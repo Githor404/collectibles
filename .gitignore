@@ -1,0 +1,4 @@
+# Transient gate artifacts: headless-browser profiles and defect-pass backups.
+# Kept INSIDE the repo on purpose -- this project's sessions are scoped to their
+# own directory, so nothing is written to %TEMP% (D1 / tests/README.md).
+tests/.tmp/
