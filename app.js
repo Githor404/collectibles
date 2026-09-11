@@ -1,0 +1,1255 @@
+'use strict';
+/* ===========================================================================
+   collectibles — flea-market triage for comics
+   ---------------------------------------------------------------------------
+   NO FEATURES YET. This file is infrastructure PORTED from HealthTracker
+   (healthtracker@dcf3d78), copied rather than shared (D1):
+     • storage adapter: localStorage -> memory, truthful badge (HT-D1)
+     • export / destructive restore with a pre-restore backup (HT-D3, HT-D5)
+     • credentials outside the state object, merge-only writes (HT-D45, HT-D49)
+     • ONE egress function for every network call, provider table (D1)
+     • the capture chain: camera-or-library, bounded decode, EXIF pin,
+       blank-canvas floor, per-call budgets (HT-D47, HT-D48, HT-D58)
+     • validate -> retry once -> fall back WITH the raw reply (HT-D64)
+     • the capture trace (HT-D65, HT-D66)
+     • the outcome modal: one modal, three states (HT-D51)
+
+   `HT-Dnn` cites HealthTracker's log, copied as INHERITED-DECISIONS.md. Those
+   entries are why the code below is shaped as it is. Read the entry before
+   simplifying anything that carries one.
+   =========================================================================== */
+
+// ---- keys & schema --------------------------------------------------------
+// D1: EVERY storage key is prefixed. Two GitHub Pages project sites under one
+// user domain share an origin, and so share localStorage with HealthTracker.
+const STORE_KEY      = 'collectibles-state';               // HT-D1: version-stable key
+const PRERESTORE_KEY = 'collectibles-state-prerestore';    // HT-D3: pre-restore backup
+const CRED_PREFIX    = 'collectibles-cred-';               // D1: + role; never in state
+const STATE_KIND     = 'collectibles';
+const SCHEMA_VERSION = 1;
+
+// ---- small helpers --------------------------------------------------------
+// Escaper covers & < > " '.
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
+const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+
+// Pasted JSON may arrive from a chat app: normalize smart quotes / non-breaking
+// spaces before JSON.parse so a clean-looking paste isn't rejected as "Bad JSON".
+const cleanJSON = (s) => String(s == null ? '' : s)
+  .replace(new RegExp('[' + String.fromCharCode(0x201C, 0x201D, 0x201E, 0x201F, 0x2033, 0x2036) + ']', 'g'), '"')
+  .replace(new RegExp('[' + String.fromCharCode(0x2018, 0x2019, 0x201A, 0x201B, 0x2032, 0x2035) + ']', 'g'), "'")
+  .replace(new RegExp('[' + String.fromCharCode(0xA0, 0x2007, 0x202F) + ']', 'g'), ' ')
+  .trim();
+
+// ---- ONE clock (HT-D50) ---------------------------------------------------
+// setClock is a TEST SEAM and is never called by shipped code. Every date and
+// duration reads through nowMs(), so a gate that fixes the clock fixes all of
+// it -- HealthTracker had 21 call sites on a second clock before this.
+let _clockFn = null;
+function nowMs() { return _clockFn ? _clockFn() : Date.now(); }
+function setClock(fn) { _clockFn = (typeof fn === 'function') ? fn : null; }
+function nowDate() { return new Date(nowMs()); }
+function localDate(d) {
+  d = d || nowDate();
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
+function todayKey() { return localDate(nowDate()); }
+
+// ---- storage adapter: localStorage -> memory (HT-D1, HT-D3) ---------------
+const Store = (() => {
+  let tier = 'unknown';     // 'local' | 'memory'
+  let lastWriteOk = true;   // false only after a real write failure on 'local'
+  let forceFail = false;    // test seam -- see CT.Store.forceWriteFailure()
+
+  function probe() {
+    try { localStorage.setItem('__ct_probe__', '1'); localStorage.removeItem('__ct_probe__'); return true; }
+    catch (e) { return false; }
+  }
+  function readRaw(key) {
+    if (tier === 'memory') return null;
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+  function writeRaw(key, value) {
+    if (forceFail) return false;
+    try { localStorage.setItem(key, value); return true; } catch (e) { return false; }
+  }
+
+  return {
+    init() { lastWriteOk = true; tier = probe() ? 'local' : 'memory'; return tier; },
+    get tier() { return tier; },
+    readRaw,
+
+    saveState(blob) {
+      const json = JSON.stringify(blob);
+      if (tier === 'local' && writeRaw(STORE_KEY, json)) { lastWriteOk = true; return true; }
+      lastWriteOk = false; tier = 'memory'; return false;
+    },
+
+    // HT-D3: durable single-slot pre-restore backup.
+    backup(blob) {
+      if (tier !== 'local') return false;
+      return writeRaw(PRERESTORE_KEY, JSON.stringify(blob));
+    },
+    peekBackup() { return readRaw(PRERESTORE_KEY); },
+    revertBackup(snapshot) {
+      if (tier !== 'local') return;
+      if (snapshot == null) { try { localStorage.removeItem(PRERESTORE_KEY); } catch (e) {} }
+      else writeRaw(PRERESTORE_KEY, snapshot);
+    },
+
+    status() {
+      if (tier === 'memory' && lastWriteOk) {
+        return { tier: 'memory', ok: false, message: '⚠ NOT saved (private mode / storage blocked) — export before closing' };
+      }
+      if (!lastWriteOk) {
+        return { tier: 'memory', ok: false, message: '⚠ storage write FAILED — data is only in memory; export now' };
+      }
+      return { tier: 'local', ok: true, message: '✓ saved in this browser' };
+    },
+    forceWriteFailure(on) { forceFail = !!on; },
+  };
+})();
+
+// ---- state (schema v1) ----------------------------------------------------
+// No features, so the state carries only `settings`, preserved as an opaque
+// object. `kind` is what lets restore refuse ANOTHER PRODUCT's export: a
+// HealthTracker export carries version 7, and without a kind check it would be
+// refused as "from a newer version" -- a wrong reason, stated confidently.
+function emptyState() { return { kind: STATE_KIND, version: SCHEMA_VERSION, settings: {} }; }
+function normalizeState(o) {
+  const s = (o && o.settings && typeof o.settings === 'object' && !Array.isArray(o.settings))
+    ? JSON.parse(JSON.stringify(o.settings)) : {};
+  return { kind: STATE_KIND, version: SCHEMA_VERSION, settings: s };
+}
+
+// ---- boot -----------------------------------------------------------------
+let APP_STATE = null;
+let APP_SOURCE = 'empty';   // 'store' | 'restored' | 'empty' | 'future'
+
+function boot() {
+  Store.init();
+  let state = null, source = 'empty', dirty = false;
+  const raw = Store.readRaw(STORE_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && parsed.kind === STATE_KIND) {
+        const v = parsed.version;
+        if (typeof v === 'number' && v > SCHEMA_VERSION) {
+          // A newer app wrote this -- never migrate or overwrite it (HT-D7).
+          APP_STATE = parsed; APP_SOURCE = 'future';
+          return { state: parsed, source: 'future', status: Store.status() };
+        }
+        if (v === SCHEMA_VERSION) {
+          state = normalizeState(parsed); source = 'store';
+          if (JSON.stringify(state) !== raw) dirty = true;
+        }
+      }
+    } catch (e) { state = null; }   // corrupt blob: fall through to a fresh state (as HealthTracker)
+  }
+  if (!state) { state = emptyState(); source = 'empty'; dirty = true; }
+  if (dirty) Store.saveState(state);
+  APP_STATE = state; APP_SOURCE = source;
+  return { state, source, status: Store.status() };
+}
+
+// ---- export / import-restore (HT-D5) --------------------------------------
+function exportJSON() { return JSON.stringify(APP_STATE, null, 2); }
+
+// Validate + route a pasted blob WITHOUT mutating.
+function parseImport(raw) {
+  const text = cleanJSON(raw);
+  if (!text) return { ok: false, error: 'Nothing to import.' };
+  let o;
+  try { o = JSON.parse(text); }
+  catch (e) { return { ok: false, error: 'Bad JSON: ' + e.message }; }
+  if (!o || typeof o !== 'object' || Array.isArray(o) || o.kind !== STATE_KIND)
+    return { ok: false, error: 'Not a collectibles export.' };
+  const v = o.version;
+  if (typeof v !== 'number' || v < 1)
+    return { ok: false, error: 'Unrecognized export format (no version).' };
+  if (v > SCHEMA_VERSION)
+    return { ok: false, error: 'This export is from a newer version of the app.' };
+  return { ok: true, state: normalizeState(o), kind: 'restore' };
+}
+
+function showPrerestore(json) {
+  const el = document.getElementById('prerestoreBox');
+  const wrap = document.getElementById('prerestoreWrap');
+  if (el) el.value = json;
+  if (wrap) wrap.style.display = 'block';
+}
+function hidePrerestore() {
+  const wrap = document.getElementById('prerestoreWrap');
+  if (wrap) wrap.style.display = 'none';
+}
+
+// Destructive full replace. Nothing mutates until a valid replacement is in hand.
+function restore(raw) {
+  const parsed = parseImport(raw);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+
+  const prev = APP_STATE;
+  showPrerestore(JSON.stringify(prev, null, 2));
+  const priorSlot = Store.peekBackup();            // snapshot existing undo slot (HT-D5)
+  const backedUp = Store.backup(prev);             // overwrite single rolling slot (HT-D3)
+
+  const msg = backedUp
+    ? 'Replace ALL current data with the imported data?\n\nYour previous data has been backed up (shown on the page) and can be recovered — proceed?'
+    : 'Replace ALL current data?\n\n⚠ Storage could NOT keep a backup. Copy the "previous data" text shown on the page FIRST, then proceed anyway?';
+  if (!window.confirm(msg)) {
+    Store.revertBackup(priorSlot);                 // decline = true no-op for the undo slot
+    hidePrerestore();
+    return { ok: false, aborted: true };
+  }
+
+  APP_STATE = parsed.state;
+  const saved = Store.saveState(APP_STATE);
+  APP_SOURCE = 'restored';
+  refresh();
+  return { ok: true, kind: parsed.kind, backedUp: backedUp, saved: saved };
+}
+
+// ---- DOM handlers ---------------------------------------------------------
+function copyOut() {
+  const json = exportJSON();
+  const box = document.getElementById('exportBox');
+  if (box) { box.value = json; box.focus(); box.select(); try { box.setSelectionRange(0, json.length); } catch (e) {} }
+  let done = false;
+  try { done = document.execCommand('copy'); } catch (e) {}
+  if (!done && navigator.clipboard && navigator.clipboard.writeText) {
+    // HT-D63: a rejection is REPORTED, not swallowed.
+    navigator.clipboard.writeText(json).then(
+      function () { toast('Copied'); },
+      function () { toast('Copy did not work — select the text above and copy it'); });
+    return;
+  }
+  toast(done ? 'Copied' : 'Select-all + copy the text above');
+}
+function doRestore() {
+  const box = document.getElementById('importBox');
+  const raw = box ? box.value : '';
+  if (!raw.trim()) { toast('Paste an export first'); return; }
+  const r = restore(raw);
+  if (!r.ok) { toast(r.aborted ? 'Restore cancelled' : (r.error || 'Restore failed')); return; }
+  if (box) box.value = '';
+  toast(r.saved ? 'Restored' : 'Restored to memory — export to be safe');
+}
+let _toastT;
+function toast(m) {
+  const e = document.getElementById('toast');
+  if (!e) return;
+  e.textContent = m; e.classList.add('show');
+  clearTimeout(_toastT);
+  _toastT = setTimeout(function () { e.classList.remove('show'); }, 1900);
+}
+
+// HT-D16: ask the browser to make storage persistent. Best-effort and SILENT by
+// contract; export is the real durability guarantee.
+function requestPersistentStorage() {
+  try {
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
+  } catch (e) { /* never blocks boot */ }
+}
+
+// HT-D53: provenance is auditable, not content -- fine print sits behind one tap.
+// Safety text never goes in here.
+function citeBlock(summary, innerHTML) {
+  return `<details class="cited"><summary>${esc(summary)}</summary><div class="citebody">${innerHTML}</div></details>`;
+}
+
+// ---- PROVIDER TABLE (D1) --------------------------------------------------
+// A provider is CONFIGURATION: its role, where it lives, how it authenticates
+// and how fast it may be called. HT-D45's "a second provider is a table row, not
+// a code change", extended to a second ROLE.
+//
+// `auth`: 'bearer'  -> Authorization header
+//         'query'   -> the credential as the `authParam` URL parameter
+//         'none'    -> no credential sent and none required. THIS IS THE SERVER
+//                      MOVE (D1): point `base` at a server that holds the token
+//                      and meters, set auth 'none', and no feature code changes.
+const PROVIDERS = {
+  // `jsonMode` / `reasoningEffort`: declared per provider, never assumed
+  // (HT-D64, HT-D66). xAI defaults reasoning to HIGH; a real capture measured
+  // 41.2s to first byte and 0.0s of body -- all deliberation.
+  grok: { role: 'vision', label: 'xAI Grok', base: 'https://api.x.ai/v1', auth: 'bearer',
+          model: 'grok-4.6', jsonMode: true, reasoningEffort: 'low', keyPrefix: 'xai-', dailyCap: 20 },
+  // Verified in the live docs 2026-09-11: 40-character token as the `t`
+  // parameter; "limited to 1 call every second ... account permissions revoked
+  // if it persists". The pacing is HERE, not in each feature's memory.
+  pricecharting: { role: 'prices', label: 'PriceCharting', base: 'https://www.pricecharting.com', auth: 'query',
+                   authParam: 't', keyLength: 40, minIntervalMs: 1000 },
+};
+const ROLES = ['vision', 'prices'];
+const ROLE_DEFAULT = { vision: 'grok', prices: 'pricecharting' };
+const ROLE_LABEL = { vision: 'Vision key', prices: 'Price-guide token' };
+
+// ---- credentials: OUTSIDE THE STATE OBJECT, one store per role (D1, HT-D45) --
+// The credential never enters APP_STATE, so export, the pre-restore backup and
+// restore cannot carry it BY CONSTRUCTION. One storage key per role, so a write
+// to one role cannot touch the other.
+const _credMem = {};                        // HT-D1: memory fallback, same as Store
+function credStoreKey(role) { return CRED_PREFIX + role; }
+function credRead(role) {
+  if (_credMem[role]) return _credMem[role];
+  try {
+    const raw = localStorage.getItem(credStoreKey(role));
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    return (o && typeof o === 'object') ? o : null;
+  } catch (e) { return null; }
+}
+function credWrite(role, o) {
+  _credMem[role] = o;
+  try { localStorage.setItem(credStoreKey(role), JSON.stringify(o)); return true; } catch (e) { return false; }
+}
+// HT-D49 -- ONE WAY TO WRITE, and it is a MERGE. HealthTracker's counter rebuilt
+// the blob from its own field list and ERASED the verified status mid-capture;
+// "remember to carry the other fields" is a rule, and the rule failed. A merge
+// cannot forget, including fields no writer has been taught about yet.
+function credPatch(role, patch) {
+  const o = credRead(role) || {};
+  Object.keys(patch || {}).forEach(function (k) { o[k] = patch[k]; });
+  return credWrite(role, o);
+}
+function credClear(role) {
+  delete _credMem[role];
+  try { localStorage.removeItem(credStoreKey(role)); } catch (e) {}
+  if (CRED_STATE[role]) CRED_STATE[role] = null;
+  refresh();
+  return { ok: true };
+}
+function credSettings(role) {
+  const o = credRead(role) || {};
+  const pick = (PROVIDERS[o.provider] && PROVIDERS[o.provider].role === role) ? o.provider : ROLE_DEFAULT[role];
+  const row = PROVIDERS[pick] || {};
+  const st = (o.status && typeof o.status === 'object') ? o.status : null;
+  return { role: role, provider: pick, key: String(o.key || ''),
+           cap: (o.cap > 0 ? o.cap : num(row.dailyCap)),
+           used: (o.used && typeof o.used === 'object') ? o.used : { date: '', n: 0 },
+           status: st || { state: 'unverified', at: '', message: '' } };
+}
+// HT-D46: a SHAPE check, not a validity check. Blocking rules are the ones that
+// are certainly wrong for any provider; a surprising prefix or length WARNS and
+// saves anyway, because key formats change and refusing on a guess is worse.
+function credKeyIssue(provider, key) {
+  const k = String(key == null ? '' : key);
+  const row = PROVIDERS[provider] || {};
+  if (!k.trim()) return { block: true, message: 'Nothing entered.' };
+  if (/\s/.test(k.trim())) return { block: true, message: 'That contains a space — check for a copy-paste stray.' };
+  if (k.trim().length < 20) return { block: true, message: 'That looks too short to be complete.' };
+  if (row.keyPrefix && k.trim().indexOf(row.keyPrefix) !== 0)
+    return { block: false, message: 'That does not start with "' + row.keyPrefix + '", which ' + row.label +
+             ' keys usually do. Saved anyway — test it to find out.' };
+  if (row.keyLength && k.trim().length !== row.keyLength)
+    return { block: false, message: row.label + ' tokens are ' + row.keyLength + ' characters; this one is ' +
+             k.trim().length + '. Saved anyway — test it to find out.' };
+  return null;
+}
+// THE single source of truth for "does this credential work": what the provider
+// last said about it, whichever call asked (HT-D49).
+function credSetStatus(role, state, message) {
+  const st = { state: state, at: new Date(nowMs()).toISOString(), message: String(message || '') };
+  credPatch(role, { status: st });
+  return st;
+}
+function credConfigured(role) { return credSettings(role).key.length > 0; }
+function credStatusLine(role) {
+  if (!credConfigured(role)) return '';
+  const st = credSettings(role).status;
+  if (st.state === 'verified') return 'verified';
+  if (st.state === 'failed') return 'failed its last test';
+  return 'not tested yet';
+}
+// NEVER returns the credential. The mask is the ONLY thing any surface may show.
+function credMask(role) {
+  const k = credSettings(role).key;
+  if (!k) return '';
+  return k.length <= 8 ? '********' : (k.slice(0, 3) + ' ... ' + k.slice(-3));
+}
+function credSave(role, provider, key, cap) {
+  const o = credSettings(role);
+  const row = PROVIDERS[provider];
+  const next = { provider: (row && row.role === role) ? provider : o.provider,
+                 key: (key == null ? o.key : String(key).trim()),
+                 cap: (cap == null || !(Number(cap) > 0)) ? o.cap : Math.round(Number(cap)),
+                 used: o.used };
+  const issue = (key == null) ? null : credKeyIssue(next.provider, next.key);
+  if (issue && issue.block) return { ok: false, blocked: true, message: issue.message, configured: credConfigured(role) };
+  // Merging must not preserve a verdict about a DIFFERENT credential (HT-D49).
+  next.status = (key != null && next.key !== o.key) ? { state: 'unverified', at: '', message: '' } : o.status;
+  // A write that did not land must NOT report success (HT-D46): the memory
+  // fallback masks it until the next reload, and then the credential is gone.
+  const ok = credPatch(role, next);
+  refresh();
+  return { ok: ok, stored: ok, warning: (issue && !issue.block) ? issue.message : '',
+           provider: next.provider, cap: next.cap, configured: next.key.length > 0 };
+}
+// HT-D45 Fork E: the counter lives WITH THE CREDENTIAL, not in the state, so a
+// restore cannot move it. Resets at local midnight. Only a row that declares a
+// dailyCap is capped.
+function credCap(role) {
+  const s = credSettings(role);
+  const today = todayKey();
+  const n = (s.used.date === today) ? num(s.used.n) : 0;
+  const capped = s.cap > 0;
+  return { date: today, used: n, cap: s.cap, capped: capped,
+           left: capped ? Math.max(0, s.cap - n) : Infinity, exhausted: capped && n >= s.cap };
+}
+// Touches the COUNTER and nothing else (HT-D49).
+function credCount(role) {
+  const c = credCap(role);
+  credPatch(role, { used: { date: c.date, n: c.used + 1 } });
+  return credCap(role);
+}
+
+// ---- EGRESS (D1): every network call in this app goes through this function --
+// It resolves the provider row, attaches the credential AS THE ROW DECLARES,
+// paces the call, bounds it with a timeout, and classifies transport failure.
+// Nothing else calls the network -- tests/check-egress.sh counts the sites.
+//
+// It never puts a URL into anything it returns: with query-parameter auth the
+// URL CONTAINS the credential (D1).
+let CALL_TIMEOUT_MS = 120000;      // HT-D48: a model reading a photograph
+let TEST_TIMEOUT_MS = 15000;       // HT-D48: a one-token ping
+function setCallTimeout(ms) { CALL_TIMEOUT_MS = (Number(ms) > 0) ? Number(ms) : 120000; }
+function setTestTimeout(ms) { TEST_TIMEOUT_MS = (Number(ms) > 0) ? Number(ms) : 15000; }
+let EGRESS_INFLIGHT = null;        // the controller, so a wait can be abandoned
+let EGRESS_CANCELLED = false;
+const PACE = {};                   // provider -> { last, chain }
+function errOf(kind, message) { return { ok: false, kind: kind, error: message }; }
+
+// D1: pacing is SERIALIZED per provider, and measured send-to-send. Two calls
+// requested together leave at least minIntervalMs apart, never together.
+function pace(name, row) {
+  const gap = num(row && row.minIntervalMs);
+  if (!(gap > 0)) return Promise.resolve();
+  const p = PACE[name] || (PACE[name] = { last: -Infinity, chain: Promise.resolve() });
+  const turn = p.chain.then(function () {
+    const wait = Math.max(0, p.last + gap - nowMs());
+    return new Promise(function (r) { setTimeout(r, wait); }).then(function () { p.last = nowMs(); });
+  });
+  p.chain = turn.catch(function () {});
+  return turn;
+}
+// D1: a provider's own words may carry the credential back. Redacted before any
+// surface sees them -- HealthTracker surfaces provider text verbatim, which is
+// safe only against a provider known not to echo.
+function redact(text, secret) {
+  let s = String(text == null ? '' : text);
+  if (secret && String(secret).length >= 8) s = s.split(String(secret)).join('[redacted]');
+  return s;
+}
+// The provider's OWN error text, for a diagnosable failure: never the key, never
+// the request we sent. PriceCharting uses `error-message`; OpenAI-style uses
+// `error` (a string or {message}).
+function providerMessage(raw, secret) {
+  try {
+    const j = JSON.parse(raw);
+    const m = (j && (j['error-message'] || j.error || j.message)) || '';
+    return redact(String(typeof m === 'string' ? m : (m.message || '')), secret).slice(0, 160);
+  } catch (e) { return ''; }
+}
+function egress(role, req) {
+  const cred = credSettings(role);
+  const row = PROVIDERS[cred.provider];
+  if (!row) return Promise.resolve(errOf('config', 'No provider configured.'));
+  const needsKey = row.auth === 'bearer' || row.auth === 'query';
+  if (needsKey && !cred.key) return Promise.resolve(errOf('config', 'No key saved.'));
+  const o = req || {};
+  const q = o.query || {};
+  const parts = Object.keys(q).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(q[k]); });
+  if (row.auth === 'query') parts.push(encodeURIComponent(row.authParam) + '=' + encodeURIComponent(cred.key));
+  const url = row.base + String(o.path || '') + (parts.length ? '?' + parts.join('&') : '');
+  const headers = {};
+  if (o.json !== undefined) headers['Content-Type'] = 'application/json';
+  if (row.auth === 'bearer') headers.Authorization = 'Bearer ' + cred.key;
+  const budget = Number(o.budget) > 0 ? Number(o.budget) : CALL_TIMEOUT_MS;
+  const att = o.attempt || null;
+  return pace(cred.provider, row).then(function () {
+    const ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+    EGRESS_INFLIGHT = ctl; EGRESS_CANCELLED = false;
+    const timer = setTimeout(function () { if (ctl) ctl.abort(); }, budget);
+    if (att) att.sentAt = nowMs();
+    return fetch(url, {
+      method: o.method || (o.json !== undefined ? 'POST' : 'GET'),
+      headers: headers,
+      body: o.json !== undefined ? JSON.stringify(o.json) : undefined,
+      signal: ctl ? ctl.signal : undefined,
+    }).then(function (res) {
+      clearTimeout(timer);
+      EGRESS_INFLIGHT = null;
+      // Headers are here: this is TIME TO FIRST BYTE (HT-D65). Everything after
+      // it is the provider writing the body.
+      if (att) { att.ttfbMs = nowMs() - att.sentAt; att.status = res.status; }
+      return res.text().then(function (raw) {
+        if (att) att.totalMs = nowMs() - att.sentAt;
+        // The credential is NOT part of the result: a caller that logs this object
+        // must not be able to log the key. Callers read it from settings to redact.
+        return { transport: true, status: res.status, httpOk: !!res.ok, raw: String(raw == null ? '' : raw) };
+      });
+    }).catch(function (e) {
+      clearTimeout(timer);
+      EGRESS_INFLIGHT = null;
+      const name = String((e && e.name) || '');
+      if (att) { att.totalMs = nowMs() - att.sentAt; att.outcome = (name === 'AbortError' ? (EGRESS_CANCELLED ? 'cancelled' : 'aborted at budget') : 'network error'); }
+      if (name === 'AbortError' && EGRESS_CANCELLED) return errOf('cancelled', 'Cancelled.');
+      // HT-D48: an aborted request is not an unmade one.
+      if (name === 'AbortError')
+        return errOf('timeout', 'The provider did not answer within ' + Math.round(budget / 1000) +
+          ' seconds. If it answered afterwards, that call still counted — check your provider console.');
+      return errOf('network', 'The call could not be made. Check the connection.');
+    });
+  });
+}
+
+// ---- the VISION CONTRACT: UNRULED (D1 -- no features yet) -------------------
+// The chain reads a reply against VISION: the prompt sent beside the photo, the
+// parser that validates the reply, and what "use this" does with it. The
+// identification contract (title, issue, publisher, cover date, cover price,
+// variant markers, key-issue flag -- NEVER a value) is the first feature slice
+// and is NOT ruled. Until it is, VISION is empty and capture says so instead of
+// calling out.
+const VISION_NONE = { version: 0, prompt: '', parse: null, accept: null, acceptLabel: '' };
+let VISION = VISION_NONE;
+// Test seam until a contract is ruled. The gates install a SYNTHETIC contract to
+// drive the chain -- which proves the chain, and never a contract.
+function setVisionContract(c) { const prev = VISION; VISION = (c && typeof c === 'object') ? c : VISION_NONE; return prev; }
+function visionReady() { return !!(VISION && VISION.prompt && typeof VISION.parse === 'function'); }
+// HT-D45 Fork B: the direct call needs a preamble a pasted reply does not, so it
+// rides as a PREFIX carrying the contract's version -- never a forked prompt.
+function visionPrefix() {
+  return 'Contract v' + num(VISION && VISION.version) +
+    '. Reply with the JSON object ONLY: no markdown fence, no prose before or after it.\n\n';
+}
+
+// ---- the capture RESULT: the success state ----------------------------------
+let CAPTURE_RESULT = null;   // { value } | null -- held in memory, never persisted
+// THE ONE DOOR (HT-D45: one downstream, not two). A called reply and a pasted
+// reply both come through here, so identical text gives an identical result BY
+// CONSTRUCTION rather than by two code paths agreeing.
+function openCaptureResult(text) {
+  const rep = document.getElementById('replyReport');
+  const r = visionReady() ? VISION.parse(String(text == null ? '' : text))
+    : { ok: false, error: 'Identification is not built yet, so there is nothing to read a reply against.' };
+  if (!r || !r.ok) {
+    const msg = (r && r.error) || 'That reply did not match.';
+    if (rep) rep.innerHTML = `<div class="ireport bad">${esc(msg)}</div>`;
+    return r || { ok: false, error: msg };
+  }
+  CAPTURE_RESULT = { value: r.value };
+  if (rep) rep.innerHTML = '';
+  renderCaptureResult();
+  return r;
+}
+function doReplyPaste() {
+  const box = document.getElementById('replyBox');
+  const r = openCaptureResult(box ? box.value : '');
+  if (r.ok && box) box.value = '';
+  return r;
+}
+function captureResult() { return CAPTURE_RESULT; }
+function captureDiscard() { CAPTURE_RESULT = null; renderCaptureResult(); return { ok: true }; }
+function captureAccept() {
+  const cur = CAPTURE_RESULT;
+  if (!cur) return { ok: false };
+  const out = (typeof VISION.accept === 'function') ? VISION.accept(cur.value)
+    : { ok: false, error: 'Nothing is built to take this yet.' };
+  if (out && out.ok) { CAPTURE_RESULT = null; renderCaptureResult(); }
+  else if (out && out.error) toast(out.error);
+  return out || { ok: false };
+}
+// A generic, escaped readout of the validated value. The identification slice
+// replaces it with the identity question; it exists so the success state has a
+// body that can be measured.
+function resultReadoutHTML(value) {
+  const v = (value && typeof value === 'object' && !Array.isArray(value)) ? value : { value: value };
+  return Object.keys(v).map(function (k) {
+    const x = v[k];
+    const s = (x != null && typeof x === 'object') ? JSON.stringify(x) : String(x);
+    return `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${esc(s)}</span></div>`;
+  }).join('');
+}
+function renderCaptureResult() {
+  // HT-D51: EVERY exit repaints the modal, including the one that clears the
+  // result -- otherwise it stays open around nothing.
+  try {
+    const el = document.getElementById('captureResult');
+    if (el) el.innerHTML = CAPTURE_RESULT ? `<div class="cresult">${resultReadoutHTML(CAPTURE_RESULT.value)}</div>` : '';
+  } finally { try { renderCaptureOutcome(); } catch (e) {} }
+}
+
+// ---- HT-D51: the capture outcome is explicit, central and MODAL -------------
+// Every capture ends in exactly ONE of three states, and that state owns the
+// screen. HealthTracker's result once rendered inline below two textareas, off a
+// phone's screen, and the first workaround painted it in a SECOND place. Two
+// surfaces telling one story is not the fix for one being off-screen; a surface
+// that cannot be off-screen is. The states are exclusive BY CONSTRUCTION.
+function captureOutcomeState() {
+  // A result outranks a stale busy line: the answer arrived.
+  if (CAPTURE_RESULT) return 'success';
+  if (BYOK_BUSY && BYOK_BUSY.phase === 'sending') return 'pending';
+  if (BYOK_BUSY && BYOK_BUSY.phase === 'error') return 'error';
+  return 'none';
+}
+// Only FAILURE is dismissable. A success must be answered -- a result dismissed
+// by a stray tap on the scrim is silently thrown away. Pending has a cancel,
+// which says what it does.
+function captureOutcomeDismiss() {
+  if (captureOutcomeState() !== 'error') return { ok: false, kind: 'not-dismissable' };
+  byokBusy(null);
+  return { ok: true };
+}
+// "Try again" re-opens the picker rather than replaying the photo: the image is
+// held in memory FOR THE CALL ONLY (HT-D45), and keeping it alive across a
+// failure would stretch that bound for convenience. HT-D51 left the replay as an
+// open hygiene option; it is not taken here either.
+function captureRetry() {
+  byokBusy(null);
+  const inp = document.getElementById('captureFile');
+  if (!inp) return { ok: false, error: 'no capture input' };
+  try { inp.click(); } catch (e) { return { ok: false, error: 'picker unavailable' }; }
+  return { ok: true };
+}
+// The floor under every failure: the reply box, which holds the raw reply when
+// one arrived (HT-D64).
+function capturePasteInstead() {
+  byokBusy(null);
+  const box = document.getElementById('replyBox');
+  if (box) { try { box.focus(); box.scrollIntoView({ block: 'center' }); } catch (e) {} }
+  return { ok: true };
+}
+function renderCaptureOutcome() {
+  const wrap = document.getElementById('captureOutcome');
+  const scrim = document.getElementById('outcomeScrim');
+  const title = document.getElementById('outcomeTitle');
+  const msg = document.getElementById('outcomeMsg');
+  const foot = document.getElementById('outcomeFoot');
+  const x = document.getElementById('outcomeX');
+  if (!wrap || !title || !msg || !foot) return;
+  const st = captureOutcomeState();
+  if (st === 'none') {
+    wrap.style.display = 'none';
+    if (scrim) scrim.style.display = 'none';
+    msg.innerHTML = '';
+    foot.innerHTML = '';
+    return;
+  }
+  wrap.style.display = 'flex';
+  if (scrim) scrim.style.display = 'block';
+  if (x) x.style.display = (st === 'error') ? '' : 'none';
+  const busyMsg = BYOK_BUSY ? String(BYOK_BUSY.message || '') : '';
+  // HT-D65: WHERE THE TIME WENT, on the surface the finger is on -- on success
+  // as well as failure, or a working run cannot be compared against a broken one.
+  const traceTxt = byokTraceLine();
+  const traceHTML = traceTxt ? `<div class="otrace">${esc(traceTxt)}</div>` : '';
+  if (st === 'success') {
+    title.textContent = 'Reply read — check it before using it';
+    msg.innerHTML = traceHTML;
+    foot.innerHTML =
+      `<button class="btn primary" onclick="captureAccept()">${esc((VISION && VISION.acceptLabel) || 'Use this')}</button>` +
+      `<button class="btn" onclick="captureDiscard()">Discard</button>`;
+  } else if (st === 'pending') {
+    title.textContent = 'Reading your photo';
+    msg.innerHTML = `<div class="opend"><span class="byokspin"></span>${esc(busyMsg)}</div>` +
+      `<div class="osub">The photo is sent once, to the provider you configured. Nothing else is sent, ` +
+      `and the photo is never stored.</div>` + traceHTML;
+    foot.innerHTML = `<button class="btn" onclick="byokCancel()">Cancel</button>`;
+  } else {
+    title.textContent = 'That did not work';
+    msg.innerHTML = traceHTML + `<div class="omsg obad">${esc(busyMsg)}</div>` +
+      `<div class="osub">Your photo is still on your phone. Trying again opens the picker so you can ` +
+      `choose it once more.</div>`;
+    foot.innerHTML =
+      `<button class="btn primary" onclick="captureRetry()">Try again</button>` +
+      `<button class="btn" onclick="capturePasteInstead()">Paste the reply by hand</button>`;
+  }
+}
+
+// ---- the capture flow -------------------------------------------------------
+let BYOK_BUSY = null;                        // {phase, message} | null
+function byokBusyState() { return BYOK_BUSY; }
+function byokBusyClear() { byokBusy(null); }
+// HT-D65: the capture TRACE. console.info is unreachable on a phone, and a number
+// nobody can read is not instrumentation. The split that matters is TIME TO FIRST
+// BYTE vs BODY: a long TTFB is the model thinking, a long body is it writing, and
+// those have opposite fixes.
+let BYOK_TRACE = null;
+function byokTraceReset() { BYOK_TRACE = { t0: nowMs(), attempts: [] }; return BYOK_TRACE; }
+function byokTrace() { return BYOK_TRACE; }
+function byokTraceNote(k, v) { if (BYOK_TRACE) BYOK_TRACE[k] = v; }
+function byokTraceAttempt(a) { if (BYOK_TRACE) BYOK_TRACE.attempts.push(a); return a; }
+const kb = function (n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' kB'; };
+const secs = function (ms) { return (ms / 1000).toFixed(1) + 's'; };
+function byokTraceLine() {
+  const t = BYOK_TRACE;
+  if (!t || !t.attempts.length && !t.bytes) return '';
+  const bits = [];
+  if (t.bytes) bits.push(kb(t.bytes) + (t.w ? ' · ' + t.w + '×' + t.h : '') + ' · encode ' + secs(t.decodeMs || 0));
+  t.attempts.forEach(function (a, i) {
+    const parts = ['call ' + (i + 1)];
+    if (a.ttfbMs != null) parts.push('first byte ' + secs(a.ttfbMs));
+    if (a.totalMs != null) parts.push('done ' + secs(a.totalMs));
+    if (a.status) parts.push('HTTP ' + a.status);
+    if (a.outcome) parts.push(a.outcome);
+    parts.push(a.jsonMode ? 'json_object sent' : 'no json_object');
+    // HT-D66: the effort actually sent, so a changed first-byte time is attributable.
+    parts.push(a.effort ? ('effort ' + a.effort) : 'effort default');
+    bits.push(parts.join(' · '));
+  });
+  bits.push('total ' + secs(nowMs() - t.t0));
+  return bits.join('  |  ');
+}
+// HT-D48: a long wait must look alive. The elapsed seconds tick on screen.
+let BYOK_TICK = null;
+function byokStopTick() { if (BYOK_TICK) { clearInterval(BYOK_TICK); BYOK_TICK = null; } }
+function byokStartTick(label) {
+  byokStopTick();
+  const t0 = nowMs();
+  byokBusy('sending', label + ' 0s');
+  BYOK_TICK = setInterval(function () {
+    if (!BYOK_BUSY || BYOK_BUSY.phase !== 'sending') { byokStopTick(); return; }
+    byokBusy('sending', label + ' ' + Math.round((nowMs() - t0) / 1000) + 's');
+  }, 1000);
+}
+// One live accessor: exporting the `let`s would freeze their value at load.
+function byokTimeouts() {
+  return { call: CALL_TIMEOUT_MS, test: TEST_TIMEOUT_MS, decode: BYOK_DECODE_TIMEOUT_MS, lease: BYOK_BITMAP_LEASE_MS };
+}
+function byokCancel() {
+  EGRESS_CANCELLED = true;
+  try { if (EGRESS_INFLIGHT) EGRESS_INFLIGHT.abort(); } catch (e) {}
+  byokStopTick();
+  byokBusy('error', 'Cancelled. The photo is still on your phone — capture again when you are ready.');
+  return { ok: false, kind: 'cancelled' };
+}
+function byokBusy(phase, message) {
+  BYOK_BUSY = phase ? { phase: phase, message: message || '' } : null;
+  try { renderCaptureOutcome(); } catch (e) {}
+  try { renderCaptureBtn(); } catch (e) {}
+}
+// HT-D49: a capture is a verdict on the key as much as a test ping is. A reply
+// VERIFIES it; only an `auth` rejection FAILS it. A timeout, a rate limit or a
+// malformed body say nothing about the key and must never demote it.
+function byokNoteVerdict(r) {
+  if (!r) return r;
+  if (r.ok) credSetStatus('vision', 'verified', '');
+  else if (r.kind === 'auth') credSetStatus('vision', 'failed', String(r.error || ''));
+  return r;
+}
+// HT-D64: below this, a retry is not worth starting -- it would report a timeout
+// for a parse failure that already happened, and bill a second call to say so.
+const BYOK_RETRY_MIN_MS = 30000;
+// Attempts are logged by stage and size only -- NEVER the key, the URL or the body.
+function byokLog(line) { try { if (window.console && console.info) console.info('[capture] ' + line); } catch (e) {} }
+
+// Runs only from an explicit capture-send (D1).
+function byokCapture(file, source) {
+  // No contract, no call. Guarded here as well as on the surface, because a
+  // surface that hides a button is not a guarantee.
+  if (!visionReady()) {
+    byokBusy('error', 'Identification is not built yet, so a photo has nothing to be read against. Nothing was sent.');
+    return Promise.resolve({ ok: false, kind: 'contract' });
+  }
+  // HealthTracker returned SILENTLY here, safe only because its buttons never
+  // render without a key. HT-D47's bar is "never in nothing", so this paints.
+  if (!credConfigured('vision')) {
+    byokBusy('error', 'No vision key saved. Add your key in Settings, then capture again.');
+    return Promise.resolve({ ok: false, kind: 'config', error: 'No key saved.' });
+  }
+  const cap = credCap('vision');
+  if (cap.exhausted) {
+    byokBusy('error', 'Daily cap reached (' + cap.cap + '). Raise it in Settings, or try tomorrow.');
+    return Promise.resolve({ ok: false, kind: 'cap' });
+  }
+  byokBusy('sending', 'Reading the photo…');
+  const capT0 = nowMs();                 // HT-D64: the retry must know what it has left
+  byokTraceReset();                      // HT-D65: one trace per capture
+  byokLog('source=' + (source === 'library' ? 'library' : 'camera') +
+          ' type=' + String((file && file.type) || '?') + ' bytes=' + Number((file && file.size) || 0));
+  return byokDownscale(file, source).then(function (img) {
+    // HT-D65: the payload the provider actually receives, not the target it was
+    // aimed at. base64 inflates by 4/3, and that is what crosses the wire.
+    byokTraceNote('decodeMs', nowMs() - capT0);
+    byokTraceNote('bytes', String(img.dataUrl || '').length);
+    byokTraceNote('w', img.w); byokTraceNote('h', img.h);
+    byokStartTick('Sending to your provider…');
+    credCount('vision');
+    return visionCall(img.dataUrl, {}).then(byokNoteVerdict).then(function (r1) {
+      if (r1.ok) {
+        const d1 = openCaptureResult(r1.text);
+        if (d1.ok) { byokStopTick(); byokBusy(null); return { ok: true, source: 'call', attempts: 1 }; }
+        // RETRY ONCE, and only for a malformed BODY: a rejected key or a dead
+        // network fails the same way twice. AND ONLY WITH BUDGET LEFT (HT-D64):
+        // a slow first attempt plus a full second one reported a TIMEOUT for what
+        // was a PARSE failure -- a symptom naming the wrong cause.
+        byokLog('reply did not validate (' + String(r1.text || '').length + ' chars); ' +
+                Math.round((nowMs() - capT0) / 1000) + 's spent');
+        const left = CALL_TIMEOUT_MS - (nowMs() - capT0);
+        if (left < BYOK_RETRY_MIN_MS)
+          return byokFallback(r1.text, 'The reply did not match, and too little time was left to ask again.');
+        byokStartTick('That reply did not match. Asking once more…');
+        credCount('vision');
+        return visionCall(img.dataUrl, { budget: left }).then(byokNoteVerdict).then(function (r2) {
+          if (r2.ok) {
+            const d2 = openCaptureResult(r2.text);
+            if (d2.ok) { byokStopTick(); byokBusy(null); return { ok: true, source: 'call', attempts: 2 }; }
+            return byokFallback(r2.text, 'The reply did not match twice.');
+          }
+          // HT-D64: THE FIRST REPLY IS NOT THROWN AWAY. It arrived, it was paid
+          // for, and it is the only thing the user can act on.
+          return byokFallback(r1.text, String(r2.error || '') +
+            ' The first reply did not match, but it is what the model sent.');
+        });
+      }
+      return byokFallback('', r1.error);
+    });
+  }).catch(function (e) {
+    return byokFallback('', (e && e.message) || 'The photo could not be prepared.');
+  });
+}
+// NEVER A DEAD END. Whatever failed, the raw reply (when there is one) lands in
+// the reply box, and the failure is stated where the finger is.
+function byokFallback(raw, message) {
+  byokStopTick();
+  const box = document.getElementById('replyBox');
+  if (box && raw) box.value = String(raw);
+  byokBusy('error', String(message || 'That did not work.') + (raw ? ' What the model sent is in the reply box.' : ''));
+  return { ok: false, kind: 'fallback', fellBack: true, hasRaw: !!raw };
+}
+// HT-D58: the source is DERIVED FROM THE INPUT THAT FIRED. The `capture`
+// attribute is what forces the camera, so its presence IS the fact; a second
+// argument in the markup could disagree with it.
+function captureSourceOf(input) {
+  return (input && input.hasAttribute && input.hasAttribute('capture')) ? 'camera' : 'library';
+}
+// HT-D47: the instant a photo comes back, SOMETHING is on screen, and the input
+// is cleared only AFTER the read -- on iOS clearing it first can invalidate the
+// very File it just handed over.
+function onCaptureFile(input) {
+  const source = captureSourceOf(input);
+  const f = input && input.files && input.files[0];
+  if (!f) {
+    // A cancelled library picker is the ordinary way to change your mind, and
+    // must not read as a camera fault (HT-D58).
+    byokBusy('error', source === 'library'
+      ? 'No photo was chosen. Pick one, or take a photo instead.'
+      : 'No photo came back from the camera. Try again.');
+    byokLog('the input delivered no file (source=' + source + ')');
+    return { ok: false, kind: 'nofile', source: source };
+  }
+  byokBusy('sending', 'Reading the photo…');
+  const done = function (r) { if (input) { try { input.value = ''; } catch (e) {} } return r; };
+  return byokCapture(f, source).then(done, function (e) {
+    done();
+    byokFallback('', 'Reading the photo failed: ' + String((e && e.message) || e).slice(0, 140));
+    return { ok: false, kind: 'threw' };
+  });
+}
+
+// ---- the decode chain (HT-D47, HT-D58) --------------------------------------
+// Downscale for the wire ONLY: no record, no store, no export ever holds an image.
+//
+// HT-D47 -- CAPTURE DID NOTHING ON THE DEVICE, and "used today: 0" was the tell:
+// the counter increments AFTER the decode, so the decode never finished. A plain
+// `new Image()` on an object URL has three ways to fail QUIETLY on a phone:
+//   * neither onload NOR onerror fires -- so the decode is BOUNDED by a timeout;
+//   * a 12 MP photo blows iOS Safari's canvas limit and drawImage yields a BLANK
+//     canvas with no exception -- so createImageBitmap resizes without the
+//     full-size allocation, and the output is sanity-checked (BYOK_MIN_DATAURL);
+//   * an HEIC frame decodes nowhere in a browser -- so that is NAMED.
+// Every one of those ends in a MESSAGE, never in nothing.
+const BYOK_MAX_EDGE = 1280;                  // HT-D45 Fork D: latency binds long before 20 MiB does
+const BYOK_JPEG_Q = 0.8;
+let BYOK_DECODE_TIMEOUT_MS = 20000;
+// THE LEASH. The preferred decoder gets 5 seconds before the fallback takes over.
+// Not hypothetical: HealthTracker's first build without it HUNG THE HARNESS exactly
+// the way the button hung the device. Do not remove it (HT-D47).
+let BYOK_BITMAP_LEASE_MS = 5000;
+function setByokBitmapLease(ms) { BYOK_BITMAP_LEASE_MS = (Number(ms) > 0) ? Number(ms) : 5000; }
+function setByokDecodeTimeout(ms) { BYOK_DECODE_TIMEOUT_MS = (Number(ms) > 0) ? Number(ms) : 20000; }
+const BYOK_MIN_DATAURL = 2048;               // a blank/failed canvas encodes to almost nothing
+function byokBounds(w, h) {
+  const long = Math.max(w, h) || 1;
+  const scale = Math.min(1, BYOK_MAX_EDGE / long);
+  return { w: Math.max(1, Math.round(w * scale)), h: Math.max(1, Math.round(h * scale)) };
+}
+function byokEncode(src, w, h) {
+  const b = byokBounds(w, h);
+  const c = document.createElement('canvas');
+  c.width = b.w; c.height = b.h;
+  const ctx = c.getContext('2d');
+  if (!ctx) throw new Error('This browser would not give a drawing context.');
+  ctx.drawImage(src, 0, 0, b.w, b.h);
+  const out = c.toDataURL('image/jpeg', BYOK_JPEG_Q);
+  // iOS can hand back a BLANK canvas rather than throwing. Checked, not trusted.
+  if (!out || out.indexOf('data:image/jpeg') !== 0 || out.length < BYOK_MIN_DATAURL)
+    throw new Error('The photo encoded to nothing — it may be too large for this browser.');
+  return { dataUrl: out, w: b.w, h: b.h };
+}
+// Preferred: createImageBitmap resizes during decode, so a 12 MP photo never
+// becomes a 12 MP bitmap in memory. ONE decode; drawImage does the scaling.
+// HT-D58: `imageOrientation` is PINNED ON THE CALL. The default has moved (spec
+// said "none", now "from-image", and "none" was folded in), so the answer is a
+// browser-version fact rather than a contract, and a library photo carries EXIF
+// far more often than a fresh camera frame. A browser too old for the option
+// still degrades correctly: any bitmap failure falls to byokDecodeImage.
+function byokDecodeBitmap(file) {
+  if (typeof createImageBitmap !== 'function') return Promise.reject(new Error('no createImageBitmap'));
+  return createImageBitmap(file, { imageOrientation: 'from-image' }).then(function (bmp) {
+    try { const out = byokEncode(bmp, bmp.width, bmp.height); try { bmp.close(); } catch (e) {} return out; }
+    catch (e) { try { bmp.close(); } catch (e2) {} throw e; }
+  });
+}
+function byokDecodeImage(file) {
+  return new Promise(function (resolve, reject) {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    const done = function (fn, arg) { try { URL.revokeObjectURL(url); } catch (e) {} fn(arg); };
+    img.onload = function () {
+      try { done(resolve, byokEncode(img, img.naturalWidth || img.width, img.naturalHeight || img.height)); }
+      catch (e) { done(reject, e); }
+    };
+    img.onerror = function () { done(reject, new Error('This browser could not decode that image.')); };
+    img.src = url;
+  });
+}
+// HT-D58: the HEIC advice depends on WHERE the photo came from. A camera setting
+// fixes the NEXT photo; it does nothing for one already in the library.
+function byokHeicMessage(source) {
+  return source === 'library'
+    ? 'That photo is in HEIC, which browsers cannot read. Share or re-save it as a JPEG first.'
+    : 'That photo is in HEIC, which browsers cannot read. Set the camera to "Most Compatible" and take it again.';
+}
+function byokDownscale(file, source) {
+  const type = String((file && file.type) || '').toLowerCase();
+  const heic = /heic|heif/.test(type) || /\.hei[cf]$/i.test(String((file && file.name) || ''));
+  let timer = null;
+  const bounded = new Promise(function (_, reject) {
+    timer = setTimeout(function () {
+      reject(new Error(heic ? byokHeicMessage(source)
+        : 'Reading the photo timed out after ' + (BYOK_DECODE_TIMEOUT_MS / 1000) + ' seconds.'));
+    }, BYOK_DECODE_TIMEOUT_MS);
+  });
+  // Bitmap first, on a SHORT LEASH (see BYOK_BITMAP_LEASE_MS above).
+  const leash = new Promise(function (_, reject) {
+    setTimeout(function () { reject(new Error('bitmap decode did not answer in time')); }, BYOK_BITMAP_LEASE_MS);
+  });
+  const work = Promise.race([byokDecodeBitmap(file), leash])
+    .catch(function () { return byokDecodeImage(file); })
+    .catch(function (e) {
+      if (heic) throw new Error(byokHeicMessage(source));
+      throw e;
+    });
+  return Promise.race([work, bounded]).then(function (r) {
+    clearTimeout(timer); return r;
+  }, function (e) { clearTimeout(timer); throw e; });
+}
+
+// ---- the vision call (HT-D45, HT-D64, HT-D66) -------------------------------
+// Verified by HealthTracker against the live API 2026-09-04: OpenAI-CLASSIC
+// content parts on /chat/completions. The input_image shape in xAI's image guide
+// is the Responses API's and is REJECTED here.
+const BYOK_MAX_TOKENS = 2048;   // HT-D64: an essay is not only unparseable, it is SLOW
+// The capabilities sent on THIS attempt: declarations minus whatever a previous
+// 400 said the provider refuses. TWO independent flags (HT-D66), so refusing one
+// field never silently costs the other.
+function visionCaps(row, o) {
+  if (!row) return null;
+  return { jsonMode: !!row.jsonMode && !(o && o.noJsonMode),
+           reasoningEffort: (o && o.noEffort) ? null : (row.reasoningEffort || null) };
+}
+function visionBody(dataUrl, text, model, caps) {
+  const b = { model: model, messages: [{ role: 'user', content: [
+    { type: 'image_url', image_url: { url: dataUrl } },
+    { type: 'text', text: text },
+  ] }] };
+  if (caps && caps.jsonMode) b.response_format = { type: 'json_object' };   // a constraint, not a request
+  if (caps && caps.reasoningEffort) b.reasoning_effort = caps.reasoningEffort;
+  b.max_tokens = BYOK_MAX_TOKENS;
+  return b;
+}
+function visionCall(dataUrl, opts) {
+  const s = credSettings('vision');
+  const row = PROVIDERS[s.provider];
+  if (!row) return Promise.resolve(errOf('config', 'No provider configured.'));
+  const o = opts || {};
+  const caps = visionCaps(row, o);
+  const body = o.ping
+    ? { model: row.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }
+    : visionBody(dataUrl, visionPrefix() + VISION.prompt, row.model, caps);
+  // The ping is bounded by the test's own race, so its abort must not sit behind it.
+  const budget = o.ping ? TEST_TIMEOUT_MS : (Number(o.budget) > 0 ? Number(o.budget) : CALL_TIMEOUT_MS);
+  // HT-D65: per-attempt timing, for the CAPTURE call only.
+  const att = o.ping ? null : byokTraceAttempt({ jsonMode: !!(caps && caps.jsonMode), effort: (caps && caps.reasoningEffort) || null });
+  return egress('vision', { path: '/chat/completions', method: 'POST', json: body, budget: budget, attempt: att }).then(function (t) {
+    if (!t.transport) return t;
+    // HT-D46: xAI answers a bad key with 400, not 401, so the provider's words
+    // are read as well as the status.
+    const pmsg = providerMessage(t.raw, s.key);
+    if (t.status === 401 || t.status === 403 || (t.status === 400 && /api key|unauthor|credential/i.test(pmsg)))
+      return errOf('auth', pmsg || 'The provider rejected the key. Check it in Settings.');
+    if (t.status === 429)
+      return errOf('ratelimit', 'The provider is rate-limiting. Wait a moment and try again.');
+    // HT-D64 / HT-D66: a provider that rejects an optional field must not cost
+    // the capture. Retried ONCE without the field it NAMED; a generic refusal
+    // strips both at once, so the worst case is two calls, never three.
+    if (!t.httpOk && t.status === 400 && !(o.noJsonMode && o.noEffort)) {
+      const wantsEffort = /reasoning[_ ]?effort|reasoning/i.test(pmsg) && !o.noEffort;
+      const wantsJson = /response_format|json_object/i.test(pmsg) && !o.noJsonMode;
+      const generic = !wantsEffort && !wantsJson && /unknown|unsupported|unrecognized|not supported/i.test(pmsg);
+      if (wantsEffort || wantsJson || generic) {
+        const drop = Object.assign({}, o, { budget: budget });
+        if (wantsEffort || generic) drop.noEffort = true;
+        if (wantsJson || generic) drop.noJsonMode = true;
+        const dropped = [drop.noEffort && !o.noEffort ? 'reasoning_effort' : null,
+                         drop.noJsonMode && !o.noJsonMode ? 'response_format' : null].filter(Boolean).join(' + ');
+        if (att) att.outcome = dropped + ' REFUSED, retried without';
+        return visionCall(dataUrl, drop);
+      }
+    }
+    if (!t.httpOk) return errOf('http', 'The provider returned ' + t.status + '. ' + pmsg);
+    let j; try { j = JSON.parse(t.raw); } catch (e) { return errOf('malformed', 'The reply was not JSON.'); }
+    const msg = j && j.choices && j.choices[0] && j.choices[0].message;
+    const content = msg && (typeof msg.content === 'string' ? msg.content
+      : (Array.isArray(msg.content) ? msg.content.map((c) => c && c.text ? c.text : '').join('') : ''));
+    if (!content) return errOf('malformed', 'The reply carried no content.');
+    if (att) att.outcome = 'reply ' + content.length + ' chars';
+    return { ok: true, text: content };
+  });
+}
+
+// ---- the prices role: Test connection only (D1) -----------------------------
+// No price feature exists. The ping is the one call the settings surface needs.
+// VERIFIED 2026-09-11 from the docs: `status: success|error`, `error-message`.
+// NOT verified (no token here): a comics subscription's success body, and the
+// wrong-token wording -- which is what this button exists to show on the device.
+const PRICES_PING_QUERY = 'batman';
+function pricesPing() {
+  const s = credSettings('prices');
+  return egress('prices', { path: '/api/products', query: { q: PRICES_PING_QUERY }, budget: TEST_TIMEOUT_MS }).then(function (t) {
+    if (!t.transport) return t;
+    let j = null; try { j = JSON.parse(t.raw); } catch (e) {}
+    if (t.httpOk && j && j.status === 'success') return { ok: true, text: '' };
+    const pmsg = providerMessage(t.raw, s.key);
+    if (t.status === 401 || t.status === 403 || /token|subscription|unauthor|permission/i.test(pmsg))
+      return errOf('auth', pmsg || 'The price guide rejected the token. Check it in Settings.');
+    if (t.status === 429) return errOf('ratelimit', 'The price guide is rate-limiting. Wait before trying again.');
+    if (!j) return errOf('malformed', 'The price guide did not answer with JSON.');
+    return errOf('http', 'The price guide returned ' + t.status + '. ' + pmsg);
+  });
+}
+
+// ---- Test connection: EVERY EXIT PAINTS (HT-D46) ----------------------------
+// HealthTracker's button was silent on the device through three defects: no
+// .catch, a disabled button, no distinct timeout. The fix is one rule.
+let CRED_STATE = { vision: null, prices: null };
+function credPaint(role, phase, ok, message) {
+  CRED_STATE[role] = { phase: phase, ok: !!ok, message: String(message || '') };
+  try { renderCred(role); } catch (e) {}          // a render fault must not eat the state
+  try { renderCaptureBtn(); } catch (e) {}
+  return { ok: !!ok, state: phase, message: CRED_STATE[role].message };
+}
+function credTest(role) {
+  let secret = '';
+  try {
+    const s = credSettings(role);
+    secret = s.key;
+    const row = PROVIDERS[s.provider];
+    // A row with auth 'none' needs no credential (D1: the server move), so it must
+    // be testable with none saved -- or the config change could not be verified.
+    if (row && row.auth !== 'none' && !s.key)
+      return Promise.resolve(credPaint(role, 'tested', false, 'Nothing saved. Paste it above, tap Save, then test.'));
+    credPaint(role, 'testing', false, 'Testing — calling ' + (row ? row.label : s.provider) + '…');
+    byokLog('test: role=' + role + ' provider=' + s.provider);
+    let settled = false;
+    const race = new Promise(function (resolve) {
+      setTimeout(function () {
+        if (!settled) resolve(credPaint(role, 'tested', false, 'No answer in ' + (TEST_TIMEOUT_MS / 1000) +
+          ' seconds. The provider may be slow or unreachable.'));
+      }, TEST_TIMEOUT_MS);
+    });
+    const call = (role === 'vision' ? visionCall(null, { ping: true }) : pricesPing()).then(function (r) {
+      settled = true;
+      credSetStatus(role, r.ok ? 'verified' : 'failed', r.ok ? '' : String(r.error || ''));
+      return credPaint(role, 'tested', r.ok, r.ok
+        ? ('Connected — ' + (row ? (row.model || row.label) : 'the provider') + ' responded.')
+        : String(r.error || 'The call failed.'));
+    }).catch(function (e) {
+      settled = true;
+      credSetStatus(role, 'failed', 'unexpected error');
+      return credPaint(role, 'tested', false, 'Something went wrong making the call: ' +
+        redact(String((e && e.message) || e), secret).slice(0, 120));
+    });
+    return Promise.race([call, race]);
+  } catch (e) {
+    return Promise.resolve(credPaint(role, 'tested', false, 'Could not start the test: ' +
+      redact(String((e && e.message) || e), secret).slice(0, 120)));
+  }
+}
+
+// ---- the settings surface (HT-D45/D46/D49, one card per role) ---------------
+// Write-only: what renders is the MASK, never the credential.
+function renderCred(role) {
+  const el = document.getElementById('credBox-' + role);
+  if (!el) return;
+  const s = credSettings(role);
+  const row = PROVIDERS[s.provider] || {};
+  const st0 = s.status;
+  const cap = credCap(role);
+  const live = CRED_STATE[role];
+  const liveHTML = live
+    ? `<div class="byoks ${live.phase === 'testing' ? 'byoktesting' : (live.ok ? 'byokok' : 'byokbad')}">` +
+      (live.phase === 'testing' ? '<span class="byokspin"></span>' : '') + `${esc(live.message)}</div>`
+    : '';
+  const storedHTML = (!live && s.key)
+    ? `<div class="byoks ${st0.state === 'verified' ? 'byokok' : (st0.state === 'failed' ? 'byokbad' : '')}">` +
+      `${esc(credStatusLine(role))}${st0.at ? ' · ' + esc(String(st0.at).slice(0, 10)) : ''}` +
+      `${st0.state === 'failed' && st0.message ? ' — ' + esc(st0.message) : ''}</div>`
+    : '';
+  const opts = Object.keys(PROVIDERS).filter((k) => PROVIDERS[k].role === role).map((k) =>
+    `<option value="${esc(k)}"${k === s.provider ? ' selected' : ''}>${esc(PROVIDERS[k].label)}</option>`).join('');
+  const noun = row.auth === 'query' ? 'Token' : 'API key';
+  // D1: the extractability warning is SAFETY text, so it is visible, never folded
+  // behind a disclosure (HT-D53: provenance may hide, safety may not).
+  const warn = role === 'prices'
+    ? `<div class="note warnline">This token is a paid-subscription credential, and anyone with access to this browser can read it. Only use it on your own device.</div>`
+    : '';
+  el.innerHTML =
+    `<div class="row"><div><label>Provider</label><select id="credProv-${role}">${opts}</select></div>` +
+    (cap.capped ? `<div><label>Daily cap</label><input id="credCap-${role}" type="number" inputmode="numeric" min="1" value="${esc(s.cap)}"></div>` : '') +
+    `</div>` +
+    `<label>${esc(noun)}${s.key ? ' <small>(saved: ' + esc(credMask(role)) + ')</small>' : ''}</label>` +
+    `<input id="credKey-${role}" type="password" autocomplete="off" placeholder="${s.key ? 'Enter a new one to replace it' : 'Paste it here'}">` +
+    `<div class="row btnrow">` +
+    `<button class="btn primary" onclick="saveCred('${role}')">Save</button>` +
+    `<button class="btn" onclick="credTest('${role}')">Test connection</button>` +
+    `<button class="btn" onclick="credClear('${role}')"${s.key ? '' : ' disabled'}>Remove</button></div>` +
+    liveHTML + storedHTML + warn +
+    (cap.capped ? `<div class="note">Used today: ${esc(cap.used)} of ${esc(cap.cap)}.</div>` : '') +
+    citeBlock('How this is handled',
+      `<small class="fine">Stored on this device only, in its own place outside your data — never included in an export or a backup. ` +
+      `Sent only to ${esc(row.label || 'its provider')}, and only when you ${role === 'vision' ? 'send a photo' : 'look something up'} or tap Test connection.` +
+      `${row.auth === 'query' ? ' It travels inside the request address, which is how ' + esc(row.label) + ' requires it.' : ''}</small>`);
+}
+function saveCred(role) {
+  const k = document.getElementById('credKey-' + role);
+  const pv = document.getElementById('credProv-' + role);
+  const cp = document.getElementById('credCap-' + role);
+  const r = credSave(role, pv ? pv.value : null, (k && k.value) ? k.value : null, cp ? cp.value : null);
+  if (k) k.value = '';                        // never leave it in the DOM
+  if (r.blocked) { CRED_STATE[role] = { phase: 'tested', ok: false, message: r.message }; renderCred(role); return r; }
+  CRED_STATE[role] = r.stored
+    ? (r.warning ? { phase: 'tested', ok: false, message: r.warning } : null)
+    : { phase: 'tested', ok: false, message: 'This device would not store it. It will work until you reload, and then be gone.' };
+  toast(r.stored ? (r.configured ? 'Saved on this device' : 'Settings saved') : 'Could not store it');
+  renderCred(role);
+  return r;
+}
+// The capture surface. The outcome is NOT painted here (HT-D51): a second copy
+// would BE a second outcome state. The key status IS here, and it is never
+// stated without an offer to settle it on the spot (HT-D49), and never a gate.
+function renderCaptureBtn() {
+  const el = document.getElementById('captureBox');
+  if (!el) return;
+  if (!visionReady()) {
+    el.innerHTML = `<div class="note">Identification is not built yet, so there is nothing to send a photo for. ` +
+      `This is the capture scaffolding it will use.</div>`;
+    return;
+  }
+  const stC = credSettings('vision').status;
+  const live = CRED_STATE.vision;
+  const testingC = (live && live.phase === 'testing')
+    ? `<div class="byoks byoktesting"><span class="byokspin"></span>${esc(live.message)}</div>` : '';
+  const verifyC = (stC.state === 'verified') ? ''
+    : ` <button type="button" class="linklike" onclick="credTest('vision')">verify now</button>`;
+  el.innerHTML = testingC + (credConfigured('vision')
+    ? `<div class="caprow">` +
+      `<button class="btn primary" onclick="document.getElementById('captureFile').click()">Take photo</button>` +
+      `<button class="btn" onclick="document.getElementById('captureLib').click()">Choose photo</button>` +
+      `</div>` +
+      (testingC ? '' :
+        `<div class="byoks ${stC.state === 'verified' ? 'byokok' : (stC.state === 'failed' ? 'byokbad' : '')}">` +
+        `key ${esc(credStatusLine('vision'))}${verifyC}</div>`) +
+      `<div class="note">Take one now, or choose one you already have. One call to your provider with the photo. Nothing else is sent.</div>`
+    : `<div class="note">Add your vision key in Settings to send a photo.</div>`);
+}
+
+// ---- observation surfaces ----------------------------------------------------
+function renderBadge() {
+  const el = document.getElementById('storeBadge');
+  if (!el) return;
+  const s = Store.status();
+  el.textContent = s.message;
+  el.style.color = s.ok ? 'var(--good)' : 'var(--warn)';
+}
+function renderDataStatus() {
+  const el = document.getElementById('dataStatus');
+  if (!el || !APP_STATE) return;
+  const rows = [
+    ['storage tier',   Store.tier],
+    ['schema version', APP_STATE.version],
+    ['load source',    APP_SOURCE],
+    ['vision key',     credConfigured('vision') ? 'saved (not in your data)' : 'none'],
+    ['price token',    credConfigured('prices') ? 'saved (not in your data)' : 'none'],
+  ];
+  el.innerHTML = rows.map(([k, v]) =>
+    `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join('');
+}
+function refresh() {
+  renderBadge(); renderDataStatus();
+  ROLES.forEach(function (r) { renderCred(r); });
+  renderCaptureBtn(); renderCaptureOutcome();
+}
+function openSettings() {
+  const p = document.getElementById('settingsPanel'), s = document.getElementById('settingsScrim');
+  if (p) p.style.display = 'flex';
+  if (s) s.style.display = 'block';
+  return { ok: true };
+}
+function closeSettings() {
+  const p = document.getElementById('settingsPanel'), s = document.getElementById('settingsScrim');
+  if (p) p.style.display = 'none';
+  if (s) s.style.display = 'none';
+  return { ok: true };
+}
+function paceReset() { Object.keys(PACE).forEach(function (k) { delete PACE[k]; }); }   // test seam
+
+function main() {
+  boot();
+  requestPersistentStorage();
+  refresh();
+}
+
+// Console seam for review and testing.
+window.CT = {
+  Store, boot, refresh, exportJSON, parseImport, restore, normalizeState, emptyState, cleanJSON, esc,
+  STATE_KIND, SCHEMA_VERSION, keys: { STORE_KEY, PRERESTORE_KEY, CRED_PREFIX },
+  setClock, nowMs, todayKey, localDate,
+  // D1 -- providers, credentials, egress
+  PROVIDERS, ROLES, ROLE_DEFAULT, egress, pace, paceReset, redact, providerMessage,
+  credRead, credPatch, credClear, credSettings, credKeyIssue, credSetStatus, credConfigured, credStatusLine,
+  credMask, credSave, credCap, credCount, credTest, credPaint, renderCred, saveCred,
+  setCallTimeout, setTestTimeout,
+  // the vision contract seam (unruled) and the one door
+  setVisionContract, visionReady, visionPrefix, openCaptureResult, doReplyPaste, captureResult,
+  captureDiscard, captureAccept, resultReadoutHTML, renderCaptureResult,
+  // HT-D51 -- the outcome modal
+  captureOutcomeState, renderCaptureOutcome, captureOutcomeDismiss, captureRetry, capturePasteInstead,
+  // the capture chain (HT-D47/D48/D58/D64/D65)
+  byokCapture, byokFallback, onCaptureFile, captureSourceOf, byokBusyState, byokBusyClear, byokCancel,
+  byokTrace, byokTraceReset, byokTraceLine, byokTimeouts, byokNoteVerdict, BYOK_RETRY_MIN_MS,
+  byokDownscale, byokDecodeBitmap, byokDecodeImage, byokEncode, byokBounds, byokHeicMessage,
+  setByokBitmapLease, setByokDecodeTimeout, BYOK_MAX_EDGE, BYOK_JPEG_Q, BYOK_MIN_DATAURL,
+  visionCaps, visionBody, visionCall, BYOK_MAX_TOKENS, pricesPing, PRICES_PING_QUERY,
+  renderCaptureBtn, openSettings, closeSettings,
+  state: () => APP_STATE,
+  resave: () => Store.saveState(APP_STATE),
+};
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', main);
+else main();

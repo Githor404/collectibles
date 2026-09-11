@@ -1,0 +1,1197 @@
+<!doctype html><meta charset="utf-8"><title>collectibles · data-layer gate</title><body>
+<!--
+  Re-runnable data-layer gate, ported from HealthTracker's harness. Self-contained:
+  synthetic fixtures inline, a swappable fake localStorage per scenario. Exercises
+  the REAL ../app.js, and loads the REAL ../index.html in an iframe for the shell
+  cases. Run: bash tests/run-data-layer.sh
+
+  THE VISION CONTRACT IS UNRULED (D1). The capture-chain cases install a SYNTHETIC
+  contract through CT.setVisionContract. They prove the chain, never a contract.
+-->
+<script>
+window.__keysEverWritten = {};
+function makeFake(seed, failWrites){
+  var m = Object.assign({}, seed || {});
+  return {
+    getItem: function(k){ return Object.prototype.hasOwnProperty.call(m,k) ? m[k] : null; },
+    setItem: function(k,v){ if(failWrites) throw new Error('QuotaExceededError'); m[k] = String(v); window.__keysEverWritten[k] = true; },
+    removeItem: function(k){ delete m[k]; },
+    _get: function(k){ return Object.prototype.hasOwnProperty.call(m,k) ? m[k] : null; },
+    _has: function(k){ return Object.prototype.hasOwnProperty.call(m,k); }
+  };
+}
+window.__ls = null;
+window.setLS = function(seed, failWrites){
+  window.__ls = makeFake(seed, failWrites);
+  Object.defineProperty(window, 'localStorage', { value: window.__ls, configurable: true });
+};
+window.setLS({});
+</script>
+<script src="../app.js"></script>
+<script>
+(function(){
+  var pass = 0, fail = 0;
+  function res(cond, name, extra){
+    var p = document.createElement('p'); p.className = 'r';
+    p.textContent = (cond ? 'PASS  ' : 'FAIL  ') + name + (!cond && extra ? '  :: ' + extra : '');
+    document.body.appendChild(p);
+    if (cond) pass++; else fail++;
+  }
+  function deepEqual(a, b){
+    if (a === b) return true;
+    if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return a === b;
+    var ka = Object.keys(a), kb = Object.keys(b);
+    if (ka.length !== kb.length) return false;
+    for (var i=0;i<ka.length;i++){ var k=ka[i]; if(!Object.prototype.hasOwnProperty.call(b,k)) return false; if(!deepEqual(a[k],b[k])) return false; }
+    return true;
+  }
+  window.__confirm = true;
+  window.confirm = function(){ return window.__confirm; };
+  // GATE INTEGRITY (HT-D35 addendum): a SYNCHRONOUS throw would otherwise still let
+  // a green-looking SUMMARY print with a silently reduced count.
+  window.addEventListener('error', function (e) {
+    res(false, 'HARNESS: uncaught exception aborted the synchronous suite -- cases after it did NOT run', String(e.message) + ' @' + (e.lineno || '?'));
+  });
+  // Host elements the renderers paint into, mirroring the shell. That the SHELL
+  // has them is what the iframe cases and capture-outcome-gate.ps1 prove.
+  (function ensureDOM(){
+    var mk = function (tag, id, cls, parent) {
+      if (document.getElementById(id)) return document.getElementById(id);
+      var e = document.createElement(tag); e.id = id; if (cls) e.className = cls;
+      (parent || document.body).appendChild(e); return e;
+    };
+    ['storeBadge','dataStatus','captureBox','credBox-vision','credBox-prices','replyReport','toast','prerestoreWrap'].forEach(function (id) { mk('div', id); });
+    mk('textarea', 'replyBox'); mk('textarea', 'prerestoreBox');
+    mk('div', 'outcomeScrim', 'scrim oscrim');
+    var w = mk('div', 'captureOutcome', 'omodal');
+    mk('b', 'outcomeTitle', '', w);
+    mk('button', 'outcomeX', 'sheetx', w);
+    var body = mk('div', 'outcomeBody', 'obody', w);
+    mk('div', 'outcomeMsg', '', body);
+    mk('div', 'captureResult', '', body);
+    mk('div', 'outcomeFoot', 'ofoot', w);
+  })();
+
+  var SECRET = 'xai-SUPERSECRET-0123456789';
+  var TOKEN = 'PCTOKEN-SECRET-' + '0123456789abcdef012345678';   // 40 chars, the documented length
+  // The SYNTHETIC contract. `probe` must be a string; every other key rides along,
+  // so a long reply makes a long result (the scroll case).
+  var OK_TEXT = '{"probe":"alpha","n":1}';
+  var TEST_CONTRACT = {
+    version: 9, acceptLabel: 'Use this',
+    prompt: 'TEST CONTRACT: reply {"probe":"<word>","n":<number>}',
+    parse: function (text) {
+      var o; try { o = JSON.parse(CT.cleanJSON(text)); } catch (e) { return { ok: false, error: 'Bad JSON: ' + e.message }; }
+      if (!o || typeof o !== 'object' || Array.isArray(o) || typeof o.probe !== 'string')
+        return { ok: false, error: 'Expected {"probe":...}.' };
+      return { ok: true, value: o };
+    },
+    accept: function (v) { window.__accepted = v; return { ok: true }; }
+  };
+
+  // ==========================================================================
+  // S -- storage (HT-D1): prefixed stable key, forward guard, truthful badge
+  // ==========================================================================
+  setLS({}); CT.boot();
+  var s = CT.state();
+  res(CT.Store.tier === 'local', 'S1: tier local');
+  res(s.kind === 'collectibles' && s.version === 1, 'S1: a fresh boot is kind collectibles, schema v1');
+  res(deepEqual(s.settings, {}), 'S1: settings start empty -- nothing fabricated');
+  res(__ls._has('collectibles-state'), 'S1: written under the PREFIXED stable key');
+  res(CT.Store.status().ok === true, 'S1: badge ok');
+
+  var futureBlob = JSON.stringify({ kind: 'collectibles', version: 2, settings: {}, futureField: 1 });
+  setLS({ 'collectibles-state': futureBlob }); var r2 = CT.boot();
+  res(r2.source === 'future', 'S2: a blob from a NEWER schema boots as future');
+  res(__ls._get('collectibles-state') === futureBlob, 'S2: and is NOT overwritten (HT-D7 forward guard)');
+
+  var NESTED = { kind: 'collectibles', version: 1, settings: { a: { b: [1, 2, { c: 'x' }] }, flag: true } };
+  setLS({ 'collectibles-state': JSON.stringify(NESTED) }); var r3 = CT.boot();
+  res(r3.source === 'store' && deepEqual(CT.state(), NESTED),
+      'S3: a same-version blob boots from store with NESTED settings intact -- nothing an allowlist rebuild could drop');
+
+  setLS({}); CT.boot();
+  CT.Store.forceWriteFailure(true);
+  res(CT.resave() === false, 'S4: a failed write reports failure');
+  res(CT.Store.tier === 'memory' && CT.Store.status().ok === false, 'S4: degraded to memory, and the badge warns');
+  res(/export/i.test(CT.Store.status().message), 'S4: the badge says to export');
+  CT.Store.forceWriteFailure(false);
+
+  setLS({}, true); CT.boot();
+  res(CT.Store.tier === 'memory' && CT.Store.status().ok === false, 'S5: blocked storage (private mode) -> memory tier, badge honest');
+
+  // ==========================================================================
+  // E -- export / restore (HT-D3, HT-D5)
+  // ==========================================================================
+  var S1 = { kind: 'collectibles', version: 1, settings: { grades: ['9.4', '9.6'], nested: { k: { deep: 'v' } } } };
+  setLS({ 'collectibles-state': JSON.stringify(S1) }); CT.boot();
+  var exp1 = CT.exportJSON();
+  setLS({}); CT.boot(); window.__confirm = true;
+  var r7 = CT.restore(exp1);
+  res(r7.ok && r7.kind === 'restore', 'E1: an export restores');
+  res(deepEqual(CT.state(), S1), 'E1: export -> restore is IDENTITY, nested settings included');
+  res(__ls._get('collectibles-state') === JSON.stringify(S1), 'E1: and what is stored is what was restored');
+
+  setLS({}); CT.boot();
+  var beforeE = JSON.stringify(CT.state());
+  // A HealthTracker export: version 7, no `kind`. Without the kind check it would
+  // be refused as "from a newer version" -- the wrong cause, stated confidently.
+  var htExport = JSON.stringify({ version: 7, days: { '2026-07-08': { status: 'complete', items: [], water_l: 0 } }, current: '2026-07-08', settings: {} });
+  var rHT = CT.restore(htExport);
+  res(!rHT.ok && /not a collectibles export/i.test(rHT.error || '') && !/newer/i.test(rHT.error || ''),
+      'E2 GATE: a HealthTracker export is refused as ANOTHER PRODUCT, not as "a newer version"', rHT.error);
+  res(!__ls._has('collectibles-state-prerestore'), 'E2: a refused paste takes no backup');
+  var rNoV = CT.restore(JSON.stringify({ kind: 'collectibles', settings: {} }));
+  res(!rNoV.ok && /no version/i.test(rNoV.error || ''), 'E3: a version-absent export is refused');
+  var rNew = CT.restore(futureBlob);
+  res(!rNew.ok && /newer version/i.test(rNew.error || ''), 'E3: a newer-schema export is refused -- we never load down');
+  res(!CT.restore('{ not json ]').ok && !CT.restore('[]').ok && !CT.restore('').ok, 'E3: bad JSON, an array and nothing are refused');
+  res(JSON.stringify(CT.state()) === beforeE, 'E3: the state is untouched by every refused paste');
+
+  setLS({}); CT.boot(); window.__confirm = true;
+  CT.Store.forceWriteFailure(true);
+  var r11 = CT.restore(JSON.stringify(S1));
+  res(r11.ok && r11.backedUp === false, 'E4: under a write failure restore proceeds and does NOT claim a backup (HT-D3)');
+  res(!__ls._has('collectibles-state-prerestore'), 'E4: no backup slot was written');
+  res(CT.Store.tier === 'memory' && CT.Store.status().ok === false, 'E4: and the badge is honest');
+  CT.Store.forceWriteFailure(false);
+
+  setLS({}); CT.boot(); window.__confirm = true;
+  var stateA = JSON.stringify(CT.state());
+  CT.restore(JSON.stringify(S1));
+  var slotA = __ls._get('collectibles-state-prerestore');
+  res(slotA === stateA, 'E5: a restore backs up the prior state first');
+  window.__confirm = false;
+  var S1b = JSON.parse(JSON.stringify(S1)); S1b.settings.changed = 1;
+  var rDecl = CT.restore(JSON.stringify(S1b));
+  // Clause 4: the declined restore would have backed up S1, which DIFFERS from slotA.
+  res(rDecl.aborted === true && __ls._get('collectibles-state-prerestore') === slotA,
+      'E5 GATE: a DECLINED restore leaves the one level of undo exactly as it was');
+  res(deepEqual(CT.state(), S1), 'E5: and the state is untouched');
+  window.__confirm = true;
+
+  setLS({}); CT.boot();
+  var smart = '{' + String.fromCharCode(0x201C) + 'kind' + String.fromCharCode(0x201D) + ':' +
+    String.fromCharCode(0x201C) + 'collectibles' + String.fromCharCode(0x201D) + ',' +
+    String.fromCharCode(0x201C) + 'version' + String.fromCharCode(0x201D) + ':' + String.fromCharCode(0xA0) + '1}';
+  res(CT.restore(smart).ok, 'E6: smart quotes and a non-breaking space are normalized, as a chat app delivers them');
+
+  // ==========================================================================
+  // K -- credentials (D1, HT-D45/D46/D49): outside the state, per role, merged
+  // ==========================================================================
+  var FETCHES = [];
+  var FETCH_SCRIPT = [];
+  window.fetch = function (url, init) {
+    FETCHES.push({ url: String(url), init: init || {}, at: Date.now() });
+    var next = FETCH_SCRIPT.shift();
+    if (!next) return Promise.resolve({ ok: true, status: 200, text: function () { return Promise.resolve('{}'); } });
+    if (next.reject) return Promise.reject(next.reject);
+    return Promise.resolve({ ok: next.status < 400, status: next.status,
+                             text: function () { return Promise.resolve(next.body); } });
+  };
+  function credReset() {
+    FETCHES = []; FETCH_SCRIPT = [];
+    CT.credClear('vision'); CT.credClear('prices'); CT.paceReset();
+  }
+  function withKeys() {
+    credReset();
+    CT.credSave('vision', 'grok', SECRET, 20);
+    CT.credSave('prices', 'pricecharting', TOKEN);
+  }
+  function surfacesText() {
+    return ['credBox-vision', 'credBox-prices', 'captureBox', 'dataStatus', 'storeBadge', 'toast', 'outcomeMsg', 'outcomeTitle', 'outcomeFoot', 'captureResult', 'replyReport']
+      .map(function (id) { var e = document.getElementById(id); return e ? e.innerHTML : ''; }).join('|');
+  }
+
+  setLS({}); CT.boot(); withKeys();
+  res(CT.credConfigured('vision') && CT.credConfigured('prices'), 'K1: both credentials configure');
+  var stj = JSON.stringify(CT.state());
+  res(stj.indexOf(SECRET) < 0 && stj.indexOf(TOKEN) < 0, 'K1 GATE: NEITHER credential is in the state object -- nothing that serializes the state can carry one');
+  var expK = CT.exportJSON();
+  res(expK.indexOf(SECRET) < 0 && expK.indexOf(TOKEN) < 0 && expK.indexOf('cred') < 0,
+      'K1: absent from the export, and so is any trace of their stores');
+  window.__confirm = true;
+  CT.restore(expK);
+  var slotK = __ls._get('collectibles-state-prerestore') || '';
+  res(slotK.indexOf(SECRET) < 0 && slotK.indexOf(TOKEN) < 0, 'K1: absent from the pre-restore backup');
+  res(CT.credSettings('vision').key === SECRET && CT.credSettings('prices').key === TOKEN,
+      'K1: a destructive restore leaves both untouched -- different store, different lifetime');
+  res(CT.credMask('vision').indexOf(SECRET) < 0 && CT.credMask('prices').indexOf(TOKEN) < 0 && CT.credMask('vision').indexOf('xai') === 0,
+      'K1: the mask shows shape, never the credential');
+  CT.refresh();
+  var surfK = surfacesText();
+  res(surfK.indexOf(SECRET) < 0 && surfK.indexOf(TOKEN) < 0, 'K1: no rendered surface carries either credential');
+  CT.credClear('vision');
+  res(!CT.credConfigured('vision') && String(localStorage.getItem('collectibles-cred-vision') || '').indexOf(SECRET) < 0,
+      'K1: removing one leaves no residue');
+  res(CT.credConfigured('prices'), 'K1: and does not touch the other role');
+
+  withKeys();
+  CT.credPatch('vision', { someFutureField: 'keep me' });
+  CT.credSetStatus('vision', 'verified', '');
+  CT.credCount('vision');
+  CT.credSave('vision', 'grok', null, 7);
+  var rawV = JSON.parse(localStorage.getItem('collectibles-cred-vision') || '{}');
+  res(rawV.someFutureField === 'keep me' && rawV.status && rawV.status.state === 'verified' && rawV.cap === 7 && rawV.key === SECRET && rawV.used && rawV.used.n === 1,
+      'K2 GATE (HT-D49): a field no writer knows survives the counter AND a save, beside the status, the cap and the key');
+  CT.credSetStatus('prices', 'failed', 'x');
+  res(CT.credSettings('vision').status.state === 'verified', 'K2: a write to one role cannot touch the other');
+  res(CT.credSave('vision', 'grok', 'xai-A-COMPLETELY-DIFFERENT-KEY-0123', 7).ok === true && CT.credSettings('vision').status.state === 'unverified',
+      'K2: replacing the credential still resets its status -- a merge must not keep a verdict about a different key');
+  CT.credSave('vision', 'pricecharting', null, null);
+  res(CT.credSettings('vision').provider === 'grok', 'K2: a provider from ANOTHER role cannot be assigned to this one');
+
+  res(CT.credKeyIssue('grok', '').block === true, 'K3 (HT-D46): an empty key is refused');
+  res(CT.credKeyIssue('grok', 'xai-with a space-0123456789').block === true, 'K3: an embedded space is refused');
+  res(CT.credKeyIssue('grok', 'xai-short').block === true, 'K3: an implausibly short key is refused');
+  var w1 = CT.credKeyIssue('grok', 'sk-someotherprovider-0123456789');
+  res(w1 && w1.block === false && w1.message.indexOf('xai-') >= 0, 'K3: a surprising prefix WARNS and saves anyway');
+  res(CT.credKeyIssue('grok', SECRET) === null, 'K3: a well-formed key raises nothing');
+  var w2 = CT.credKeyIssue('pricecharting', TOKEN + 'X');
+  res(w2 && w2.block === false && /40/.test(w2.message), 'K3: a token that is not the documented 40 characters warns, and saves anyway');
+  res(CT.credKeyIssue('pricecharting', TOKEN) === null, 'K3: a 40-character token raises nothing');
+  credReset();
+  res(CT.credSave('prices', 'pricecharting', 'nope').blocked === true && CT.credConfigured('prices') === false, 'K3: a blocked save stores NOTHING');
+
+  withKeys();
+  res(CT.credSettings('vision').status.state === 'unverified' && CT.credStatusLine('vision') === 'not tested yet',
+      'K4 (HT-D46): a newly saved key is UNVERIFIED, and says so');
+  CT.credSetStatus('vision', 'verified', '');
+  res(String(localStorage.getItem('collectibles-cred-vision') || '').indexOf('verified') >= 0 && CT.exportJSON().indexOf('verified') < 0,
+      'K4: the status is stored WITH THE KEY, so the export carries no trace of it');
+
+  withKeys();
+  FETCHES = [];
+  CT.boot(); CT.refresh(); CT.openSettings(); CT.closeSettings(); CT.renderCred('vision'); CT.renderCred('prices'); CT.renderCaptureBtn();
+  CT.openCaptureResult('not json at all');
+  window.__confirm = true; CT.restore(CT.exportJSON());
+  res(FETCHES.length === 0, 'K5 (D1): boot, refresh, settings, a failed read and a restore issue ZERO calls');
+
+  // ==========================================================================
+  // V -- the vision contract seam ships EMPTY (D1: no features)
+  // ==========================================================================
+  CT.setVisionContract(null);
+  res(CT.visionReady() === false, 'V1: no vision contract is ruled -- the seam ships empty');
+  CT.renderCaptureBtn();
+  var cbV = document.getElementById('captureBox').innerHTML;
+  res(cbV.indexOf('not built yet') >= 0 && cbV.indexOf('Take photo') < 0,
+      'V1: the capture surface says so, and offers no button that could only fail');
+  res(CT.openCaptureResult(OK_TEXT).ok === false && CT.captureResult() === null,
+      'V1: a reply cannot open a result when there is nothing to read it against');
+
+  // ==========================================================================
+  // C -- the request contract (HT-D45, HT-D64, HT-D66) and the clocks (HT-D48)
+  // ==========================================================================
+  var b1 = CT.visionBody('data:image/jpeg;base64,AAAA', 'TEXT', 'grok-4.6', CT.visionCaps(CT.PROVIDERS.grok, {}));
+  var c1 = b1.messages[0].content;
+  res(b1.model === 'grok-4.6' && c1.length === 2 && c1[0].type === 'image_url' && c1[0].image_url.url.indexOf('data:image/jpeg;base64,') === 0 && c1[1].type === 'text' && c1[1].text === 'TEXT',
+      'C1: one user message, an OpenAI-CLASSIC image part and a text part -- the shape the endpoint accepts');
+  res(b1.response_format && b1.response_format.type === 'json_object' && b1.max_tokens > 0 && b1.max_tokens <= 4096,
+      'C1 (HT-D64): JSON is asked for STRUCTURALLY, and the answer is bounded');
+  res(b1.reasoning_effort === 'low', 'C1 (HT-D66): the capture asks for the LOW reasoning floor');
+  var capsOff = CT.visionCaps(CT.PROVIDERS.grok, { noEffort: true });
+  var capsNoJson = CT.visionCaps(CT.PROVIDERS.grok, { noJsonMode: true });
+  res(capsOff.reasoningEffort === null && capsOff.jsonMode === true && capsNoJson.jsonMode === false && capsNoJson.reasoningEffort === 'low',
+      'C1 (HT-D66): the two degrade flags are INDEPENDENT, in both directions');
+  var undeclared = CT.visionCaps({ role: 'vision', label: 'x', base: 'b', model: 'm' }, {});
+  res(!undeclared.reasoningEffort && !undeclared.jsonMode &&
+      CT.visionBody('data:,x', 'p', 'm', undeclared).reasoning_effort === undefined &&
+      CT.visionBody('data:,x', 'p', 'm', undeclared).response_format === undefined,
+      'C1: a provider that declares neither field is sent neither -- asserted through visionCaps, not a null (HT-D60 Clause 4)');
+  res(CT.PROVIDERS.grok.base === 'https://api.x.ai/v1' && CT.PROVIDERS.grok.auth === 'bearer' &&
+      CT.PROVIDERS.pricecharting.base === 'https://www.pricecharting.com' && CT.PROVIDERS.pricecharting.auth === 'query' &&
+      CT.PROVIDERS.pricecharting.authParam === 't' && CT.PROVIDERS.pricecharting.minIntervalMs >= 1000,
+      'C1 (D1): the verified endpoints, auth styles and the 1 call/s pacing are the shipped rows');
+  CT.setVisionContract(TEST_CONTRACT);
+  res(CT.visionPrefix().indexOf('v' + TEST_CONTRACT.version) >= 0 && CT.visionPrefix().indexOf('ONLY') >= 0,
+      'C2 (HT-D45 Fork B): the preamble is a prefix CARRYING the contract version, not a forked prompt');
+  var T0 = CT.byokTimeouts();
+  res(T0.call >= 90000 && T0.test <= 20000 && T0.call >= T0.test * 4,
+      'C3 (HT-D48): two clocks -- the capture budget is long, the test budget short, and capture at least 4x test');
+  res(T0.decode > 0 && T0.lease > 0 && T0.lease < T0.decode,
+      'C3 (HT-D47): the decoder LEASH sits inside the decode budget, so the fallback always gets a turn');
+  res(CT.BYOK_RETRY_MIN_MS > 0 && CT.BYOK_RETRY_MIN_MS < T0.call, 'C3 (HT-D64): a retry floor exists inside the call budget');
+
+  // ==========================================================================
+  // P -- one door, and the result surface is escaped
+  // ==========================================================================
+  document.getElementById('replyBox').value = OK_TEXT;
+  CT.doReplyPaste();
+  var viaPaste = JSON.stringify(CT.captureResult());
+  CT.captureDiscard();
+  CT.openCaptureResult(OK_TEXT);
+  var viaDoor = JSON.stringify(CT.captureResult());
+  CT.captureDiscard();
+  res(viaPaste === viaDoor && viaPaste.indexOf('alpha') >= 0,
+      'P1 (HT-D45): identical reply text gives a BYTE-IDENTICAL result, pasted or called -- one door');
+  CT.openCaptureResult('{"probe":"<img src=x onerror=alert(1)>","n":1}');
+  var crP = document.getElementById('captureResult').innerHTML;
+  res(crP.indexOf('<img src=x') < 0 && crP.indexOf('&lt;img') >= 0, 'P2: a hostile string in a reply is ESCAPED on the result surface');
+  CT.captureDiscard();
+
+  // ==========================================================================
+  // R -- redaction (D1): a provider's words may carry the credential back
+  // ==========================================================================
+  res(CT.providerMessage('{"error":"bad token ' + TOKEN + ' rejected"}', TOKEN).indexOf(TOKEN) < 0 &&
+      CT.providerMessage('{"error":"bad token ' + TOKEN + ' rejected"}', TOKEN).indexOf('[redacted]') >= 0,
+      'R1 GATE: a provider that ECHOES the credential has it redacted before any surface sees it');
+  res(CT.providerMessage('{"error":"Must provide an access token","error-message":"Must provide an access token","status":"error"}', TOKEN) === 'Must provide an access token',
+      'R1: the PriceCharting error shape verified 2026-09-11 is read as written');
+
+  // ==========================================================================
+  // ASYNC -- the call path, the capture chain and the shipped shell. Registered
+  // as ordered STEPS and run after the shell iframe loads, so the suite still
+  // finishes exactly once.
+  // ==========================================================================
+  var STEPS = [];
+  function step(fn) { STEPS.push(fn); }
+  function tick(ms) { return new Promise(function (r) { setTimeout(r, ms || 0); }); }
+  var OK_REPLY = '{"choices":[{"message":{"content":' + JSON.stringify(OK_TEXT) + '}}]}';
+  var JUNK = '{"choices":[{"message":{"content":"sorry, I cannot"}}]}';
+  var SCRIPTED_FETCH = window.fetch;
+  // Honours the abort signal, like a real fetch: a stub that ignores it leaves a
+  // promise pending for the rest of the run (HT-R21.3's harness hang).
+  function hangFetch() {
+    return function (u, i) {
+      FETCHES.push({ url: String(u), init: i || {}, at: Date.now() });
+      return new Promise(function (_, rej) {
+        var sig = i && i.signal;
+        if (sig) sig.addEventListener('abort', function () { var e = new Error('aborted'); e.name = 'AbortError'; rej(e); });
+      });
+    };
+  }
+  // The rendered status line, tags stripped (the spinner is an element inside it).
+  function vis(role) {
+    var el = document.getElementById('credBox-' + role);
+    var m = el ? el.innerHTML.match(/<div class="byoks([^"]*)">([\s\S]*?)<\/div>/) : null;
+    return m ? { cls: m[1].trim(), text: m[2].replace(/<[^>]+>/g, '').trim() } : { cls: '(none)', text: '(NOTHING RENDERED)' };
+  }
+  function capVis() { CT.renderCaptureBtn(); return document.getElementById('captureBox').innerHTML; }
+  function outcome() {
+    CT.renderCaptureOutcome();
+    var w = document.getElementById('captureOutcome');
+    return { state: CT.captureOutcomeState(), shown: w.style.display !== 'none' && w.style.display !== '',
+             title: document.getElementById('outcomeTitle').textContent || '',
+             msg: document.getElementById('outcomeMsg').innerHTML || '',
+             foot: document.getElementById('outcomeFoot').innerHTML || '',
+             body: document.getElementById('captureResult').innerHTML || '' };
+  }
+  var FILE = null;
+  function mkFile() {
+    var c = document.createElement('canvas'); c.width = 2400; c.height = 1600;
+    var x = c.getContext('2d'); x.fillStyle = '#a33'; x.fillRect(0, 0, 2400, 1600);
+    return new Promise(function (resolve) {
+      c.toBlob(function (b) { resolve(new File([b], 'cover.jpg', { type: 'image/jpeg' })); }, 'image/jpeg', 0.9);
+    });
+  }
+
+  step(function () {
+    // HARNESS LIMITATION (HT-D47), recorded rather than hidden: createImageBitmap
+    // NEVER settles under --virtual-time-budget. The suite proves the LEASH and
+    // the fallback; the preferred decoder runs in capture-outcome-gate.ps1, in
+    // real time. The lease is shortened so the fallback engages at once.
+    CT.setByokBitmapLease(20);
+    CT.setVisionContract(TEST_CONTRACT);
+    return mkFile().then(function (f) { FILE = f; });
+  });
+
+  // ---- LE: THE LEASH (HT-D47), first, because without it nothing else runs ---
+  // Under virtual time createImageBitmap never settles -- the device's hang,
+  // reproduced in the harness. The whole decode gets 2 s here, so only the LEASH
+  // (20 ms) can hand the photo to the fallback in time: HT-D60 Clause 4, the
+  // fixture makes the mechanism load-bearing.
+  //
+  // It runs FIRST deliberately. Placed later, removing the leash simply stalled
+  // the first capture step for the whole decode budget, aborting the chain before
+  // this case could name itself -- the defect was caught, by the count pin, but
+  // the gate written for it never spoke.
+  step(function () {
+    CT.setByokBitmapLease(20); CT.setByokDecodeTimeout(2000);
+    return CT.byokDownscale(FILE).then(function (img) {
+      res(Math.max(img.w, img.h) === CT.BYOK_MAX_EDGE,
+          'LE1 GATE (HT-D47): when the preferred decoder never answers, the LEASH hands the photo to the fallback and it decodes');
+    }, function (e) {
+      res(false, 'LE1 GATE (HT-D47): when the preferred decoder never answers, the LEASH hands the photo to the fallback and it decodes', String(e && e.message));
+    }).then(function () { CT.setByokDecodeTimeout(20000); });
+  });
+
+  // ---- V2/V3: never a call without a contract or a key, and never silence ----
+  step(function () {
+    CT.setVisionContract(null); withKeys();
+    return CT.byokCapture(FILE).then(function (r) {
+      var o = outcome();
+      res(r.ok === false && r.kind === 'contract' && FETCHES.length === 0, 'V2 GATE: with no contract ruled, a capture makes ZERO calls');
+      res(o.state === 'error' && o.shown && o.msg.indexOf('Nothing was sent') >= 0,
+          'V2: and SAYS so, in the outcome modal -- never in nothing (HT-D47)');
+      CT.byokBusyClear(); CT.setVisionContract(TEST_CONTRACT);
+    });
+  });
+  step(function () {
+    credReset();
+    return CT.byokCapture(FILE).then(function (r) {
+      res(r.ok === false && r.kind === 'config' && FETCHES.length === 0 && CT.captureOutcomeState() === 'error',
+          'V3: with no key a capture paints a stated failure and makes no call -- HealthTracker returned silently at this point');
+      CT.byokBusyClear();
+    });
+  });
+
+  // ---- PH: the downscale touches only the bytes sent -------------------------
+  step(function () {
+    withKeys();
+    var before = CT.exportJSON();
+    return CT.byokDownscale(FILE).then(function (img) {
+      res(Math.max(img.w, img.h) === CT.BYOK_MAX_EDGE, 'PH1 (HT-D45 Fork D): a 2400px photo is downscaled to the 1280px bound before it is sent');
+      res(img.dataUrl.indexOf('data:image/jpeg;base64,') === 0, 'PH1: and encoded as a jpeg data URL');
+      res(CT.exportJSON() === before && JSON.stringify(CT.state()).indexOf('data:image') < 0,
+          'PH1: the downscale changed the SENT BYTES ONLY -- no store, no export ever holds an image');
+    });
+  });
+
+  // ---- VR: validate -> retry once -> fall back with the raw reply (HT-D64) ----
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    FETCH_SCRIPT = [{ status: 200, body: OK_REPLY }];
+    return CT.byokCapture(FILE).then(function (r) {
+      var f0 = FETCHES[0] || { url: '', init: { headers: {} } };
+      res(r.ok === true && r.attempts === 1, 'VR1: a valid reply needs ONE call');
+      res(FETCHES.length === 1 && f0.url === 'https://api.x.ai/v1/chat/completions', 'VR1: sent to the verified endpoint');
+      res(String(f0.init.headers.Authorization) === 'Bearer ' + SECRET && f0.url.indexOf(SECRET) < 0,
+          'VR1: the key rides as a Bearer header, as the row declares -- never in the URL');
+      var sent = String(f0.init.body || '');
+      res(sent.indexOf('data:image/jpeg;base64,') > 0 && sent.indexOf('"type":"image_url"') > 0 &&
+          sent.indexOf('Contract v9') > 0 && sent.indexOf('TEST CONTRACT') > 0,
+          'VR1: carrying the photo, the versioned prefix and the contract prompt');
+      res(!!CT.captureResult() && CT.captureResult().value.probe === 'alpha', 'VR1: and the reply opens the RESULT through the one door');
+      res(CT.byokBusyState() === null, 'VR1: the pending state clears');
+    });
+  });
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    FETCH_SCRIPT = [{ status: 200, body: JUNK }, { status: 200, body: OK_REPLY }];
+    return CT.byokCapture(FILE).then(function (r) {
+      res(r.ok === true && r.attempts === 2 && FETCHES.length === 2, 'VR2: a reply that does not validate is retried EXACTLY once');
+      res(!!CT.captureResult(), 'VR2: and the second reply opens the result');
+    });
+  });
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    document.getElementById('replyBox').value = '';
+    FETCH_SCRIPT = [{ status: 200, body: JUNK }, { status: 200, body: JUNK }];
+    return CT.byokCapture(FILE).then(function (r) {
+      res(r.ok === false && r.fellBack === true && FETCHES.length === 2, 'VR3: two replies that do not validate stop -- no third call');
+      res(document.getElementById('replyBox').value.indexOf('sorry') >= 0, 'VR3: the raw reply lands in the reply box -- NEVER a dead end');
+      res(CT.captureResult() === null, 'VR3: and no result is fabricated from it');
+    });
+  });
+  step(function () {
+    // THE HT-D64 BUG: the first reply arrived, the retry failed, and the fallback
+    // was handed an empty string.
+    var PROSE = '{"choices":[{"message":{"content":' + JSON.stringify('Here is what I see on this cover, as a table, with values.') + '}}]}';
+    withKeys(); CT.captureDiscard();
+    document.getElementById('replyBox').value = '';
+    FETCH_SCRIPT = [{ status: 200, body: PROSE }, { status: 500, body: 'gateway error' }];
+    return CT.byokCapture(FILE).then(function (r) {
+      res(r.ok === false && r.fellBack === true && FETCHES.length === 2, 'VR4: a prose reply is retried once, and the second failure ends it');
+      res(document.getElementById('replyBox').value.indexOf('what I see on this cover') >= 0,
+          'VR4 GATE (HT-D64): the FIRST reply reaches the reply box even though the SECOND call failed -- it arrived, it was paid for');
+      res(CT.captureResult() === null, 'VR4: and no result is fabricated from prose');
+    });
+  });
+  step(function () {
+    var PROSE2 = '{"choices":[{"message":{"content":' + JSON.stringify('A table of cover details.') + '}}]}';
+    withKeys(); CT.captureDiscard();
+    document.getElementById('replyBox').value = '';
+    CT.setCallTimeout(1);                     // nothing left the moment the first returns
+    FETCH_SCRIPT = [{ status: 200, body: PROSE2 }, { status: 200, body: OK_REPLY }];
+    return CT.byokCapture(FILE).then(function (r) {
+      CT.setCallTimeout(120000);
+      res(FETCHES.length === 1,
+          'VR5 GATE (HT-D64): with no budget left the second call is NOT made -- it would report a timeout for a parse failure that already happened');
+      res(document.getElementById('replyBox').value.indexOf('table of cover details') >= 0 && r.fellBack === true,
+          'VR5: and the first reply still reaches the reply box, reported as a fallback');
+    });
+  });
+
+  // ---- TR: the capture trace (HT-D65, HT-D66) -------------------------------
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    FETCH_SCRIPT = [{ status: 200, body: OK_REPLY }];
+    return CT.byokCapture(FILE).then(function () {
+      var t = CT.byokTrace();
+      res(!!t && t.attempts.length === 1, 'TR1: a capture records exactly one attempt when the first reply validates');
+      res(t.bytes > 0 && t.w > 0 && t.h > 0 && typeof t.decodeMs === 'number',
+          'TR1 GATE: the PAYLOAD actually sent is recorded -- bytes and dimensions, not the target');
+      var a0 = t.attempts[0];
+      res(typeof a0.ttfbMs === 'number' && typeof a0.totalMs === 'number' && a0.totalMs >= a0.ttfbMs,
+          'TR1 GATE: TIME TO FIRST BYTE is recorded separately from total -- thinking and writing have opposite fixes');
+      res(a0.status === 200 && /reply \d+ chars/.test(String(a0.outcome)) && typeof a0.jsonMode === 'boolean',
+          'TR1: with the HTTP status, how much came back, and whether response_format was sent');
+      var line = CT.byokTraceLine();
+      res(line.indexOf('effort low') >= 0 && line.indexOf('first byte') >= 0 && line.indexOf('total') >= 0 && line.indexOf('call 1') >= 0,
+          'TR1 GATE (HT-D66): the line names each part AND the effort sent, so a change is attributable');
+      res(line.indexOf(SECRET) < 0 && line.indexOf('api.x.ai') < 0, 'TR1 (D1): the trace carries neither the key nor a URL');
+    });
+  });
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    FETCH_SCRIPT = [{ status: 200, body: JUNK }, { status: 200, body: OK_REPLY }];
+    return CT.byokCapture(FILE).then(function () {
+      res(CT.byokTrace().attempts.length === 2 && CT.byokTraceLine().indexOf('call 2') >= 0,
+          'TR2 GATE: a SECOND call appears in the breakdown -- two calls behind one spinner is what could not be seen');
+    });
+  });
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    FETCH_SCRIPT = [{ status: 200, body: OK_REPLY }];
+    return CT.byokCapture(FILE).then(function () {
+      res(outcome().msg.indexOf('otrace') >= 0, 'TR3 GATE: the breakdown reaches the OUTCOME MODAL on success');
+      CT.captureDiscard(); withKeys();
+      FETCH_SCRIPT = [{ status: 500, body: 'boom' }];
+      return CT.byokCapture(FILE).then(function () {
+        res(outcome().msg.indexOf('otrace') >= 0, 'TR3 GATE: and on FAILURE -- instrumentation only on failure cannot be compared with a working run');
+        CT.byokBusyClear();
+      });
+    });
+  });
+
+  // ---- FW: each wall distinct, each landing on the reply box, none printing the key
+  step(function () {
+    var walls = [
+      { name: 'a rejected key', script: { status: 401, body: '{"error":"bad key"}' }, kind: 'auth' },
+      { name: 'the 400 xAI really sends for a bad key',
+        script: { status: 400, body: '{"error":"Incorrect API key provided. You can obtain an API key from https://console.x.ai."}' }, kind: 'auth' },
+      { name: 'a 400 that is NOT about the key', script: { status: 400, body: '{"error":"Messages cannot be empty"}' }, kind: 'http' },
+      { name: 'a rate limit', script: { status: 429, body: '{"error":"slow down"}' }, kind: 'ratelimit' },
+      { name: 'a server error', script: { status: 500, body: '{"error":"boom"}' }, kind: 'http' },
+      { name: 'a dead network', script: { reject: new TypeError('Failed to fetch') }, kind: 'network' },
+      { name: 'a timeout', script: { reject: (function () { var e = new Error('aborted'); e.name = 'AbortError'; return e; })() }, kind: 'timeout' }
+    ];
+    return walls.reduce(function (chain, w) {
+      return chain.then(function () {
+        withKeys(); CT.captureDiscard();
+        FETCH_SCRIPT = [w.script];
+        return CT.visionCall('data:image/jpeg;base64,AA', {}).then(function (r) {
+          res(r.ok === false && r.kind === w.kind, 'FW: ' + w.name + ' is classified as ' + w.kind, r.kind);
+          res(String(r.error || '').indexOf(SECRET) < 0, 'FW: and ' + w.name + ' never prints the key');
+          FETCH_SCRIPT = [w.script];
+          return CT.byokCapture(FILE).then(function (c) {
+            res(c.ok === false && c.fellBack === true && CT.captureOutcomeState() === 'error',
+                'FW: ' + w.name + ' ends in a stated failure, with the photo still in hand');
+            res(surfacesText().indexOf(SECRET) < 0, 'FW: and no surface prints the key');
+            CT.byokBusyClear();
+          });
+        });
+      });
+    }, Promise.resolve());
+  });
+  step(function () {
+    withKeys();
+    FETCH_SCRIPT = [{ status: 400, body: '{"error":"Argument not supported: reasoning_effort"}' }, { status: 200, body: OK_REPLY }];
+    CT.byokTraceReset();
+    return CT.visionCall('data:image/jpeg;base64,AA', {}).then(function (r) {
+      var b0 = JSON.parse(FETCHES[0].init.body), b1 = FETCHES[1] ? JSON.parse(FETCHES[1].init.body) : {};
+      res(r.ok === true && FETCHES.length === 2, 'RF1 (HT-D66): a 400 naming reasoning_effort is retried ONCE, and the retry succeeds');
+      res(b0.reasoning_effort === 'low' && b1.reasoning_effort === undefined && b1.response_format && b1.response_format.type === 'json_object',
+          'RF1: the retry drops ONLY the field the provider named -- the other flag is independent');
+      res(/REFUSED/.test(String((CT.byokTrace().attempts[0] || {}).outcome)), 'RF1: and the trace names the refusal');
+    });
+  });
+
+  // ---- TC: Test connection -- EVERY EXIT PAINTS (HT-D46) --------------------
+  step(function () {
+    withKeys();
+    var held = null;
+    window.fetch = function (u, i) { FETCHES.push({ url: String(u), init: i || {}, at: Date.now() }); return new Promise(function (r) { held = r; }); };
+    var pending = CT.credTest('vision');
+    var vPend = vis('vision');
+    res(vPend.text.indexOf('Testing') === 0 && vPend.cls.indexOf('byoktesting') >= 0 &&
+        document.getElementById('credBox-vision').innerHTML.indexOf('byokspin') >= 0,
+        'TC1: PENDING paints the moment the button is tapped, with a spinner, before any answer');
+    return tick(0).then(function () {
+      if (held) held({ ok: true, status: 200, text: function () { return Promise.resolve('{"choices":[{"message":{"content":"pong"}}]}'); } });
+      return pending;
+    }).then(function (r) {
+      var v = vis('vision');
+      res(r.ok === true && v.text.indexOf('Connected') === 0 && v.text.indexOf('grok-4.6') > 0 && v.cls.indexOf('byokok') >= 0,
+          'TC1: SUCCESS names the model that answered, in its own colour');
+      res(CT.credSettings('vision').status.state === 'verified', 'TC1: and the verification is remembered');
+      window.fetch = SCRIPTED_FETCH;
+    });
+  });
+  step(function () {
+    withKeys();
+    FETCH_SCRIPT = [{ status: 401, body: '{"error":"Incorrect API key provided"}' }];
+    return CT.credTest('vision').then(function (r) {
+      var v = vis('vision');
+      res(r.ok === false && v.cls.indexOf('byokbad') >= 0 && v.text.length > 0 && CT.credSettings('vision').status.state === 'failed',
+          'TC2: FAILURE paints in the failure colour, with a message, and is remembered');
+      res(document.getElementById('credBox-vision').innerHTML.indexOf(SECRET) < 0, 'TC2: and never the key');
+    });
+  });
+  step(function () {
+    withKeys();
+    CT.setTestTimeout(40);
+    window.fetch = hangFetch();
+    return CT.credTest('vision').then(function (r) {
+      var v = vis('vision');
+      res(r.ok === false && v.text.indexOf('No answer') === 0 && v.cls.indexOf('byokbad') >= 0, 'TC3: TIMEOUT paints rather than hanging silent');
+      CT.setTestTimeout(15000);
+      return tick(60);
+    }).then(function () { window.fetch = SCRIPTED_FETCH; });
+  });
+  step(function () {
+    withKeys();
+    window.fetch = function () { throw new Error('boom ' + SECRET); };
+    return CT.credTest('vision').then(function (r) {
+      var v = vis('vision');
+      res(r.ok === false && v.text.indexOf('boom') > 0, 'TC4: a THROW paints instead of vanishing');
+      res(v.text.indexOf(SECRET) < 0 && v.text.indexOf('[redacted]') > 0, 'TC4 (D1): and a throw carrying the key has it redacted');
+      window.fetch = SCRIPTED_FETCH;
+    });
+  });
+  step(function () {
+    credReset();
+    CT.renderCred('vision');
+    res(document.getElementById('credBox-vision').innerHTML.indexOf('onclick="credTest(\'vision\')">Test connection') >= 0,
+        'TC5: the Test button is NEVER disabled -- a disabled button is the silence');
+    return CT.credTest('vision').then(function (r) {
+      res(r.ok === false && vis('vision').text.indexOf('Nothing saved') === 0, 'TC5: and with nothing saved it says so');
+    });
+  });
+  step(function () {
+    credReset();
+    var realSet = localStorage.setItem;
+    localStorage.setItem = function (k) { if (k === 'collectibles-cred-vision') throw new Error('quota'); return realSet.apply(localStorage, arguments); };
+    var sv = CT.credSave('vision', 'grok', SECRET, 20);
+    localStorage.setItem = realSet;
+    res(sv.stored === false, 'TC6 (HT-D46): a write that did not land reports stored:false -- memory must not report a save it did not make');
+    credReset();
+  });
+
+  // ---- PC: the prices role (D1) ----------------------------------------------
+  step(function () {
+    withKeys();
+    FETCH_SCRIPT = [{ status: 200, body: '{"status":"success","products":[]}' }];
+    return CT.credTest('prices').then(function (r) {
+      var f0 = FETCHES[0] || { url: '', init: {} };
+      res(r.ok === true && vis('prices').cls.indexOf('byokok') >= 0 && CT.credSettings('prices').status.state === 'verified',
+          'PC1: a documented success verifies the token, in its own colour');
+      res(f0.url.indexOf('https://www.pricecharting.com/api/products?') === 0 && f0.url.indexOf('q=batman') > 0,
+          'PC1: the ping is a candidate search against the documented base', f0.url.replace(TOKEN, '[token]'));
+      res(f0.url.indexOf('t=' + encodeURIComponent(TOKEN)) > 0 && !(f0.init.headers && f0.init.headers.Authorization),
+          'PC1 (D1): the token rides as the `t` parameter, as the row declares, with no header');
+      res(String(f0.init.method) === 'GET' && f0.init.body === undefined, 'PC1: a GET with no body');
+    });
+  });
+  step(function () {
+    withKeys();
+    FETCH_SCRIPT = [{ status: 400, body: '{"error":"Must provide an access token","error-message":"Must provide an access token","status":"error"}' }];
+    return CT.credTest('prices').then(function (r) {
+      var v = vis('prices');
+      res(r.ok === false && v.cls.indexOf('byokbad') >= 0 && v.text.indexOf('Must provide an access token') >= 0,
+          'PC2: a PriceCharting error paints in the failure colour, in the provider\'s own words (shape verified 2026-09-11)');
+      res(CT.credSettings('prices').status.state === 'failed', 'PC2: and is remembered');
+    });
+  });
+  step(function () {
+    withKeys();
+    FETCH_SCRIPT = [{ status: 401, body: '{"status":"error","error-message":"invalid token ' + TOKEN + '"}' }];
+    return CT.credTest('prices').then(function () {
+      var st = CT.credSettings('prices').status;
+      res(surfacesText().indexOf(TOKEN) < 0 && vis('prices').text.indexOf('[redacted]') >= 0,
+          'PC3 GATE (D1): a provider ECHOING the token has it redacted on the surface');
+      res(String(st.message).indexOf(TOKEN) < 0 && String(localStorage.getItem('collectibles-cred-prices')).split(TOKEN).length === 2,
+          'PC3: and in the persisted status -- the token appears in its store exactly once, as the token');
+      res(surfacesText().indexOf('pricecharting.com/api') < 0, 'PC3: no request URL reaches any surface');
+      CT.renderCred('prices');
+      var pb = document.getElementById('credBox-prices').innerHTML;
+      var wi = pb.indexOf('anyone with access to this browser'), di = pb.indexOf('<details');
+      res(wi >= 0 && di > wi, 'PC4 (D1, HT-D53): the extractability warning is VISIBLE safety text -- before, not inside, the fine print');
+    });
+  });
+
+  // ---- PACE: 1 call per second, enforced where every call passes (D1) --------
+  step(function () {
+    withKeys(); CT.paceReset();
+    FETCH_SCRIPT = [{ status: 200, body: '{"status":"success"}' }, { status: 200, body: '{"status":"success"}' }, { status: 200, body: '{"status":"success"}' }];
+    return Promise.all([CT.pricesPing(), CT.pricesPing(), CT.pricesPing()]).then(function (rs) {
+      var gaps = FETCHES.length === 3 ? [FETCHES[1].at - FETCHES[0].at, FETCHES[2].at - FETCHES[1].at] : [];
+      res(FETCHES.length === 3 && rs.every(function (x) { return x.ok; }), 'PACE1: three price calls requested together all complete');
+      res(gaps.length === 2 && gaps[0] >= 990 && gaps[1] >= 990,
+          'PACE1 GATE (D1): and leave at least ONE SECOND apart -- the documented limit, whose penalty is the subscription', JSON.stringify(gaps));
+    });
+  });
+  step(function () {
+    withKeys(); CT.paceReset();
+    FETCH_SCRIPT = [{ status: 200, body: OK_REPLY }, { status: 200, body: OK_REPLY }];
+    return Promise.all([CT.visionCall('data:,x', {}), CT.visionCall('data:,x', {})]).then(function () {
+      var gap = FETCHES.length === 2 ? FETCHES[1].at - FETCHES[0].at : -1;
+      res(FETCHES.length === 2 && gap >= 0 && gap < 500,
+          'PACE1 CONTROL: a provider that declares no pacing is not delayed -- the gate measures the leash, not a slow harness', String(gap));
+    });
+  });
+
+  // ---- CFG: the server move is a configuration change (D1) -------------------
+  step(function () {
+    credReset();
+    CT.PROVIDERS.proxy = { role: 'prices', label: 'Metering server', base: 'https://proxy.test', auth: 'none' };
+    CT.credSave('prices', 'proxy', null, null);
+    FETCH_SCRIPT = [{ status: 200, body: '{"status":"success"}' }];
+    return CT.credTest('prices').then(function (r) {
+      var f0 = FETCHES[0] || { url: '', init: {} };
+      res(CT.credSettings('prices').provider === 'proxy' && r.ok === true && f0.url === 'https://proxy.test/api/products?q=batman',
+          'CFG1 GATE (D1): a prices row with auth "none" calls with NO credential saved -- the server move is a table edit', f0.url);
+      res(!(f0.init.headers && f0.init.headers.Authorization), 'CFG1: and sends no header');
+      CT.credSave('prices', 'proxy', TOKEN, null);
+      FETCHES = []; FETCH_SCRIPT = [{ status: 200, body: '{"status":"success"}' }];
+      return CT.pricesPing().then(function () {
+        res(FETCHES.length === 1 && FETCHES[0].url.indexOf(TOKEN) < 0 && FETCHES[0].url.indexOf('t=') < 0,
+            'CFG1: even with a token still saved, a "none" row never attaches it');
+        delete CT.PROVIDERS.proxy; credReset();
+      });
+    });
+  });
+  step(function () {
+    credReset();
+    CT.PROVIDERS.other = { role: 'vision', label: 'Other', base: 'https://example.test/v1', auth: 'bearer', model: 'm-1' };
+    CT.credSave('vision', 'other', SECRET, 20);
+    FETCH_SCRIPT = [{ status: 200, body: '{"choices":[{"message":{"content":"pong"}}]}' }];
+    return CT.credTest('vision').then(function (r) {
+      var f0 = FETCHES[0] || { url: '', init: {} };
+      res(r.ok === true && f0.url === 'https://example.test/v1/chat/completions' && JSON.parse(f0.init.body || '{}').model === 'm-1',
+          'CFG2 (HT-D45): a second vision provider is a table row -- no code change');
+      delete CT.PROVIDERS.other; credReset();
+    });
+  });
+
+  // ---- KV: one persisted fact, read by every surface (HT-D49) ----------------
+  step(function () {
+    window.fetch = SCRIPTED_FETCH;
+    withKeys(); CT.captureDiscard();
+    FETCH_SCRIPT = [{ status: 200, body: '{"choices":[{"message":{"content":"pong"}}]}' }];
+    return CT.credTest('vision').then(function (t) {
+      var raw = JSON.parse(localStorage.getItem('collectibles-cred-vision') || '{}');
+      res(t.ok === true && raw.status && raw.status.state === 'verified',
+          'KV1 (HT-D49): a passing Test sets a PERSISTED verified state -- in the store, not a variable');
+      res(capVis().indexOf('key verified') >= 0, 'KV1: and the CAPTURE SURFACE reads that same fact');
+      CT.credCount('vision');
+      res(CT.credSettings('vision').status.state === 'verified' && capVis().indexOf('key not tested yet') < 0,
+          'KV1 GATE: counting a call does NOT cost the verification -- the exact write that ate it in HealthTracker');
+    });
+  });
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    FETCH_SCRIPT = [{ status: 200, body: '{"choices":[{"message":{"content":"pong"}}]}' }, { status: 200, body: OK_REPLY }];
+    return CT.credTest('vision').then(function () {
+      var usedBefore = CT.credCap('vision').used;
+      return CT.byokCapture(FILE).then(function (r) {
+        res(r.ok === true && CT.credSettings('vision').status.state === 'verified' && CT.credCap('vision').used === usedBefore + 1,
+            'KV2: test, then capture, on one key -- capture runs, the key is STILL verified, and the counter moved');
+        CT.captureDiscard();
+      });
+    });
+  });
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    FETCH_SCRIPT = [{ status: 200, body: OK_REPLY }];
+    return CT.byokCapture(FILE).then(function () {
+      res(CT.credSettings('vision').status.state === 'verified', 'KV3 (HT-D49): a SUCCESSFUL capture verifies an untested key');
+      CT.captureDiscard(); withKeys(); CT.credSetStatus('vision', 'verified', '');
+      FETCH_SCRIPT = [{ status: 401, body: '{"error":"Incorrect API key provided"}' }];
+      return CT.byokCapture(FILE);
+    }).then(function () {
+      res(CT.credSettings('vision').status.state === 'failed' && capVis().indexOf('key failed its last test') >= 0,
+          'KV3: an AUTH rejection during a capture demotes it, and the capture surface says so');
+      CT.byokBusyClear(); withKeys(); CT.credSetStatus('vision', 'verified', '');
+      FETCH_SCRIPT = [{ status: 200, body: JUNK }, { status: 200, body: JUNK }];
+      return CT.byokCapture(FILE);
+    }).then(function (r) {
+      res(r.ok === false && CT.credSettings('vision').status.state === 'verified',
+          'KV3: a reply that will not validate is NOT a verdict on the key');
+      CT.byokBusyClear(); withKeys(); CT.credSetStatus('vision', 'verified', '');
+      CT.setCallTimeout(40); window.fetch = hangFetch();
+      return CT.byokCapture(FILE);
+    }).then(function (r) {
+      window.fetch = SCRIPTED_FETCH; CT.setCallTimeout(120000);
+      res(r.ok === false && CT.credSettings('vision').status.state === 'verified', 'KV3: a TIMEOUT is not a verdict on the key either');
+      CT.byokBusyClear();
+    });
+  });
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    var untested = capVis();
+    res(untested.indexOf('Take photo') >= 0 && untested.indexOf('Choose photo') >= 0,
+        'KV4 (HT-D49): an untested key still gets BOTH capture buttons -- the status has never been a gate');
+    res(untested.indexOf('key not tested yet') >= 0 && untested.indexOf('verify now') >= 0 && untested.indexOf('onclick="credTest(\'vision\')"') >= 0,
+        'KV4: and it is never STATED without an offer to settle it, right here');
+    res(untested.indexOf(SECRET) < 0, 'KV4: the capture surface never prints the key');
+    CT.credSetStatus('vision', 'verified', '');
+    res(capVis().indexOf('verify now') < 0, 'KV4: a verified key is offered nothing');
+    CT.credSetStatus('vision', 'failed', 'Incorrect API key provided');
+    var fv = capVis();
+    res(fv.indexOf('verify now') >= 0 && fv.indexOf('key failed its last test') >= 0, 'KV4: a FAILED key is offered one too');
+  });
+
+  // ---- OM: EXACTLY ONE OUTCOME, AND IT OWNS THE SCREEN (HT-D51) --------------
+  step(function () {
+    window.fetch = SCRIPTED_FETCH;
+    withKeys(); CT.captureDiscard(); CT.byokBusyClear();
+    var o0 = outcome();
+    res(o0.state === 'none' && !o0.shown, 'OM1 (HT-D51): with nothing happening the modal is CLOSED');
+    FETCH_SCRIPT = [{ status: 200, body: OK_REPLY }];
+    return CT.byokCapture(FILE).then(function (r) {
+      var o = outcome();
+      res(r.ok === true && o.state === 'success' && o.shown, 'OM2: a validated reply opens the modal, and the modal is the outcome');
+      res(o.body.indexOf('cresult') >= 0 && o.body.indexOf('alpha') >= 0, 'OM2: the result is IN the modal body');
+      res(o.foot.indexOf('captureAccept()') >= 0 && o.foot.indexOf('captureDiscard()') >= 0 && (o.foot.match(/<button/g) || []).length === 2,
+          'OM2: with exactly two actions, Use this and Discard');
+      res(o.body.indexOf('captureAccept()') < 0 && o.body.indexOf('captureDiscard()') < 0, 'OM2: and the actions are NOT in the scrolling body');
+      res(o.foot.indexOf('byokCancel') < 0 && o.foot.indexOf('captureRetry') < 0, 'OM2: success offers neither cancel nor retry -- the other states are absent');
+      var cv = capVis();
+      res(cv.indexOf('opend') < 0 && cv.indexOf('byokCancel') < 0 && cv.indexOf('captureAccept') < 0, 'OM2: and the capture surface carries NO outcome');
+      res((o.title + o.msg + o.body + o.foot).indexOf(SECRET) < 0, 'OM2: the modal never prints the key');
+      var d = CT.captureOutcomeDismiss();
+      res(d.ok === false && CT.captureOutcomeState() === 'success' && !!CT.captureResult(),
+          'OM3 GATE: the scrim and the close button do NOT dismiss a success -- a result closed by a stray tap is thrown away');
+      var exportBefore = CT.exportJSON();
+      window.__accepted = null;
+      var acc = CT.captureAccept();
+      var oa = outcome();
+      res(acc.ok === true && !!window.__accepted && window.__accepted.probe === 'alpha' && oa.state === 'none' && !oa.shown,
+          'OM4: Use this hands the validated value to the contract and closes the modal');
+      res(CT.exportJSON() === exportBefore, 'OM4: and the chain itself writes nothing to the data');
+    });
+  });
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    var exportBefore = CT.exportJSON();
+    FETCH_SCRIPT = [{ status: 200, body: OK_REPLY }];
+    return CT.byokCapture(FILE).then(function () {
+      CT.captureDiscard();
+      var o = outcome();
+      res(CT.exportJSON() === exportBefore && o.state === 'none' && !o.shown && CT.captureResult() === null,
+          'OM5: Discard writes nothing, and the modal closes with the result gone');
+    });
+  });
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    CT.setCallTimeout(40); window.fetch = hangFetch();
+    return CT.byokCapture(FILE).then(function (r) {
+      window.fetch = SCRIPTED_FETCH; CT.setCallTimeout(120000);
+      var o = outcome();
+      res(r.ok === false && o.state === 'error' && o.shown, 'OM6: a timeout is an explicit STATE, not a silent return');
+      res(o.msg.indexOf('did not answer') > 0 && o.msg.indexOf('still counted') > 0,
+          'OM6 (HT-D48): it says the provider did not answer, and that the call may still have counted');
+      res(o.foot.indexOf('captureRetry()') >= 0 && o.foot.indexOf('capturePasteInstead()') >= 0,
+          'OM6: with Try again and Paste the reply by hand as BUTTONS, not as a sentence');
+      res(o.foot.indexOf('captureAccept()') < 0 && o.foot.indexOf('byokCancel') < 0 && o.body === '',
+          'OM6: a failure offers neither use nor cancel, and shows no result beside it');
+      res(capVis().indexOf('did not answer') < 0, 'OM6: and is not ALSO restated on the capture surface');
+      res((o.title + o.msg + o.foot).indexOf(SECRET) < 0, 'OM6: the failure never prints the key');
+      var d = CT.captureOutcomeDismiss();
+      res(d.ok === true && outcome().state === 'none', 'OM7: a failure CAN be dismissed -- nothing is lost by closing it');
+      CT.byokFallback('', 'planted failure');   // Clause 4: be IN the failure state first
+      res(CT.captureOutcomeState() === 'error', 'OM7: (fixture) back in the failure state');
+      CT.capturePasteInstead();
+      res(CT.captureOutcomeState() === 'none', 'OM7: "Paste the reply by hand" closes the failure and hands over to the reply box');
+    });
+  });
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    window.fetch = hangFetch();
+    var hang = CT.byokCapture(FILE);
+    return tick(60).then(function () {
+      var o = outcome();
+      res(o.state === 'pending' && o.shown, 'OM8: the wait is an explicit state of the same modal');
+      res(o.msg.indexOf('byokspin') >= 0 && /\d+s/.test(o.msg), 'OM8 (HT-D48): with a spinner and the elapsed seconds counting');
+      res(o.foot.indexOf('byokCancel') >= 0 && o.foot.indexOf('captureAccept()') < 0 && o.body === '',
+          'OM8: a cancel and nothing else, and no stale result underneath');
+      res(capVis().indexOf('byokCancel') < 0, 'OM8: the capture surface carries no second copy of the wait');
+      var b = CT.byokBusyState();
+      res(!!b && String(b.message).indexOf('Sending to your provider') === 0 && /\d+s$/.test(String(b.message)),
+          'OM8: and the stage says what it is doing');
+      var c = CT.byokCancel();
+      return hang.then(function () {
+        var b2 = CT.byokBusyState();
+        res(c.kind === 'cancelled' && CT.captureOutcomeState() === 'error' && !!b2 && b2.message.indexOf('Cancelled') === 0,
+            'OM8: cancelling stops the wait and SAYS so -- never to nothing');
+        CT.byokBusyClear(); window.fetch = SCRIPTED_FETCH;
+      });
+    });
+  });
+  step(function () {
+    withKeys(); CT.captureDiscard(); CT.byokBusyClear();
+    document.getElementById('replyBox').value = OK_TEXT;
+    CT.doReplyPaste();
+    var o = outcome();
+    res(o.state === 'success' && o.shown && o.foot.indexOf('captureAccept()') >= 0,
+        'OM9: a PASTED reply opens the same modal with the same actions -- one downstream, not two');
+    CT.captureDiscard();
+  });
+
+  // ---- SH: the SHIPPED shell, and the chain driven through its own DOM -------
+  step(function () {
+    var W = seFrame.contentWindow, D = seFrame.contentDocument;
+    if (!W || !D || !W.CT) { res(false, 'SH: the shipped shell did not load, so it could not be inspected'); return; }
+    var ids = Array.prototype.map.call(D.querySelectorAll('[id]'), function (e) { return e.id; });
+    var dup = ids.filter(function (id, i) { return ids.indexOf(id) !== i; });
+    res(dup.length === 0, 'SH1 (HT-D63): the shell has no duplicate id', dup.join(','));
+    var body = D.getElementById('outcomeBody'), foot = D.getElementById('outcomeFoot');
+    res(!!body && !!D.getElementById('captureResult') && body.contains(D.getElementById('captureResult')) && body.contains(D.getElementById('outcomeMsg')),
+        'SH1 (HT-D51): the result and the message live IN the outcome modal body');
+    res(!!foot && !body.contains(foot) && D.getElementById('captureOutcome').contains(foot),
+        'SH1 (HT-D51): the footer is OUTSIDE the scrolling body, inside the modal');
+    var sp = D.getElementById('settingsPanel');
+    res(!!sp && sp.contains(D.getElementById('credBox-vision')) && sp.contains(D.getElementById('credBox-prices')) && !!D.getElementById('replyBox'),
+        'SH1: both credential cards live in Settings, and the reply box exists');
+    res(W.CT.visionReady() === false && D.getElementById('captureBox').innerHTML.indexOf('not built yet') >= 0,
+        'SH1 (D1): the SHIPPED shell carries no vision contract, and its capture surface says so');
+
+    W.CT.setByokBitmapLease(20);
+    W.CT.setVisionContract(TEST_CONTRACT);
+    var WF = { calls: [], script: [] };
+    W.fetch = function (u, i) {
+      WF.calls.push({ url: String(u), init: i || {} });
+      var n = WF.script.shift();
+      if (!n) return Promise.resolve({ ok: true, status: 200, text: function () { return Promise.resolve('{}'); } });
+      return Promise.resolve({ ok: n.status < 400, status: n.status, text: function () { return Promise.resolve(n.body); } });
+    };
+    function wReset() {
+      WF.calls = []; WF.script = [];
+      W.CT.credClear('vision'); W.CT.credSave('vision', 'grok', SECRET, 20);
+      W.CT.byokBusyClear(); W.CT.captureDiscard();
+    }
+    function wFireFrom(id, file) {
+      var inp = D.getElementById(id);
+      if (!inp) return Promise.resolve({ ok: false, missing: id });
+      try { var dt = new W.DataTransfer(); if (file) dt.items.add(file); inp.files = dt.files; } catch (e) {}
+      var r = W.onCaptureFile(inp);
+      return (r && r.then) ? r : Promise.resolve(r || { ok: false });
+    }
+    function wOutcome() {
+      var w = D.getElementById('captureOutcome');
+      return { state: W.CT.captureOutcomeState(), shown: !!w && w.style.display === 'flex',
+               msg: (D.getElementById('outcomeMsg').textContent || '') };
+    }
+    function wCanvas(w, h) {
+      var c = D.createElement('canvas'); c.width = w; c.height = h;
+      var x = c.getContext('2d'); var g = x.createLinearGradient(0, 0, w, h);
+      g.addColorStop(0, '#873'); g.addColorStop(1, '#39a'); x.fillStyle = g; x.fillRect(0, 0, w, h);
+      return c;
+    }
+    function wImage(w, h) {
+      return new Promise(function (r) { wCanvas(w, h).toBlob(function (b) { r(new W.File([b], 'cover.jpg', { type: 'image/jpeg' })); }, 'image/jpeg', 0.9); });
+    }
+    // A real JPEG carrying a real EXIF Orientation tag (HT-D58).
+    function wExifImage(w, h, orientation) {
+      return new Promise(function (r) {
+        wCanvas(w, h).toBlob(function (b) {
+          b.arrayBuffer().then(function (ab) {
+            var src = new Uint8Array(ab);
+            var tiff = [0x4D,0x4D,0x00,0x2A,0x00,0x00,0x00,0x08, 0x00,0x01,
+                        0x01,0x12,0x00,0x03,0x00,0x00,0x00,0x01,
+                        (orientation >> 8) & 255, orientation & 255, 0x00,0x00,
+                        0x00,0x00,0x00,0x00];
+            var payload = [0x45,0x78,0x69,0x66,0x00,0x00].concat(tiff);
+            var len = payload.length + 2;
+            var app1 = [0xFF,0xE1, (len >> 8) & 255, len & 255].concat(payload);
+            var out = new Uint8Array(src.length + app1.length);
+            out.set(src.subarray(0, 2), 0);
+            out.set(app1, 2);
+            out.set(src.subarray(2), 2 + app1.length);
+            r(new W.File([out], 'IMG_2201.JPG', { type: 'image/jpeg' }));
+          });
+        }, 'image/jpeg', 0.9);
+      });
+    }
+    window.__W = { W: W, D: D, WF: WF, wReset: wReset, wFireFrom: wFireFrom, wOutcome: wOutcome, wImage: wImage, wExifImage: wExifImage };
+
+    res(typeof W.onCaptureFile === 'function' && String(D.getElementById('captureFile').getAttribute('onchange')).indexOf('onCaptureFile') >= 0,
+        'SH2 (HT-D47): the shipped file input is wired to the shipped handler');
+    wReset();
+    return wImage(1400, 1050).then(function (f) {
+      WF.script = [{ status: 200, body: OK_REPLY }];
+      var pend = wFireFrom('captureFile', f);
+      var o1 = wOutcome();
+      res(o1.state === 'pending' && o1.shown && o1.msg.indexOf('Reading the photo') >= 0,
+          'SH2: a photo paints PENDING immediately, in the outcome modal, before the decode starts');
+      return pend.then(function () {
+        res(WF.calls.length === 1 && WF.calls[0].url.indexOf('api.x.ai') > 0, 'SH2: a real image through the real DOM path FIRES THE REQUEST');
+        res(!!W.CT.captureResult() && W.CT.credCap('vision').used === 1,
+            'SH2: opens the result, and the counter moves -- "used today: 0" was HT-D47\'s tell');
+      });
+    });
+  });
+  step(function () {
+    // THE HARD REQUIREMENT (HT-D47), over BOTH inputs (HT-D58): every adversarial
+    // input ends in a fired request OR a STATED failure in the modal. Never neither.
+    var R = window.__W; if (!R) { res(false, 'NS: the shipped shell was not available'); return; }
+    var base = [
+      { name: 'no file at all (the picker returned nothing)', file: null },
+      { name: 'a file that is not an image', file: new R.W.File(['this is not a jpeg'], 'x.jpg', { type: 'image/jpeg' }) },
+      { name: 'an empty file', file: new R.W.File([], 'empty.jpg', { type: 'image/jpeg' }) },
+      { name: 'an HEIC frame', file: new R.W.File(['ftypheic'], 'IMG_0001.HEIC', { type: 'image/heic' }) }
+    ];
+    var cases = [];
+    [['captureFile', 'camera'], ['captureLib', 'library']].forEach(function (src) {
+      base.forEach(function (c) { cases.push({ name: c.name + ' [' + src[1] + ']', file: c.file, input: src[0] }); });
+    });
+    return cases.reduce(function (chain, c) {
+      return chain.then(function () {
+        R.wReset();
+        return R.wFireFrom(c.input, c.file).then(function () {
+          var o = R.wOutcome();
+          var fired = R.WF.calls.length > 0;
+          var spoke = o.state === 'error' && o.shown && o.msg.length > 0;
+          res(fired || spoke, 'NS: ' + c.name + ' ends in a request or a STATED failure in the outcome modal, never in nothing');
+          res(o.msg.indexOf(SECRET) < 0, 'NS: ' + c.name + ' never prints the key');
+        });
+      });
+    }, Promise.resolve());
+  });
+  step(function () {
+    var R = window.__W; if (!R) { res(false, 'CL: the shipped shell was not available'); return; }
+    var D2 = R.D, W2 = R.W;
+    var camIn = D2.getElementById('captureFile'), libIn = D2.getElementById('captureLib');
+    res(!!camIn && !!libIn && camIn.hasAttribute('capture') && !libIn.hasAttribute('capture'),
+        'CL1 (HT-D58): a camera input that FORCES the camera, and a library input that does not');
+    res(!!camIn && !!libIn && String(libIn.getAttribute('onchange')).indexOf('onCaptureFile') >= 0 &&
+        String(camIn.getAttribute('onchange')).indexOf('onCaptureFile') >= 0 && String(libIn.getAttribute('accept')).indexOf('image/') === 0,
+        'CL1: both are wired to the SAME handler, and the library input still filters to images');
+    res(W2.CT.captureSourceOf(camIn) === 'camera' && W2.CT.captureSourceOf(libIn) === 'library',
+        'CL1: the source is DERIVED from the capture attribute itself');
+    R.wReset(); W2.CT.renderCaptureBtn();
+    var capHTML = D2.getElementById('captureBox').innerHTML;
+    res(capHTML.indexOf("getElementById('captureFile').click()") >= 0 && capHTML.indexOf("getElementById('captureLib').click()") >= 0 &&
+        capHTML.indexOf('Take photo') >= 0 && capHTML.indexOf('Choose photo') >= 0,
+        'CL2: the capture surface offers BOTH doors, each saying which it is');
+    R.wReset();
+    R.WF.script = [{ status: 200, body: OK_REPLY }];
+    return R.wImage(1400, 1050).then(function (f) {
+      return R.wFireFrom('captureLib', f).then(function () {
+        res(R.WF.calls.length === 1 && !!W2.CT.captureResult() && W2.CT.credCap('vision').used === 1,
+            'CL3: a library photo fires the SAME request, opens the same result, and counts against the same cap');
+      });
+    }).then(function () {
+      var camMsg = W2.CT.byokHeicMessage('camera'), libMsg = W2.CT.byokHeicMessage('library');
+      res(camMsg !== libMsg && /Most Compatible/.test(camMsg) && !/Most Compatible/.test(libMsg) && /JPEG/i.test(libMsg),
+          'CL4 (HT-D58): HEIC advice depends on the source -- a camera setting only where it can help');
+      R.wReset();
+      return R.wFireFrom('captureLib', new R.W.File(['ftypheic'], 'IMG_0001.HEIC', { type: 'image/heic' })).then(function () {
+        var o = R.wOutcome();
+        res(o.state === 'error' && /HEIC/.test(o.msg) && !/Most Compatible/.test(o.msg),
+            'CL4: a library HEIC says so in the modal, without the camera advice that cannot apply');
+      });
+    }).then(function () {
+      res(/createImageBitmap\s*\(\s*file\s*,\s*\{[^})]*imageOrientation\s*:\s*'from-image'/.test(String(W2.CT.byokDecodeBitmap)),
+          'CL5 STRUCTURAL (HT-D58): the decoder PINS imageOrientation ON THE CALL -- matched on the call shape, which no comment contains');
+      return R.wExifImage(400, 200, 6).then(function (f) {
+        return W2.CT.byokDownscale(f, 'library').then(function (img) {
+          res(img.w === 200 && img.h === 400,
+              'CL5 BEHAVIOURAL: Orientation=6 decodes PORTRAIT at the oriented size -- CANNOT FAIL on a browser whose default is already from-image (HT-D60 Clause 2), hence the structural twin',
+              img.w + 'x' + img.h);
+        });
+      });
+    }).then(function () {
+      return R.wExifImage(400, 200, 1).then(function (f) {
+        return W2.CT.byokDownscale(f, 'library').then(function (img) {
+          res(img.w === 400 && img.h === 200, 'CL5 CONTROL: Orientation=1 is left alone -- it orients, it does not rotate everything');
+        });
+      });
+    }).then(function () {
+      return R.wExifImage(2400, 1800, 1).then(function (f) {
+        return W2.CT.byokDownscale(f, 'library').then(function (img) {
+          res(Math.max(img.w, img.h) === CT.BYOK_MAX_EDGE && img.dataUrl.length > CT.BYOK_MIN_DATAURL,
+              'CL6: a large library photo is MEASURED at the bound through the real decoder, above the blank-canvas floor');
+        });
+      });
+    }).then(function () {
+      R.wReset();
+      return R.wFireFrom('captureLib', null).then(function () {
+        var o = R.wOutcome();
+        res(o.state === 'error' && !/camera/i.test(o.msg), 'CL7 (HT-D58): a cancelled library pick is not reported as a camera fault');
+        R.wReset();
+        return R.wFireFrom('captureFile', null).then(function () {
+          res(/camera/i.test(R.wOutcome().msg), 'CL7 CONTROL: the camera path still names the camera');
+          R.wReset(); W2.CT.captureDiscard();
+        });
+      });
+    });
+  });
+
+  // ---- EN / LE: the encode floor and THE LEASH (HT-D47) ----------------------
+  step(function () {
+    res(CT.byokBounds(4032, 3024).w === 1280 && CT.byokBounds(4032, 3024).h === 960, 'EN1 (HT-D47): a 12 MP photo is bounded to the long edge, aspect kept');
+    res(CT.byokBounds(400, 300).w === 400, 'EN1: a small image is never UPscaled');
+    var cv = document.createElement('canvas'); cv.width = 900; cv.height = 600;
+    var cx = cv.getContext('2d'); var g = cx.createLinearGradient(0, 0, 900, 600);
+    g.addColorStop(0, '#873'); g.addColorStop(1, '#39a'); cx.fillStyle = g; cx.fillRect(0, 0, 900, 600);
+    var enc = CT.byokEncode(cv, 900, 600);
+    res(enc.dataUrl.indexOf('data:image/jpeg;base64,') === 0 && enc.w === 900 && enc.dataUrl.length > CT.BYOK_MIN_DATAURL,
+        'EN1: real pixels encode to a jpeg above the blank-canvas floor');
+    var threw = false;
+    var tiny = document.createElement('canvas'); tiny.width = 1; tiny.height = 1;
+    try { CT.byokEncode(tiny, 1, 1); } catch (e) { threw = true; }
+    res(threw, 'EN1 GATE (HT-D47): an encode that produced almost nothing THROWS -- iOS hands back a blank canvas without raising');
+  });
+  // ---- CAP: the daily cap, whose counter lives with the key (HT-D45 Fork E) --
+  step(function () {
+    withKeys(); CT.captureDiscard();
+    CT.credSave('vision', 'grok', null, 1);
+    FETCH_SCRIPT = [{ status: 200, body: OK_REPLY }];
+    return CT.byokCapture(FILE).then(function () {
+      CT.captureDiscard();
+      var before = FETCHES.length;
+      return CT.byokCapture(FILE).then(function (r) {
+        res(r.ok === false && r.kind === 'cap' && FETCHES.length === before, 'CAP1: past the daily cap NO call is made at all');
+        res(CT.captureOutcomeState() === 'error' && outcome().msg.indexOf('Daily cap') >= 0, 'CAP1: and it says so');
+        res(CT.exportJSON().indexOf('used') < 0, 'CAP1: the counter lives with the key, not in the data');
+        CT.byokBusyClear();
+      });
+    });
+  });
+
+  // ---- PFX: the storage prefix, swept over the WHOLE run (D1) ---------------
+  step(function () {
+    var keys = Object.keys(window.__keysEverWritten).filter(function (k) { return k !== '__ct_probe__'; });
+    var stray = keys.filter(function (k) { return k.indexOf('collectibles-') !== 0; });
+    res(keys.length >= 4 && stray.length === 0,
+        'PFX1 GATE (D1): every storage key written in the whole run is prefixed collectibles- -- a shared origin shares storage', stray.join(','));
+    res(keys.indexOf('collectibles-cred-vision') >= 0 && keys.indexOf('collectibles-cred-prices') >= 0 &&
+        keys.indexOf('collectibles-state') >= 0 && keys.indexOf('collectibles-state-prerestore') >= 0,
+        'PFX1: and the sweep SAW the state, the backup and both credential stores', keys.join(','));
+  });
+
+  // ---- run ------------------------------------------------------------------
+  var seDone = false;
+  function finish() {
+    if (seDone) return;
+    seDone = true;
+    var sm = document.createElement('p'); sm.className = 's';
+    sm.textContent = 'SUMMARY ' + pass + '/' + (pass + fail) + (fail ? (' -- ' + fail + ' FAILED') : ' -- ALL PASS');
+    document.body.appendChild(sm);
+  }
+  var seFrame = document.createElement('iframe');
+  seFrame.style.cssText = 'width:390px;height:700px;border:0';
+  var sePending = true;
+  // Appending an iframe fires `load` once for about:blank BEFORE the real document.
+  seFrame.onload = function () {
+    var d = seFrame.contentDocument;
+    if (!d || !d.getElementById('captureOutcome')) return;
+    if (!sePending) return;
+    sePending = false;
+    STEPS.reduce(function (chain, fn) { return chain.then(function () { return fn(); }); }, Promise.resolve())
+      .then(finish, function (e) {
+        res(false, 'ASYNC: a step threw -- the steps after it did NOT run', String(e && e.message));
+        finish();
+      });
+  };
+  seFrame.src = '../index.html';
+  document.body.appendChild(seFrame);
+  // Safety net: an iframe that never loads still ends in a SUMMARY, loudly.
+  setTimeout(function () {
+    if (sePending) { res(false, 'SH: the shipped index.html did not load into the harness iframe'); sePending = false; finish(); }
+  }, 15000);
+})();
+</script>
+</body>
