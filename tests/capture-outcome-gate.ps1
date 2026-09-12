@@ -4,15 +4,20 @@
 # measured as one. A string gate can prove the modal rendered; only a viewport can
 # prove it was READABLE without hunting for it.
 #
+# REPOINTED FOR R1 (HT-D60 Clause 3), not weakened: it now installs the SHIPPED
+# identification contract and measures the real identity draft -- the question,
+# its fields, and both footer actions. Measuring the synthetic contract's generic
+# readout would have kept the gate green while saying nothing about what ships.
+#
 # Measured against the real index.html, driven through the shipped capture path
-# with fetch stubbed and a SYNTHETIC vision contract installed (the real one is
-# unruled, D1), at two phone sizes and one desktop:
+# with fetch stubbed, at two phone sizes and one desktop:
 #   * exactly ONE outcome state exists, and the capture surface carries none of it;
-#   * SUCCESS -- the first result row and BOTH footer actions are fully inside the
-#     viewport with the page unscrolled, and stay there when the result is long
-#     enough to scroll the body;
+#   * SUCCESS -- the identity QUESTION and BOTH footer actions are fully inside the
+#     viewport with the page unscrolled;
+#   * SHORT VIEWPORT -- where the draft is taller than the screen, the body scrolls
+#     and the footer does NOT, so Confirm and Discard stay reachable;
 #   * FAILURE -- the stated message and both ways out are in view;
-#   * PENDING -- the counted spinner and the cancel are in view.
+#   * PENDING -- the counted spinner and the cancel, in view.
 #
 # Unlike the data-layer suite this runs in REAL time, so it exercises the
 # createImageBitmap decoder that never settles under --virtual-time-budget (HT-D47).
@@ -89,10 +94,6 @@ $install = @'
                       r.left >= -1 && r.right <= window.innerWidth + 1 &&
                       r.width > 0 && r.height > 0) };
   };
-  __g.contract = { version: 9, acceptLabel: 'Use this', prompt: 'GATE CONTRACT',
-    parse: function (t) { var o; try { o = JSON.parse(CT.cleanJSON(t)); } catch (e) { return { ok:false, error:'Bad JSON' }; }
-      return (o && typeof o.probe === 'string') ? { ok:true, value:o } : { ok:false, error:'Expected probe' }; },
-    accept: function () { return { ok:true }; } };
   __g.snap = function(){
     var w = document.getElementById('captureOutcome');
     var foot = document.getElementById('outcomeFoot');
@@ -103,7 +104,8 @@ $install = @'
       state: CT.captureOutcomeState(),
       shown: shown,
       msgText: (document.getElementById('outcomeMsg').textContent || ''),
-      lead:   __g.rect('#captureResult .kv'),
+      lead:   __g.rect('#captureResult .idq'),
+      firstField: __g.rect('#captureResult .idrow input'),
       primary:__g.rect('#outcomeFoot .btn:nth-of-type(1)'),
       second: __g.rect('#outcomeFoot .btn:nth-of-type(2)'),
       nActions: document.querySelectorAll('#outcomeFoot .btn').length,
@@ -116,20 +118,20 @@ $install = @'
       footHTML: foot ? foot.innerHTML : ''
     };
   };
-  __g.key = function(){ CT.setVisionContract(__g.contract); CT.credClear('vision'); CT.credSave('vision','grok','xai-GATEKEY-0123456789012345',20); };
+  // The SHIPPED contract, not a stand-in: this gate measures what ships (R1).
+  __g.key = function(){ CT.setVisionContract(CT.IDENTITY_CONTRACT); CT.clearConfirmed();
+    CT.credClear('vision'); CT.credSave('vision','grok','xai-GATEKEY-0123456789012345',20); };
   __g.file = function(){
     var c=document.createElement('canvas'); c.width=1400; c.height=1050;
     var x=c.getContext('2d'); var g=x.createLinearGradient(0,0,1400,1050);
     g.addColorStop(0,'#873'); g.addColorStop(1,'#39a'); x.fillStyle=g; x.fillRect(0,0,1400,1050);
     return new Promise(function(r){ c.toBlob(function(b){ r(new File([b],'cover.jpg',{type:'image/jpeg'})); },'image/jpeg',0.9); });
   };
-  __g.reply = function(n){
-    var o = { probe: 'gate' };
-    for (var i=0;i<n;i++) o['field_' + (i+1)] = 'value ' + (i+1);
-    return JSON.stringify({choices:[{message:{content:JSON.stringify(o)}}]});
+  __g.reply = function(){
+    return JSON.stringify({choices:[{message:{content:CT.ID_SAMPLE}}]});
   };
-  __g.ok = function(n){ window.fetch=function(){ return Promise.resolve({ok:true,status:200,
-    text:function(){ return Promise.resolve(__g.reply(n)); }}); }; };
+  __g.ok = function(){ window.fetch=function(){ return Promise.resolve({ok:true,status:200,
+    text:function(){ return Promise.resolve(__g.reply()); }}); }; };
   __g.hang = function(){ window.fetch=function(u,i){ return new Promise(function(_,rej){
     var s=i&&i.signal; if(s) s.addEventListener('abort',function(){ var e=new Error('a'); e.name='AbortError'; rej(e); }); }); }; };
   return 'installed';
@@ -150,8 +152,8 @@ function Go([int]$w, [int]$h, [bool]$mobile) {
   Start-Sleep -Milliseconds 1500
   Eval $install | Out-Null
 }
-function Measure-Success([int]$fields) {
-  Eval ("__g.ok($fields)") | Out-Null
+function Measure-Success {
+  Eval '__g.ok()' | Out-Null
   return (Eval $capture | ConvertFrom-Json)
 }
 function Measure-Fail {
@@ -233,28 +235,21 @@ try {
 
   $viewports = @(@('phone 360x690', 360, 690, $true), @('phone 390x745', 390, 745, $true), @('desktop 1200x900', 1200, 900, $false))
 
-  Write-Host "capture outcome (real index.html, shipped capture path, CDP, real time):"
+  Write-Host "capture outcome (real index.html, SHIPPED identity contract, CDP, real time):"
   $allOk = $true
   foreach ($v in $viewports) {
     $name = $v[0]; $w = $v[1]; $h = $v[2]; $mob = $v[3]
     Go $w $h $mob
 
-    $S = Measure-Success 2
+    $S = Measure-Success
     $sOk = $S.state -eq 'success' -and $S.shown -and $S.lead.inView -and
            $S.primary.inView -and $S.second.inView -and
            $S.primary.h -ge $MIN_ACTION_H -and $S.second.h -ge $MIN_ACTION_H -and
            $S.footHTML -like '*captureAccept()*' -and $S.footHTML -like '*captureDiscard()*' -and
-           $S.nActions -eq 2 -and $S.captureSurfaceClean -and (-not $S.pageOverflowX) -and $S.pageScrollY -eq 0
-    Write-Host ("  {0,-17} success : row={1} use={2}({3}px) discard={4} bodyScrolls={5} oneState={6} -> {7}" -f `
-      $name, $S.lead.inView, $S.primary.inView, $S.primary.h, $S.second.inView, $S.bodyScrolls, $S.captureSurfaceClean, $sOk)
-
-    # LONG result -- the footer must not travel with the content.
-    $L = Measure-Success 30
-    $lOk = $L.state -eq 'success' -and $L.shown -and $L.bodyScrolls -and
-           $L.primary.inView -and $L.second.inView -and $L.lead.inView -and
-           (-not $L.pageOverflowX) -and $L.pageScrollY -eq 0
-    Write-Host ("  {0,-17} long    : bodyScrolls={1} use={2} discard={3} row={4} -> {5}" -f `
-      $name, $L.bodyScrolls, $L.primary.inView, $L.second.inView, $L.lead.inView, $lOk)
+           $S.footHTML -like '*Confirm*' -and $S.nActions -eq 2 -and
+           $S.captureSurfaceClean -and (-not $S.pageOverflowX) -and $S.pageScrollY -eq 0
+    Write-Host ("  {0,-17} success : question={1} confirm={2}({3}px) discard={4} field={5} oneState={6} -> {7}" -f `
+      $name, $S.lead.inView, $S.primary.inView, $S.primary.h, $S.second.inView, $S.firstField.found, $S.captureSurfaceClean, $sOk)
 
     $F = Measure-Fail
     $fOk = $F.state -eq 'error' -and $F.shown -and $F.primary.inView -and $F.second.inView -and
@@ -271,10 +266,22 @@ try {
     Write-Host ("  {0,-17} pending : spinner={1} counted='{2}' cancel={3} -> {4}" -f `
       $name, $P.spin.inView, ($P.msgText -replace '[^0-9]*(\d+s).*', '$1'), $P.primary.inView, $pOk)
 
-    if (-not ($sOk -and $lOk -and $fOk -and $pOk)) { $allOk = $false }
+    if (-not ($sOk -and $fOk -and $pOk)) { $allOk = $false }
   }
 
-  Write-Host ("  thresholds        : exactly one outcome state; first result row and BOTH actions fully inside the viewport with the page unscrolled; actions >={0}px tall; footer fixed while the body scrolls; capture surface carries no outcome" -f $MIN_ACTION_H)
+  # The identity draft is a fixed set of fields, so the scroll case is made by a
+  # SHORT VIEWPORT rather than a long list: where the draft is taller than the
+  # screen, the body must scroll and the footer must not travel with it.
+  Go 360 520 $true
+  $L = Measure-Success
+  $lOk = $L.state -eq 'success' -and $L.shown -and $L.bodyScrolls -and
+         $L.lead.inView -and $L.primary.inView -and $L.second.inView -and
+         (-not $L.pageOverflowX) -and $L.pageScrollY -eq 0
+  Write-Host ("  {0,-17} scrolled: bodyScrolls={1} question={2} confirm={3} discard={4} -> {5}" -f `
+    'phone 360x520', $L.bodyScrolls, $L.lead.inView, $L.primary.inView, $L.second.inView, $lOk)
+  if (-not $lOk) { $allOk = $false }
+
+  Write-Host ("  thresholds        : exactly one outcome state; the identity question and BOTH actions fully inside the viewport with the page unscrolled; actions >={0}px tall; footer fixed while the body scrolls; capture surface carries no outcome" -f $MIN_ACTION_H)
   Write-Host "-----------------------------------------"
   if ($allOk) {
     Write-Host "CAPTURE OUTCOME GATE: PASS (one explicit state per capture, in view without scrolling, at every width)"

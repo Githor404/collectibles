@@ -80,7 +80,71 @@ Real `index.html`, shipped capture path, CDP, **real time** (so it exercises the
 
 ---
 
-## R1 — Identification: the model reads the cover, the human confirms it — PRE-REGISTERED, FORKS OPEN (received 2026-09-12; NOT built)
+## R1 — Identification: the model reads the cover, the human confirms it — RULED AND BUILT (D2, 2026-09-12)
+
+**Ruled:** Forks **A1, B1, C1, D1, E1, F1, G1** as recommended. D2 carries the two notes that belong in the record — C1's correction is the author's own (the key-issue field is **dropped, not deferred**), and A1's cost is stated: **R1 is a milestone, not a release. There is no price in this build.**
+
+**Result: `SUITE: PASS (2 of 2 produced a verdict, and every verdict was PASS)`, runner exit 0.**
+**Assertions: executed 294 · pinned 294** (248 → 294, **+46**, re-pinned in this commit).
+
+### What R1 ships
+
+The contract (six printed fields, a closed marker vocabulary, absence as a state, and value/grade/key-issue refused by name); an identity-first confirm surface where every field is correctable and the model's original is kept beside it; the PriceCharting search string derived from the **confirmed** fields, copyable; a confirm action that produces the identity and states plainly that pricing is not built; and the no-key floor — copy the prompt, paste the reply — gated on content and outcome.
+
+### Behavioural cases
+
+| case | asserts |
+|---|---|
+| **ID1** | the shipped sample parses through the **real parser**, field for field (HT-D11); the template asks for every field the parser reads, states the closed vocabulary, demands JSON only first and last, **refuses value, grade and key-issue by name**, and carries no free-text field |
+| **ID2** | a value, a grade **and** a key-issue judgement are each detected and **counted**; none reaches the identity; the refusal is **said** on the surface |
+| **ID3** | the **printed** cover price survives the same reply whose market value is refused — asserted in both directions |
+| **ID4** | empty, `unknown` and `n/a` are **absent**, never guessed or zero-filled; the surface says *not legible*; a reply with nothing legible never becomes an identity to confirm |
+| **ID5** | markers are closed-vocabulary, case-folded and de-duplicated; anything else is dropped, counted and said |
+| **ID6** | the identity **question comes before any control**; no grade control and no grade word anywhere; no valuation vocabulary — with a **control** asserting the printed `$1.00` *is* on the surface, so it is a gate about valuation and grade rather than about the character `$` |
+| **ID7** | a correction changes the accepted value and **keeps the model's original**; clearing restores *absent* rather than an empty string; a field outside the contract cannot be set at all |
+| **ID8** | the query is built from the **corrected** fields, moves when they move, and is empty when nothing is legible |
+| **ID9** | Confirm produces the identity and its query, the modal closes, the surface states that pricing is not built — and **nothing is saved**, not a record and not a byte of the export |
+| **ID10** | hostile strings are escaped on the identity surface **and** the confirmed surface |
+| **ID11** | **both** prompt boxes hold the prompt after a render (content, not presence — HT-D63); Copy fills the box **unconditionally** and fills the one the finger was on; with **no key at all**, a pasted reply opens the same modal with the same actions |
+| **ID12** | no valuation or evaluative vocabulary reaches the identity surface, with a planted control |
+| **ID13** | the **shipped** contract gives a byte-identical identity by call or by paste, and the call carries the contract prompt behind its version prefix |
+
+### Repointed, not weakened (HT-D60 Clause 3)
+
+- The two cases that asserted *the seam ships empty* now assert that the shipped contract **is** the identification contract; the empty-seam guard is still gated, by clearing the contract and driving the capture chain through it.
+- **`capture-outcome-gate.ps1` now measures the shipped identity draft**, not the synthetic contract's generic readout — measuring the stand-in would have kept the gate green while saying nothing about what ships. Its long-list case became a **short-viewport** case (360×520), because the identity draft is a fixed set of fields rather than a list: there, the body scrolls and the footer does not.
+
+### The defect pass — 23 rows, every one failing, each naming its own case
+
+`bash tests/defect-pass.sh`. The fifteen port rows still fail as recorded above; the eight added for R1:
+
+| planted defect | verdict | first case to fail, by name |
+|---|---|---|
+| the value/grade/key-issue refusal list emptied | GATE: FAIL | `ID2` |
+| absent fields guessed as `unknown` | GATE: FAIL | `ID4` |
+| the marker vocabulary opened | GATE: FAIL | `ID5` |
+| a correction overwrites what the model read | GATE: FAIL | `ID7` |
+| the query built from the model's originals | GATE: FAIL | `ID8` |
+| the prompt boxes stop being filled (HealthTracker's dead floor) | GATE: FAIL | `ID11` |
+| a grade control planted above the identity question | GATE: FAIL | `ID6` |
+| the shipped sample drifts from the parser | GATE: FAIL | `ID1` |
+
+### Corrections made to the pre-registration before building (recorded as corrections)
+
+1. **`R1-identity-first` was wrong as pre-registered.** It asked for *no price field anywhere in the draft*, with a planted `$` as its control — but the **printed cover price is a field and must render**. Restated: no **grade control**, no **valuation vocabulary**, plus a control asserting the printed price is present.
+2. **`R1-refuse`'s fixture** carries a value, a grade **and** a key-issue claim, so C1's ruling is gated rather than only written down.
+3. **`notes` was dropped from the contract** (D2) — a free-text field is a hole in a structural refusal.
+
+### Limits of this evidence, stated
+
+- **The contract has never been sent to a model.** Every call in every gate is stubbed. The template is gated for self-consistency against its parser, not for whether a model obeys it — **that is R1's device question**, and the first real capture is the first evidence that a phone photo of a cover yields these fields at all.
+- **No price, and no product match.** The derived query is unverified against PriceCharting's search behaviour; that is R2's probe, which only the subscriber can run.
+- **The floor's clipboard behaviour is gated in the harness browser only.** Copy filling the box is proven; what a phone's clipboard does with it is not.
+- `CL5 BEHAVIOURAL` still cannot fail on this browser (HT-D60 Clause 2) and remains paired with its structural twin.
+
+---
+
+### The pre-registration, as it was written before building (kept verbatim)
 
 **Numbering.** The first slice in this repo: **R1**; its ruling becomes **D2**. D1 carries no R-number because the port was not a slice.
 

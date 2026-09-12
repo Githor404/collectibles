@@ -270,14 +270,23 @@ window.setLS({});
   // ==========================================================================
   // V -- the vision contract seam ships EMPTY (D1: no features)
   // ==========================================================================
+  // REPOINTED (HT-D60 Clause 3), not weakened. R1 ruled a contract, so the seam
+  // is no longer empty -- and the guard it protects is still asserted, by
+  // CLEARING the contract, which V2/V3 then drive through the whole capture chain.
+  res(CT.visionReady() === true && CT.IDENTITY_CONTRACT.version === CT.ID_TEMPLATE_VERSION,
+      'V1: the shipped contract is the identification contract, at the template version');
+  res(typeof CT.IDENTITY_CONTRACT.parse === 'function' && typeof CT.IDENTITY_CONTRACT.render === 'function' &&
+      CT.IDENTITY_CONTRACT.acceptLabel === 'Confirm',
+      'V1: it carries a parser, a renderer and a confirm action -- the chain stays contract-agnostic around it');
   CT.setVisionContract(null);
-  res(CT.visionReady() === false, 'V1: no vision contract is ruled -- the seam ships empty');
+  res(CT.visionReady() === false, 'V1: with the contract cleared the seam reports not ready');
   CT.renderCaptureBtn();
   var cbV = document.getElementById('captureBox').innerHTML;
   res(cbV.indexOf('not built yet') >= 0 && cbV.indexOf('Take photo') < 0,
-      'V1: the capture surface says so, and offers no button that could only fail');
+      'V1: and the capture surface says so, offering no button that could only fail');
   res(CT.openCaptureResult(OK_TEXT).ok === false && CT.captureResult() === null,
       'V1: a reply cannot open a result when there is nothing to read it against');
+  CT.setVisionContract(CT.IDENTITY_CONTRACT);
 
   // ==========================================================================
   // C -- the request contract (HT-D45, HT-D64, HT-D66) and the clocks (HT-D48)
@@ -944,8 +953,13 @@ window.setLS({});
     var sp = D.getElementById('settingsPanel');
     res(!!sp && sp.contains(D.getElementById('credBox-vision')) && sp.contains(D.getElementById('credBox-prices')) && !!D.getElementById('replyBox'),
         'SH1: both credential cards live in Settings, and the reply box exists');
-    res(W.CT.visionReady() === false && D.getElementById('captureBox').innerHTML.indexOf('not built yet') >= 0,
-        'SH1 (D1): the SHIPPED shell carries no vision contract, and its capture surface says so');
+    // REPOINTED (HT-D60 Clause 3): the shipped shell now carries R1's contract.
+    res(W.CT.visionReady() === true && W.CT.IDENTITY_CONTRACT.version === 1,
+        'SH1 (R1): the SHIPPED shell carries the identification contract, at version 1');
+    var shBoxes = W.CT.promptBoxes();
+    res(shBoxes.length === 2 && shBoxes.every(function (b) { return String(b.value).indexOf('identify a comic book') >= 0; }),
+        'SH1 GATE (HT-D63): EVERY prompt box in the SHIPPED shell holds the prompt after boot -- content, not presence',
+        shBoxes.map(function (b) { return String(b.value).length; }).join('/'));
 
     W.CT.setByokBitmapLease(20);
     W.CT.setVisionContract(TEST_CONTRACT);
@@ -1160,6 +1174,205 @@ window.setLS({});
     res(keys.indexOf('collectibles-cred-vision') >= 0 && keys.indexOf('collectibles-cred-prices') >= 0 &&
         keys.indexOf('collectibles-state') >= 0 && keys.indexOf('collectibles-state-prerestore') >= 0,
         'PFX1: and the sweep SAW the state, the backup and both credential stores', keys.join(','));
+  });
+
+  // ==========================================================================
+  // ID -- R1 / D2: the identification contract. The model reads the cover, the
+  // human confirms it. Nothing here prices, grades or saves.
+  // ==========================================================================
+  (function () {
+    if (!document.getElementById('confirmedBox')) {
+      var cb = document.createElement('div'); cb.id = 'confirmedBox'; document.body.appendChild(cb);
+    }
+  })();
+  CT.setVisionContract(CT.IDENTITY_CONTRACT);
+  CT.captureDiscard(); CT.clearConfirmed();
+
+  // ---- ID1: template <-> parser self-consistency (HT-D11) -------------------
+  var idSample = CT.parseIdentity(CT.ID_SAMPLE);
+  res(idSample.ok === true && idSample.value.fields.title === 'The Amazing Spider-Man' &&
+      idSample.value.fields.issue === '300' && idSample.value.fields.publisher === 'Marvel' &&
+      idSample.value.fields.cover_date === 'MAY 88' && idSample.value.fields.cover_price === '$1.00' &&
+      idSample.value.markers.join(',') === 'newsstand',
+      'ID1 GATE (HT-D11): the SHIPPED sample parses through the REAL parser, field for field -- template and parser cannot drift apart');
+  var idPrompt = CT.ID_PROMPT;
+  res(CT.ID_FIELD_KEYS.every(function (k) { return idPrompt.indexOf('"' + k + '"') >= 0; }),
+      'ID1: the template asks for every field the parser reads');
+  res(CT.ID_MARKERS.every(function (m) { return idPrompt.indexOf(m) >= 0; }) &&
+      idPrompt.indexOf('JSON ONLY') >= 0 && idPrompt.indexOf('start with { and end with }') >= 0,
+      'ID1: it states the closed marker vocabulary, and demands JSON only, first and last');
+  res(/worth/i.test(idPrompt) && /price-guide value/i.test(idPrompt) && /grade or condition/i.test(idPrompt) && /key issue/i.test(idPrompt),
+      'ID1 GATE: and it refuses value, grade and key-issue BY NAME -- on the copy-prompt path the words are the only mechanism there is (HT-D64)');
+  res(CT.ID_FIELD_KEYS.indexOf('notes') < 0 && idPrompt.indexOf('"notes"') < 0,
+      'ID1 (D2): there is no free-text field in the contract -- a valuation can simply be written into one');
+
+  // ---- ID2: a value, a grade or a key-issue claim is REFUSED (HT-D45 Fork H) --
+  var idValued = '{"title":"Spawn","issue":"1","publisher":"Image","value":"$120","grade":"9.4","key_issue":true,"markers":[]}';
+  var idRef = CT.parseIdentity(idValued);
+  res(idRef.ok === true && idRef.value.refused === 3,
+      'ID2 GATE: a value, a grade AND a key-issue judgement are each detected and COUNTED -- refused, not dropped as a side effect',
+      String(idRef.value.refused));
+  res(JSON.stringify(idRef.value).indexOf('120') < 0 && JSON.stringify(idRef.value).indexOf('9.4') < 0,
+      'ID2: and none of them reaches the identity');
+  CT.openCaptureResult(idValued);
+  var idRefHTML = document.getElementById('captureResult').innerHTML;
+  res(idRefHTML.indexOf('refused') >= 0 && idRefHTML.indexOf('never come from the model') >= 0,
+      'ID2: the refusal is SAID on the surface, the same contract the paste path has');
+  res(idRefHTML.indexOf('$120') < 0 && idRefHTML.indexOf('9.4') < 0, 'ID2: and the refused values are nowhere on it');
+  CT.captureDiscard();
+
+  // ---- ID3: the PRINTED cover price survives the same reply ------------------
+  var idBoth = '{"title":"Daredevil","issue":"1","cover_price":"12c","value":"$3,000","markers":[]}';
+  var idB = CT.parseIdentity(idBoth);
+  res(idB.ok === true && idB.value.fields.cover_price === '12c' && idB.value.refused === 1,
+      'ID3 GATE: the price PRINTED ON THE COVER is kept while a market value in the SAME reply is refused -- both directions asserted');
+  CT.openCaptureResult(idBoth);
+  var idBH = document.getElementById('captureResult').innerHTML;
+  res(idBH.indexOf('12c') >= 0 && idBH.indexOf('3,000') < 0,
+      'ID3: the cover price renders and the market value does not render at all');
+  res(idBH.indexOf('printed on the cover') >= 0, 'ID3: and the label says which kind of price it is');
+  CT.captureDiscard();
+
+  // ---- ID4: absence is a state (D2 Fork B1) ---------------------------------
+  var idThin = CT.parseIdentity('{"title":"Weird Science","issue":"unknown","publisher":"","cover_date":"n/a","markers":[]}');
+  res(idThin.ok === true && idThin.value.fields.title === 'Weird Science' &&
+      !('issue' in idThin.value.fields) && !('publisher' in idThin.value.fields) && !('cover_date' in idThin.value.fields),
+      'ID4 GATE: empty, "unknown" and "n/a" are ABSENT -- never guessed, never zero-filled, never carried into a search');
+  CT.openCaptureResult('{"title":"Weird Science","markers":[]}');
+  var idThinHTML = document.getElementById('captureResult').innerHTML;
+  res(idThinHTML.indexOf('not legible') >= 0 && idThinHTML.indexOf('value=""') >= 0,
+      'ID4: the surface SAYS not legible rather than printing an empty value as though it had been read');
+  res(CT.parseIdentity('{"markers":[]}').ok === false,
+      'ID4: and a reply with nothing legible does not become an identity to confirm');
+  CT.captureDiscard();
+
+  // ---- ID5: the marker vocabulary is CLOSED ---------------------------------
+  var idMk = CT.parseIdentity('{"title":"X","markers":["newsstand","NEWSSTAND","cgc 9.8","first appearance","direct"]}');
+  res(idMk.ok === true && idMk.value.markers.join(',') === 'newsstand,direct' && idMk.value.droppedMarkers === 2,
+      'ID5 GATE: markers come from a closed list, case-folded and de-duplicated; anything else is dropped and COUNTED',
+      idMk.value.markers.join(',') + ' / ' + idMk.value.droppedMarkers);
+  CT.openCaptureResult('{"title":"X","markers":["cgc 9.8"]}');
+  res(document.getElementById('captureResult').innerHTML.indexOf('not on the list') >= 0, 'ID5: and the drop is said, not silent');
+  CT.captureDiscard();
+
+  // ---- ID6: IDENTITY FIRST, and no grade or valuation anywhere (D2) ---------
+  CT.openCaptureResult(CT.ID_SAMPLE);
+  var body6 = document.getElementById('captureResult').innerHTML;
+  res(body6.indexOf('Is this the book?') >= 0 && body6.indexOf('Is this the book?') < body6.indexOf('<input'),
+      'ID6 GATE: the identity QUESTION comes before any control in the draft -- what it is, before anything else');
+  res(!/<select/i.test(body6) && !/\bgrade\b/i.test(body6),
+      'ID6 GATE: no grade control and no grade word anywhere in the draft -- a photo cannot establish grade, and the app never takes one from the model');
+  res(!/\b(worth|market value|estimated value|guide value|nm price)\b/i.test(body6),
+      'ID6: and no valuation vocabulary reaches it');
+  res(body6.indexOf('$1.00') >= 0,
+      'ID6 CONTROL: the PRINTED cover price IS on the surface -- so the two assertions above are about valuation and grade, not about the character $');
+  CT.captureDiscard();
+
+  // ---- ID7: a correction keeps what the model read (HT-D55/D57) -------------
+  CT.openCaptureResult(CT.ID_SAMPLE);
+  var v7 = CT.captureResult().value;
+  CT.identitySetField('issue', '308');
+  res(v7.fields.issue === '308' && v7.ai.fields.issue === '300',
+      'ID7 GATE: a correction changes the ACCEPTED value and keeps the model original beside it');
+  CT.identitySetField('publisher', '');
+  res(!('publisher' in v7.fields) && v7.ai.fields.publisher === 'Marvel',
+      'ID7: clearing restores ABSENT rather than storing an empty string, and still keeps the original');
+  CT.identityToggleMarker('direct');
+  res(v7.markers.indexOf('direct') >= 0 && v7.ai.markers.join(',') === 'newsstand',
+      'ID7: a marker toggle is the human\'s, and what the model saw is untouched');
+  res(CT.identitySetField('grade', '9.4').ok === false && !('grade' in v7.fields),
+      'ID7: and a field outside the contract cannot be set at all');
+
+  // ---- ID8: the query is derived from the CONFIRMED fields ------------------
+  res(CT.identityQuery(v7) === 'The Amazing Spider-Man 308',
+      'ID8 GATE: the search query is built from the CORRECTED fields, never the model originals', CT.identityQuery(v7));
+  CT.identitySetField('title', 'Amazing Spider-Man');
+  res(CT.identityQuery(v7) === 'Amazing Spider-Man 308', 'ID8: and it moves when a field moves');
+  res(CT.identityQuery({ fields: {} }) === '', 'ID8: with nothing legible there is no query to make');
+
+  // ---- ID9: confirm -- the query, an honest dead end, and NOTHING saved -----
+  var exportBefore9 = CT.exportJSON();
+  var acc9 = CT.captureAccept();
+  var cf9 = CT.confirmedIdentity();
+  res(acc9.ok === true && !!cf9 && cf9.query === 'Amazing Spider-Man 308' && cf9.fields.issue === '308',
+      'ID9: Confirm produces the confirmed identity and its query');
+  res(CT.captureResult() === null && CT.captureOutcomeState() === 'none', 'ID9: and the modal closes behind it');
+  var cfHTML = document.getElementById('confirmedBox').innerHTML;
+  res(cfHTML.indexOf('Amazing Spider-Man 308') >= 0 && cfHTML.indexOf('Pricing is not built yet') >= 0,
+      'ID9 GATE: the confirmed surface carries the query AND states plainly that this build stops at the identity');
+  res(CT.exportJSON() === exportBefore9 && JSON.stringify(CT.state()).indexOf('Spider-Man') < 0,
+      'ID9 GATE (D2 Fork F1): nothing is saved -- not a record, not a byte of the export');
+  CT.clearConfirmed();
+  res(CT.confirmedIdentity() === null && document.getElementById('confirmedBox').innerHTML === '', 'ID9: and Start over clears it');
+
+  // ---- ID10: every field is escaped on the way to both surfaces -------------
+  CT.openCaptureResult('{"title":"<img src=x onerror=alert(1)>","issue":"\\"><b>x</b>","markers":["newsstand"]}');
+  var h10 = document.getElementById('captureResult').innerHTML;
+  res(h10.indexOf('<img src=x') < 0 && h10.indexOf('&lt;img') >= 0 && h10.indexOf('<b>x</b>') < 0,
+      'ID10: a hostile string in any field is escaped on the identity surface');
+  CT.captureAccept();
+  res(document.getElementById('confirmedBox').innerHTML.indexOf('<img src=x') < 0, 'ID10: and on the confirmed surface too');
+  CT.clearConfirmed(); CT.captureDiscard();
+
+  // ---- ID12: vocabulary, with a planted control -----------------------------
+  CT.openCaptureResult(CT.ID_SAMPLE);
+  var surface12 = String(document.getElementById('captureResult').textContent || '').toLowerCase();
+  var banned12 = ['worth', 'estimated value', 'market value', 'should', 'rare', 'valuable', 'investment'];
+  var hit12 = banned12.filter(function (w) { return surface12.indexOf(w) >= 0; });
+  res(hit12.length === 0, 'ID12: no valuation or evaluative vocabulary reaches the identity surface' + (hit12.length ? ' [' + hit12.join(',') + ']' : ''));
+  res(banned12.filter(function (w) { return (surface12 + ' this one is valuable and rare').indexOf(w) >= 0; }).length >= 2,
+      'ID12 CONTROL: the same test fires on planted text, so it is not vacuous');
+  CT.captureDiscard();
+
+  // ---- ID11: the no-key floor, on the SHIPPED shell, content and outcome ----
+  step(function () {
+    var R = window.__W;
+    if (!R) { res(false, 'ID11: the shipped shell was not available'); return; }
+    var W = R.W, D = R.D;
+    W.CT.setVisionContract(W.CT.IDENTITY_CONTRACT);
+    W.CT.credClear('vision');                       // the floor is the NO-KEY route
+    W.CT.refresh();
+    var boxes = W.CT.promptBoxes();
+    res(boxes.length === 2 && boxes.every(function (b) { return String(b.value).indexOf('identify a comic book') >= 0; }),
+        'ID11 GATE (HT-D63): BOTH prompt boxes in the shipped shell hold the prompt after a render -- content, not presence',
+        boxes.map(function (b) { return String(b.value).length; }).join('/'));
+    boxes.forEach(function (b) { b.value = ''; });   // Clause 4: measure the copy, not the boot
+    var cp = W.CT.copyPrompt(boxes[1]);
+    res(cp.ok === true && String(boxes[1].value).indexOf('identify a comic book') >= 0,
+        'ID11 GATE: Copy fills the box UNCONDITIONALLY, so "select it and copy" is followable whatever the clipboard does');
+    res(String(boxes[0].value) === '', 'ID11: and it fills the box the finger was on, not the first in the document');
+    W.CT.captureDiscard(); W.CT.clearConfirmed();
+    D.getElementById('replyBox').value = W.CT.ID_SAMPLE;
+    W.CT.doReplyPaste();
+    res(W.CT.captureOutcomeState() === 'success' && !!W.CT.captureResult() &&
+        D.getElementById('outcomeFoot').innerHTML.indexOf('captureAccept()') >= 0,
+        'ID11 GATE: with NO key at all, a pasted reply opens the SAME modal with the same actions -- the floor works end to end');
+    W.CT.captureDiscard(); W.CT.refresh();
+  });
+
+  // ---- ID13: one door, with the SHIPPED contract ----------------------------
+  step(function () {
+    var R = window.__W;
+    if (!R) { res(false, 'ID13: the shipped shell was not available'); return; }
+    var W = R.W;
+    W.CT.setVisionContract(W.CT.IDENTITY_CONTRACT);
+    R.wReset();
+    R.WF.script = [{ status: 200, body: '{"choices":[{"message":{"content":' + JSON.stringify(CT.ID_SAMPLE) + '}}]}' }];
+    return R.wImage(1400, 1050).then(function (f) {
+      return R.wFireFrom('captureFile', f).then(function () {
+        var cr = W.CT.captureResult();
+        var viaCall = cr ? JSON.stringify(cr.value) : '(no result)';
+        W.CT.captureDiscard();
+        W.CT.openCaptureResult(W.CT.ID_SAMPLE);
+        var viaPaste = JSON.stringify(W.CT.captureResult().value);
+        res(viaCall === viaPaste && viaCall.indexOf('Amazing Spider-Man') >= 0,
+            'ID13 GATE: the SHIPPED contract gives a byte-identical identity whether it arrived by call or by paste -- one door');
+        var sent = String((R.WF.calls[0] || { init: {} }).init.body || '');
+        res(sent.indexOf('Contract v1') > 0 && sent.indexOf('identify a comic book') > 0,
+            'ID13: and the call carried the contract prompt behind its version prefix');
+        W.CT.captureDiscard();
+      });
+    });
   });
 
   // ---- run ------------------------------------------------------------------

@@ -123,6 +123,41 @@ report "a case throws mid-suite" "HARNESS|ASSERTION COUNT" "$(run_dl)"; restore
 mv tests/capture-outcome-gate.ps1 "$TMP/capture-outcome-gate.ps1.moved"; MOVED="$TMP/capture-outcome-gate.ps1.moved"
 report "gate script renamed away" "CENSUS" "$(run_dl)"; restore
 
+# ---- R1 / D2: the identification contract ---------------------------------
+
+# 16. the refusal emptied (D2, HT-D45 Fork H): a value or a grade would ride in
+mutate 's/const ID_REFUSED_KEYS = \[[\s\S]*?\];/const ID_REFUSED_KEYS = [];/' app.js
+report "value/grade refusal removed" "ID2" "$(run_dl)"; restore
+
+# 17. absence zero-filled instead of left absent (D2 Fork B1)
+mutate "s/    if \(v && !ID_ABSENT_RE\.test\(v\)\) fields\[k\] = v;/    fields[k] = v || 'unknown';/" app.js
+report "absent fields guessed" "ID4" "$(run_dl)"; restore
+
+# 18. the marker vocabulary opened (D2 Fork B1: only what is visible, from a list)
+mutate 's/    if \(ID_MARKERS\.indexOf\(s\) >= 0\) \{ if \(markers\.indexOf\(s\) < 0\) markers\.push\(s\); \}/    if (true) { if (markers.indexOf(s) < 0) markers.push(s); }/' app.js
+report "marker vocabulary opened" "ID5" "$(run_dl)"; restore
+
+# 19. a correction overwrites what the model read (HT-D55/D57 correction loop)
+mutate 's/  if \(s\) v\.fields\[key\] = s; else delete v\.fields\[key\];/  if (s) { v.fields[key] = s; v.ai.fields[key] = s; } else delete v.fields[key];/' app.js
+report "correction erases the original" "ID7" "$(run_dl)"; restore
+
+# 20. the query built from the model's originals rather than the confirmed fields
+mutate 's/  const f = \(v && v\.fields\) \|\| \{\};/  const f = (v \&\& v.ai \&\& v.ai.fields) || {};/' app.js
+report "query ignores corrections" "ID8" "$(run_dl)"; restore
+
+# 21. the prompt boxes stop being filled -- HealthTracker's dead floor, exactly (HT-D63)
+mutate 's/\n  renderPromptCard\(\);\n  renderConfirmed\(\);/\n  renderConfirmed();/' app.js
+report "no-key floor unfilled" "ID11" "$(run_dl)"; restore
+
+# 22. a grade control planted above the identity question (D2: identity first,
+#     and the app never takes a grade from the model)
+mutate 's/<div class="idq">Is this the book\?<\/div>/<label>Grade<\/label><select id="idGrade"><option>9.4<\/option><\/select><div class="idq">Is this the book?<\/div>/' app.js
+report "grade control in the draft" "ID6" "$(run_dl)"; restore
+
+# 23. the shipped sample drifts from the parser (HT-D11 self-consistency)
+mutate 's/const ID_SAMPLE = .\{"title"/const ID_SAMPLE = \x27{"titel"/' app.js
+report "sample drifts from the parser" "ID1" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 echo "restored: app.js $(sha256sum app.js | cut -c1-12) (was ${ORIG_APP:0:12}) · index.html $(sha256sum index.html | cut -c1-12) (was ${ORIG_IDX:0:12})"
 echo "git status (expect nothing but untracked tests/.tmp):"

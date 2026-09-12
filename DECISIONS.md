@@ -76,3 +76,48 @@ Accepted consequences:
 - **The service worker and HT-D6's update machinery** (`SHELL_HASH`, precache and version-drift gates, changelog notice). These were not on the port list. They arrive together, as one slice, if installability is wanted. **When they do, HT-D45 Fork G's explicit SW bypass for cross-origin and non-GET requests arrives with them.** A cache-first worker that could see a request URL carrying the token would contradict this entry.
 - **The copy-prompt card** (HT-D11 / HT-D63). With no vision contract ruled there is no prompt to copy. The **paste box is ported**, because the fallback needs somewhere to put the raw reply. Whether collectibles has a no-key vision floor at all is a question for the identification slice.
 - **HT-D7 migration machinery.** There is nothing to migrate at schema v1. The forward-version guard is ported.
+
+## D2 — Identification: the model reads the cover, the human confirms it (R1, 2026-09-12)
+
+Forks **A1, B1, C1, D1, E1, F1, G1** ruled as recommended. Two of them carry a note that belongs in the record rather than in a commit message.
+
+### A1 — and its cost, stated where a future session will read it
+
+R1 ends at a **confirmed reading and the query it implies**. There is no price in this slice, and no product id.
+
+**R1 is a MILESTONE, NOT A RELEASE.** It is a seam with a confirmed reading on one side and nothing on the other. The copyable search string is genuinely usable by hand at a table, and that is the whole of what this build does. Recorded in these words because "identification" is exactly the kind of slice name a later session reads as *identification shipped, the app works*.
+
+### C1 — the key-issue field is DROPPED, and the reason is the record
+
+The brief that opened this repo asked vision for *"whether it looks like a key issue"*. **It should not have, and the correction is the author's own:** that is market memory, not a property of the photograph — the one field the model would **recall rather than see**, the one most likely to be confidently wrong, and the one where being wrong **costs money at a table**.
+
+**Dropped, not deferred.** And it does not merely go unasked: `key_issue` is on the refusal list, so a model that volunteers it anyway is refused, counted, and the refusal is said on the surface (HT-D45 Fork H). A photograph cannot show whether a book is a key issue, so nothing in this app will take that answer from a model.
+
+### The contract (Fork B1)
+
+`title`, `issue`, `publisher`, `cover_date`, `cover_price`, `markers` — **every field optional**, and **absent when not legible**. Strings exactly as printed (`"300"`, `"1/2"`, `"$1.00"`, `"75c"`, `"MAY 88"`): a number would invent precision the cover does not offer. `markers` comes from a **closed vocabulary of what is visible** — `newsstand, direct, foil, facsimile, variant-cover, price-variant` — and anything else is dropped and counted.
+
+**Absence is a state.** A field the model writes as `unknown`, `n/a` or `none` is read as absence, because those words would otherwise travel into a search query as though they had been read off the cover.
+
+**`notes` is dropped from the contract** — a deviation from Fork B's own sketch, ruled here. A free-text field is a hole in a structural refusal: a valuation can simply be written into it. Everything legitimate it could have carried is either already structured (markers) or is condition information this app refuses by design.
+
+**The refusal covers value, grade and key-issue alike.** A phone photo cannot establish grade any more than it can establish worth, so a grade from the model is refused exactly like a price. The **printed cover price survives** the same reply — that distinction is gated in both directions rather than left to a comment.
+
+### Correction, query, confirmation, floor
+
+- **A correction keeps what the model read** beside the accepted value (HT-D55/D57's correction-loop shape). Clearing a field restores *absent*, never an empty string.
+- **The query is derived from the CONFIRMED fields**, never the model's originals: correcting a misread issue number changes what will be searched. Title and issue only — whether publisher or date help the search is R2's probe to answer, not this slice's guess.
+- **Confirm** (Fork E1) produces the identity and its query, and the surface states plainly, where the result is, that pricing is not built. **Nothing persists** (Fork F1): no record, no schema change, and the export is byte-unchanged.
+- **The no-key floor ships** (Fork G1) and is gated on **content and outcome** — every prompt box holds the prompt, Copy fills the box unconditionally, and a pasted reply opens the same modal. HT-D63 is the reason that wording matters: HealthTracker's floor sat dead for weeks behind a gate that asserted a box *existed*.
+
+### Corrections to the pre-registered gates, recorded as corrections
+
+1. **R1-identity-first was wrong as pre-registered.** It said *no price field exists anywhere in the draft*, with a planted `$` proving it could fail — but the **printed cover price is a field and must render**. The gate now forbids a **grade control** and **valuation vocabulary**, and carries a control asserting the printed price **is** on the surface, so it is a gate about valuation and grade rather than about the character `$`.
+2. **R1-refuse's fixture** carries a value, a grade **and** a key-issue claim, so C1's ruling is gated rather than only written down.
+3. **Repointed, not weakened** (HT-D60 Clause 3): the two cases asserting the seam ships empty now assert that the shipped contract *is* the identification contract, and the empty-seam guard is asserted by clearing it. The viewport gate now measures the **shipped identity draft** rather than the synthetic contract's generic readout — measuring the stand-in would have kept it green while saying nothing about what ships — and its long-list case became a **short-viewport** case, because the identity draft is a fixed set of fields rather than a list.
+
+**Count: 248 → 294.** Re-pinned in the same commit.
+
+### What R1 does not do
+
+It does not price, grade, save, or match a reading to a PriceCharting product. The product match is R2, and it is blocked on a live search probe that only the subscriber can run (D1's key handling; HT-D45's precedent that a vendor's own docs described a payload their endpoint rejects).

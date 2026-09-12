@@ -6,13 +6,14 @@ Structure and discipline are ported from HealthTracker (`../healthtracker`). The
 
 ## Status
 
-**No features yet.** The repo holds the ported infrastructure and its gates (D1, `GATES.md`).
+**R1 — identification — is built and gated** (D2, 2026-09-12), awaiting review. Photo → a confirmed reading → the PriceCharting search string it implies.
 
-The first feature slice — **R1, identification** — is **pre-registered with its forks open** in `GATES.md` (2026-09-12) and is **not built**. Its ruling becomes D2. Seven forks await a decision, the central one being where identification ends: at the confirmed reading (A1), or at a PriceCharting product id (A2, which requires a live search probe with the subscriber's token first).
+**R1 is a milestone, not a release: there is no price in this build.** It stops at the identity, saves nothing, and says so where the result is. The port's infrastructure and gates are D1 / `GATES.md`. R2 — resolving a reading to a PriceCharting product — is blocked on a live search probe only the subscriber can run.
 
 ## Domain rules (from the brief that opened this repo, 2026-09-11)
 
-1. **The model perceives; the deterministic layer prices.** Vision (BYOK Grok) identifies what is *printed or visible*: title, issue number, publisher, cover date, **cover price** (a printed fact on the cover, not a valuation), visible variant markers (newsstand vs direct, foil, facsimile), and whether it looks like a key issue. **It never returns a market value.** This is HealthTracker's D8 rule transposed, and a value in a reply is refused actively and said so, not dropped as a side effect (HT-D45 Fork H).
+1. **The model perceives; the deterministic layer prices.** Vision (BYOK Grok) identifies what is *printed or visible*: title, issue number, publisher, cover date, **cover price** (a printed fact on the cover, not a valuation), and visible variant markers (newsstand vs direct, foil, facsimile). **It never returns a market value, and never a grade.** This is HealthTracker's D8 rule transposed, and a value in a reply is refused actively and said so, not dropped as a side effect (HT-D45 Fork H).
+   **The brief's "whether it looks like a key issue" was DROPPED by D2/C1** — market memory is not a property of a photograph, and it is on the refusal list for that reason.
 2. **The anchor is GRADE, not quantity.** A phone photo cannot establish grade, so the output is a **range across plausible grades**, never one number. **The user picks the grade; the app never guesses it.**
 3. **Identity is confirmed, never assumed** (HT-R30's identity-first rule, for the same reason). A confidently wrong identification attached to a confident price is *the* failure mode. The evidence: PriceCharting's own photo appraiser returned the same wrong book for three different covers, with a value and no uncertainty shown.
 4. **Guide values, not comps, and the product says so where the number is.** The PriceCharting API has **no historic prices and no sold comps** — "The API and CSV only support current item values in various grades and conditions. Historic prices and historic sales are not supported." (docs, 2026-09-11).

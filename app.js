@@ -579,7 +579,17 @@ function renderCaptureResult() {
   // result -- otherwise it stays open around nothing.
   try {
     const el = document.getElementById('captureResult');
-    if (el) el.innerHTML = CAPTURE_RESULT ? `<div class="cresult">${resultReadoutHTML(CAPTURE_RESULT.value)}</div>` : '';
+    if (el) {
+      // The CONTRACT owns the success body (R1: the identity question). The
+      // generic readout stays as the fallback for a contract that ships no
+      // renderer -- the gates' synthetic contract uses it, which is what keeps
+      // the chain provably contract-agnostic. A renderer escapes its own values.
+      const body = !CAPTURE_RESULT ? ''
+        : ((VISION && typeof VISION.render === 'function')
+            ? VISION.render(CAPTURE_RESULT.value)
+            : resultReadoutHTML(CAPTURE_RESULT.value));
+      el.innerHTML = CAPTURE_RESULT ? `<div class="cresult">${body}</div>` : '';
+    }
   } finally { try { renderCaptureOutcome(); } catch (e) {} }
 }
 
@@ -1176,8 +1186,297 @@ function renderCaptureBtn() {
         `<div class="byoks ${stC.state === 'verified' ? 'byokok' : (stC.state === 'failed' ? 'byokbad' : '')}">` +
         `key ${esc(credStatusLine('vision'))}${verifyC}</div>`) +
       `<div class="note">Take one now, or choose one you already have. One call to your provider with the photo. Nothing else is sent.</div>`
-    : `<div class="note">Add your vision key in Settings to send a photo.</div>`);
+    // D2 Fork G1: without a key there is still a route, and it is named here
+    // rather than left to be discovered.
+    : `<div class="note">No vision key saved. Add one in Settings to send a photo — or use the prompt below with your own AI assistant and paste its reply back.</div>`);
 }
+
+// ---- R1 / D2: THE IDENTIFICATION CONTRACT -----------------------------------
+// The model READS THE COVER; the human confirms it. Nothing here prices, grades,
+// or saves anything: R1 ends at a confirmed identity and the query it implies
+// (D2 Fork A1), and it is a MILESTONE, NOT A RELEASE -- a seam with a confirmed
+// reading on one side and nothing on the other.
+//
+// What may come back is what a photograph can show. What may NOT -- what the book
+// is worth, any market or guide value, a grade, or whether it is a key issue --
+// is refused ACTIVELY: detected, counted and SAID, never dropped as a side effect
+// (HT-D45 Fork H).
+//
+// D2 Fork C1 dropped the key-issue field from the brief's own list, and the
+// reason is recorded rather than softened: "whether it looks like a key issue" is
+// MARKET MEMORY, not a property of the photograph. It is the one field the model
+// would recall rather than see, the one most likely to be confidently wrong, and
+// the one where being wrong costs money at a table. Dropped, not deferred.
+//
+// `notes` is deliberately absent too (a deviation from Fork B's sketch, ruled in
+// D2): a free-text field is a hole in a structural refusal -- a valuation can
+// simply be written into it -- and everything legitimate it could carry is either
+// already structured here or is condition information this app refuses by design.
+const ID_TEMPLATE_VERSION = 1;
+const ID_FIELDS = [
+  { key: 'title',       label: 'Title' },
+  { key: 'issue',       label: 'Issue' },
+  { key: 'publisher',   label: 'Publisher' },
+  { key: 'cover_date',  label: 'Cover date', hint: 'as printed' },
+  { key: 'cover_price', label: 'Cover price', hint: 'printed on the cover' },
+];
+const ID_FIELD_KEYS = ID_FIELDS.map((f) => f.key);
+// A CLOSED vocabulary, and only what is VISIBLE on a cover (D2 Fork B1).
+const ID_MARKERS = ['newsstand', 'direct', 'foil', 'facsimile', 'variant-cover', 'price-variant'];
+// Refused BY NAME, on the call path and the paste path alike. `key_issue` is on
+// this list because C1 dropped it: a model that volunteers it is answering from
+// memory, and the app says so rather than quietly ignoring it.
+const ID_REFUSED_KEYS = ['value', 'worth', 'market_value', 'market_price', 'estimate', 'estimated_value',
+  'price_estimate', 'nm_price', 'guide_value', 'book_value', 'grade', 'condition', 'grades', 'ladder',
+  'key_issue', 'key'];
+// Absence is a STATE. A model writing "unknown" is saying "not legible" in a form
+// that would otherwise travel into a search query, so it is read as absence.
+const ID_ABSENT_RE = /^(unknown|n\/a|na|none|not legible|illegible|not visible|\?+|-+)$/i;
+
+const ID_PROMPT =
+'You are helping me identify a comic book from a photo of its cover.\n' +
+'Reply with JSON ONLY - no prose, no markdown fence, straight quotes only.\n\n' +
+'Format:\n' +
+'{"title":"<as printed>","issue":"<as printed>","publisher":"<as printed>",' +
+'"cover_date":"<as printed>","cover_price":"<as printed>","markers":["<from the list>"]}\n\n' +
+'Rules:\n' +
+'- Report ONLY what is visible on the cover in this photo.\n' +
+'- If something is not legible, LEAVE THAT FIELD OUT. Do not guess, and do not write "unknown".\n' +
+'- "issue" and "cover_price" are strings, exactly as printed: "300", "1/2", "$1.00", "75c".\n' +
+'- "cover_date" is the date printed on the cover, as printed: "MAY 88".\n' +
+'- "markers" may contain only: ' + ID_MARKERS.join(', ') + '. Include one only if the cover\n' +
+'  shows it (a UPC barcode box is newsstand; a direct-sales box or diamond is direct). If none are\n' +
+'  visible, use [].\n' +
+'- Do NOT include what the book is worth, any market or price-guide value, any price other than the\n' +
+'  one printed on the cover, any grade or condition assessment, or any judgement about whether it is\n' +
+'  a key issue. This app looks prices up itself from the identity you return, and a photograph cannot\n' +
+'  show any of those.\n' +
+'Nothing else. No commentary.\n' +
+'Your entire reply must start with { and end with }.';
+
+// Adjacent sample that obeys the template, run through the REAL parser by a gate,
+// so the two cannot drift apart (HT-D11).
+const ID_SAMPLE = '{"title":"The Amazing Spider-Man","issue":"300","publisher":"Marvel",' +
+  '"cover_date":"MAY 88","cover_price":"$1.00","markers":["newsstand"]}';
+
+function parseIdentity(raw) {
+  const text = cleanJSON(raw);
+  if (!text) return { ok: false, error: 'Nothing to read.' };
+  let o;
+  try { o = JSON.parse(text); } catch (e) { return { ok: false, error: 'Bad JSON: ' + e.message }; }
+  if (!o || typeof o !== 'object' || Array.isArray(o))
+    return { ok: false, error: 'Expected the identification JSON object from the template.' };
+  // The refusal happens FIRST, and it counts. A value that is merely absent from
+  // the output was never refused -- it was dropped, which is the distinction
+  // HT-D45 Fork H exists to keep.
+  let refused = 0;
+  ID_REFUSED_KEYS.forEach(function (k) { if (Object.prototype.hasOwnProperty.call(o, k)) refused++; });
+  const fields = {};
+  ID_FIELD_KEYS.forEach(function (k) {
+    const v = (o[k] == null) ? '' : String(o[k]).trim();
+    if (v && !ID_ABSENT_RE.test(v)) fields[k] = v;
+  });
+  const markers = [];
+  let droppedMarkers = 0;
+  (Array.isArray(o.markers) ? o.markers : []).forEach(function (m) {
+    const s = String(m == null ? '' : m).trim().toLowerCase();
+    if (!s) return;
+    if (ID_MARKERS.indexOf(s) >= 0) { if (markers.indexOf(s) < 0) markers.push(s); }
+    else droppedMarkers++;
+  });
+  if (!Object.keys(fields).length)
+    return { ok: false, error: 'Nothing legible came back — there is no identity to confirm.' };
+  return { ok: true, value: {
+    fields: fields, markers: markers,
+    // The model's originals, kept beside the accepted values (HT-D55/D57's
+    // correction-loop shape): a correction never erases what was read.
+    ai: { fields: JSON.parse(JSON.stringify(fields)), markers: markers.slice() },
+    refused: refused, droppedMarkers: droppedMarkers,
+  } };
+}
+
+// The query R2 will send, derived from the CONFIRMED fields -- never from the
+// model's originals, so correcting a misread issue number changes what is
+// searched. Title and issue only: publisher and date disambiguate for the human,
+// and whether they help the search is R2's probe to answer, not this slice's guess.
+function identityQuery(v) {
+  const f = (v && v.fields) || {};
+  return [f.title, f.issue].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+}
+function identityValue() { return CAPTURE_RESULT ? CAPTURE_RESULT.value : null; }
+function identitySetField(key, raw) {
+  const v = identityValue();
+  if (!v || ID_FIELD_KEYS.indexOf(key) < 0) return { ok: false };
+  const s = String(raw == null ? '' : raw).trim();
+  if (s) v.fields[key] = s; else delete v.fields[key];   // clearing restores ABSENT, never ''
+  renderConfirmQuery();
+  return { ok: true, query: identityQuery(v) };
+}
+function identityToggleMarker(m) {
+  const v = identityValue();
+  if (!v || ID_MARKERS.indexOf(m) < 0) return { ok: false };
+  const i = v.markers.indexOf(m);
+  if (i >= 0) v.markers.splice(i, 1); else v.markers.push(m);
+  renderCaptureResult();
+  return { ok: true, markers: v.markers.slice() };
+}
+// The live query line, repainted without rebuilding the inputs -- retyping a
+// title must not cost the caret.
+function renderConfirmQuery() {
+  const el = document.getElementById('idQueryLive');
+  const v = identityValue();
+  if (el && v) el.textContent = identityQuery(v) || '(nothing to search for yet)';
+}
+// IDENTITY FIRST (D2, and HT-R30's rule): the question is what this IS. There is
+// no grade control and no market value anywhere in here -- the cover price is
+// present because it is PRINTED ON THE COVER, and it is labelled as such.
+function renderIdentityHTML(v) {
+  const f = v.fields;
+  const head = [f.title || 'Title not legible', f.issue ? '#' + f.issue : ''].filter(Boolean).join(' ');
+  const sub = [f.publisher, f.cover_date, f.cover_price].filter(Boolean).join(' · ');
+  const rows = ID_FIELDS.map(function (spec) {
+    const val = f[spec.key];
+    return `<div class="idrow${val ? '' : ' idmissing'}">` +
+      `<label for="id_${esc(spec.key)}">${esc(spec.label)}` +
+      `${spec.hint ? ' <small>(' + esc(spec.hint) + ')</small>' : ''}` +
+      `${val ? '' : ' <small class="idna">not legible</small>'}</label>` +
+      `<input id="id_${esc(spec.key)}" type="text" value="${esc(val || '')}" ` +
+      `placeholder="not legible — type it if you can" ` +
+      `oninput="identitySetField('${esc(spec.key)}', this.value)"></div>`;
+  }).join('');
+  const chips = ID_MARKERS.map(function (m) {
+    const on = v.markers.indexOf(m) >= 0;
+    return `<button type="button" class="idchip${on ? ' on' : ''}" aria-pressed="${on ? 'true' : 'false'}" ` +
+      `onclick="identityToggleMarker('${esc(m)}')">${esc(m)}</button>`;
+  }).join('');
+  const bits = [];
+  if (v.refused > 0) bits.push(v.refused + (v.refused === 1 ? ' field was' : ' fields were') + ' refused');
+  if (v.droppedMarkers > 0) bits.push(v.droppedMarkers + ' marker' + (v.droppedMarkers === 1 ? ' was' : 's were') + ' not on the list');
+  const refusedHTML = bits.length
+    ? `<div class="idrefused">${esc(bits.join(' · '))} — this app takes only what a photo can show. ` +
+      `What a book is worth, its grade, and whether it is a key issue never come from the model.</div>`
+    : '';
+  return `<div class="iddraft">` +
+    `<div class="idq">Is this the book?</div>` +
+    `<div class="idhead">${esc(head)}</div>` +
+    (sub ? `<div class="idsub">${esc(sub)}</div>` : '') +
+    refusedHTML +
+    `<div class="idfields">${rows}</div>` +
+    `<div class="idmarklabel">Markers visible on the cover</div><div class="idchips">${chips}</div>` +
+    `<div class="idqueryrow">Will search for: <span id="idQueryLive">${esc(identityQuery(v) || '(nothing to search for yet)')}</span></div>` +
+    `</div>`;
+}
+
+// CONFIRMED: memory only (D2 Fork F1 -- nothing persists in R1).
+let CONFIRMED = null;
+function confirmedIdentity() { return CONFIRMED; }
+function identityAccept(v) {
+  const q = identityQuery(v);
+  CONFIRMED = {
+    fields: JSON.parse(JSON.stringify(v.fields)), markers: v.markers.slice(),
+    ai: JSON.parse(JSON.stringify(v.ai)), query: q, at: new Date(nowMs()).toISOString(),
+  };
+  renderConfirmed();
+  return { ok: true, query: q };
+}
+function clearConfirmed() { CONFIRMED = null; renderConfirmed(); return { ok: true }; }
+function renderConfirmed() {
+  const el = document.getElementById('confirmedBox');
+  if (!el) return;
+  if (!CONFIRMED) { el.innerHTML = ''; return; }
+  const f = CONFIRMED.fields;
+  const head = [f.title, f.issue ? '#' + f.issue : ''].filter(Boolean).join(' ') || '(nothing legible)';
+  const sub = [f.publisher, f.cover_date, f.cover_price].filter(Boolean).join(' · ');
+  const marks = CONFIRMED.markers.length ? CONFIRMED.markers.join(', ') : 'none seen';
+  el.innerHTML = `<div class="confirmed">` +
+    `<div class="cfhead">Confirmed: ${esc(head)}</div>` +
+    `<div class="cfsub">${sub ? esc(sub) + ' · ' : ''}markers: ${esc(marks)}</div>` +
+    `<label for="confirmedQuery">Search the price guide for</label>` +
+    `<div class="cfq"><input id="confirmedQuery" type="text" readonly value="${esc(CONFIRMED.query)}">` +
+    `<button class="btn" onclick="copyQuery(this)">Copy</button></div>` +
+    // Stated where the result is, not in a footnote: this build stops here.
+    `<div class="note warnline">Pricing is not built yet. This build stops at the identity — nothing looks up a price, and nothing is saved.</div>` +
+    `<button class="btn" onclick="clearConfirmed()">Start over</button></div>`;
+}
+function copyQuery() {
+  if (!CONFIRMED) return { ok: false };
+  const box = document.getElementById('confirmedQuery');
+  const text = CONFIRMED.query;
+  if (box) { try { box.focus(); box.select(); box.setSelectionRange(0, text.length); } catch (e) {} }
+  let done = false;
+  try { done = document.execCommand('copy'); } catch (e) { done = false; }
+  if (done) { toast('Search text copied'); return { ok: true, via: 'selection' }; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      function () { toast('Search text copied'); },
+      function () { toast('Copy did not work — the text is in the box, select it and copy'); });
+    return { ok: true, via: 'clipboard' };
+  }
+  toast('The text is in the box — select it and copy');
+  return { ok: true, via: 'manual' };
+}
+
+// ---- the no-key floor (D2 Fork G1) ------------------------------------------
+// Copy the prompt into your own assistant, paste the reply back. HT-D63 is the
+// warning this is built against: HealthTracker's floor sat DEAD for weeks because
+// its gate asserted that a box EXISTED rather than that it held the prompt, and
+// the app told users to copy from an empty box. So: every box is filled by
+// attribute (a third card would be filled too, not silently join the dead one),
+// filled UNCONDITIONALLY before any copy is attempted, and a rejected clipboard
+// write is REPORTED rather than swallowed.
+function promptBoxes() { return Array.prototype.slice.call(document.querySelectorAll('[data-prompt-box]')); }
+function renderPromptCard() {
+  promptBoxes().forEach(function (box) { box.value = ID_PROMPT; });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-prompt-version]'),
+    function (v) { v.textContent = 'template v' + ID_TEMPLATE_VERSION; });
+}
+// The box the FINGER was on, not the first in the document: from Settings, the
+// first box may sit in a hidden pane, and a hidden textarea cannot be selected.
+function promptBoxFor(from) {
+  const boxes = promptBoxes();
+  let n = (from && from.parentElement) ? from.parentElement : null;
+  while (n) {
+    const own = n.querySelector ? n.querySelector('[data-prompt-box]') : null;
+    if (own) return own;
+    n = n.parentElement;
+  }
+  const visible = boxes.filter(function (b) { return b.offsetParent !== null; });
+  return visible[0] || boxes[0] || null;
+}
+function copyPrompt(from) {
+  const text = ID_PROMPT;
+  const box = promptBoxFor(from);
+  if (box) box.value = text;                     // FILL FIRST, whatever the clipboard does
+  let done = false;
+  if (box && box.offsetParent !== null) {
+    try {
+      box.focus(); box.select();
+      try { box.setSelectionRange(0, text.length); } catch (e) {}
+      done = document.execCommand('copy');
+    } catch (e) { done = false; }
+  }
+  if (done) { toast('Prompt copied'); return { ok: true, via: 'selection', chars: text.length }; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      function () { toast('Prompt copied'); },
+      function () { toast('Copy did not work — the prompt is in the box, select it and copy'); });
+    return { ok: true, via: 'clipboard', chars: text.length };
+  }
+  toast('The prompt is in the box — select it and copy');
+  return { ok: true, via: 'manual', chars: text.length };
+}
+
+// The contract itself, and the seam filled (R1/D2). `setVisionContract` stays a
+// test seam; the gates clear it to prove the no-contract guard still holds.
+const IDENTITY_CONTRACT = {
+  version: ID_TEMPLATE_VERSION,
+  prompt: ID_PROMPT,
+  parse: parseIdentity,
+  render: renderIdentityHTML,
+  accept: identityAccept,
+  acceptLabel: 'Confirm',
+};
+VISION = IDENTITY_CONTRACT;
 
 // ---- observation surfaces ----------------------------------------------------
 function renderBadge() {
@@ -1203,6 +1502,12 @@ function renderDataStatus() {
 function refresh() {
   renderBadge(); renderDataStatus();
   ROLES.forEach(function (r) { renderCred(r); });
+  // HT-D63: the prompt boxes are filled on EVERY render, unconditionally. The
+  // no-key floor died in HealthTracker because filling them was a step that
+  // quietly stopped happening, while the app went on telling people to copy from
+  // a box that was empty.
+  renderPromptCard();
+  renderConfirmed();
   renderCaptureBtn(); renderCaptureOutcome();
 }
 function openSettings() {
@@ -1247,6 +1552,11 @@ window.CT = {
   setByokBitmapLease, setByokDecodeTimeout, BYOK_MAX_EDGE, BYOK_JPEG_Q, BYOK_MIN_DATAURL,
   visionCaps, visionBody, visionCall, BYOK_MAX_TOKENS, pricesPing, PRICES_PING_QUERY,
   renderCaptureBtn, openSettings, closeSettings,
+  // R1 / D2 -- the identification contract, the confirm surface and the floor
+  IDENTITY_CONTRACT, ID_TEMPLATE_VERSION, ID_PROMPT, ID_SAMPLE, ID_FIELDS, ID_FIELD_KEYS, ID_MARKERS,
+  ID_REFUSED_KEYS, parseIdentity, identityQuery, identitySetField, identityToggleMarker,
+  identityAccept, renderIdentityHTML, confirmedIdentity, clearConfirmed, renderConfirmed, copyQuery,
+  promptBoxes, promptBoxFor, renderPromptCard, copyPrompt,
   state: () => APP_STATE,
   resave: () => Store.saveState(APP_STATE),
 };
