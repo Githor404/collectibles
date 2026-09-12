@@ -1226,9 +1226,22 @@ const ID_MARKERS = ['newsstand', 'direct', 'foil', 'facsimile', 'variant-cover',
 // Refused BY NAME, on the call path and the paste path alike. `key_issue` is on
 // this list because C1 dropped it: a model that volunteers it is answering from
 // memory, and the app says so rather than quietly ignoring it.
+// R1.1 (D2 amendment): the ASKING PRICE joins the refusal list, with its likely
+// spellings. At a flea market the seller's number is often VISIBLE in the photo
+// -- a sticker on the bag, a board behind the stack -- so a model can read it off
+// the picture and hand back PRICING data through the IDENTIFICATION path. The
+// asking price is attested by the person holding the book, never perceived, and
+// the two must never be conflated in the record (brief rules 3-5).
+//
+// The failure this closes is SILENT: a sticker price sitting in `cover_price`
+// looks exactly like a printed one, nothing downstream can tell them apart, and
+// noticing it depends on someone spotting that a 1988 book claims a $5 cover.
+//
+// `ID_TEMPLATE_VERSION` HOLDS at 1: the field contract does not change, only what
+// may fill one of its fields (D2, on HT-D64's distinction).
 const ID_REFUSED_KEYS = ['value', 'worth', 'market_value', 'market_price', 'estimate', 'estimated_value',
   'price_estimate', 'nm_price', 'guide_value', 'book_value', 'grade', 'condition', 'grades', 'ladder',
-  'key_issue', 'key'];
+  'key_issue', 'key', 'asking_price', 'sticker_price', 'seller_price', 'sale_price'];
 // Absence is a STATE. A model writing "unknown" is saying "not legible" in a form
 // that would otherwise travel into a search query, so it is read as absence.
 const ID_ABSENT_RE = /^(unknown|n\/a|na|none|not legible|illegible|not visible|\?+|-+)$/i;
@@ -1243,6 +1256,9 @@ const ID_PROMPT =
 '- Report ONLY what is visible on the cover in this photo.\n' +
 '- If something is not legible, LEAVE THAT FIELD OUT. Do not guess, and do not write "unknown".\n' +
 '- "issue" and "cover_price" are strings, exactly as printed: "300", "1/2", "$1.00", "75c".\n' +
+'- "cover_price" is the price PRINTED ON THE COVER by the publisher. A price on a sticker, a bag, a\n' +
+'  label, a board or a shop tag is NOT the cover price: leave it out entirely, and never report what\n' +
+'  anyone is asking for the book.\n' +
 '- "cover_date" is the date printed on the cover, as printed: "MAY 88".\n' +
 '- "markers" may contain only: ' + ID_MARKERS.join(', ') + '. Include one only if the cover\n' +
 '  shows it (a UPC barcode box is newsstand; a direct-sales box or diamond is direct). If none are\n' +

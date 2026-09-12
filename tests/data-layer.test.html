@@ -1233,6 +1233,28 @@ window.setLS({});
   res(idBH.indexOf('printed on the cover') >= 0, 'ID3: and the label says which kind of price it is');
   CT.captureDiscard();
 
+  // ---- ID14 (R1.1): the ASKING price is refused, the PRINTED one survives ---
+  // Gated in BOTH directions, because a refusal that also killed the legitimate
+  // field would be the R1-identity-first error over again. The failure this
+  // closes is silent: a sticker price in cover_price looks exactly like a
+  // printed one, and nothing downstream can tell them apart.
+  res(/sticker/i.test(idPrompt) && /not the cover price/i.test(idPrompt) && /asking/i.test(idPrompt),
+      'ID14 GATE (R1.1): the template names the sticker, bag, label and board case BY NAME -- on the copy-prompt path the words are the only mechanism there is');
+  res(CT.ID_REFUSED_KEYS.indexOf('asking_price') >= 0 && CT.ID_REFUSED_KEYS.indexOf('cover_price') < 0,
+      'ID14: asking_price is on the refusal list and cover_price is NOT -- perceived and attested are different kinds of fact');
+  var idStick = '{"title":"The Amazing Spider-Man","issue":"300","cover_price":"$1.00","asking_price":"$5","sticker_price":"$5","markers":[]}';
+  var idSt = CT.parseIdentity(idStick);
+  res(idSt.ok === true && idSt.value.refused === 2,
+      'ID14 GATE: an asking price and a sticker price are REFUSED and counted -- pricing data is attested by the person holding the book, never read off a photo',
+      String(idSt.value.refused));
+  res(idSt.value.fields.cover_price === '$1.00',
+      'ID14 GATE: and the PRINTED cover price survives the SAME reply -- the refusal must not swallow the legitimate field');
+  CT.openCaptureResult(idStick);
+  var h14 = document.getElementById('captureResult').innerHTML;
+  res(h14.indexOf('$1.00') >= 0 && h14.indexOf('$5') < 0,
+      'ID14: the cover price renders, and the asking price reaches no surface at all');
+  CT.captureDiscard();
+
   // ---- ID4: absence is a state (D2 Fork B1) ---------------------------------
   var idThin = CT.parseIdentity('{"title":"Weird Science","issue":"unknown","publisher":"","cover_date":"n/a","markers":[]}');
   res(idThin.ok === true && idThin.value.fields.title === 'Weird Science' &&

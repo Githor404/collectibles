@@ -118,6 +118,22 @@ The brief that opened this repo asked vision for *"whether it looks like a key i
 
 **Count: 248 → 294.** Re-pinned in the same commit.
 
+### Amendment — the sticker price (R1.1, 2026-09-12)
+
+**Ruled: take it, and do not wait for the device test to justify it.**
+
+**The reason is the shape of the failure, not its likelihood: it is SILENT.** A sticker price sitting in `cover_price` looks exactly like a printed one, nothing downstream can tell them apart, and catching it depends on someone noticing that a 1988 book claims a $5 cover. That is not a hypothesis a device test can cheaply confirm — it is one whose **confirmation is unreliable**. One template line and a refusal-list entry against that is a good trade.
+
+What changed:
+
+- **The template names the case.** A price on a sticker, a bag, a label, a board or a shop tag is **not** the cover price: leave it out entirely, and never report what anyone is asking for the book.
+- **`asking_price`, `sticker_price`, `seller_price` and `sale_price` join the refusal list**, so a volunteered asking price is refused and counted exactly like a value or a grade. The set is deliberately small and unambiguous — each of those names pricing data. **A bare `price` was not added**: it is ambiguous enough that refusing it would fire on replies that meant the cover price, and the template already asks for `cover_price` by name.
+- **`ID_TEMPLATE_VERSION` holds at 1.** The field contract does not change — only what may fill one of its fields. That is HT-D64's distinction, applied as D2 applied it.
+
+**Gated in both directions**, the way the cover-price control was: a sticker or asking price is refused **and counted**, *and* the printed cover price **survives the same reply**. A refusal that killed the legitimate field would be the R1-identity-first error over again — so that direction is itself defect-tested, by planting `cover_price` onto the refusal list and watching the gate fail.
+
+**The device test still runs, reframed:** it is evidence about **model behaviour**, not the gate on whether to close the hole. Photograph a stickered book — if the reply leaves the sticker out, the template is working; if it does not, that is a template-hardening finding on the copy-prompt path, where words are the only mechanism there is (HT-D64).
+
 ### What R1 does not do
 
 It does not price, grade, save, or match a reading to a PriceCharting product. The product match is R2, and it is blocked on a live search probe that only the subscriber can run (D1's key handling; HT-D45's precedent that a vendor's own docs described a payload their endpoint rejects).

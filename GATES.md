@@ -129,6 +129,32 @@ The contract (six printed fields, a closed marker vocabulary, absence as a state
 | a grade control planted above the identity question | GATE: FAIL | `ID6` |
 | the shipped sample drifts from the parser | GATE: FAIL | `ID1` |
 
+### R1.1 — the sticker price (D2 amendment, 2026-09-12)
+
+**Taken without waiting for the device test, because the failure is SILENT:** a sticker price sitting in `cover_price` looks exactly like a printed one, nothing downstream can tell them apart, and catching it depends on someone noticing that a 1988 book claims a $5 cover. A hypothesis whose *confirmation is unreliable* is not one to spend a device pass deciding.
+
+**Changed:** the template names the case (a price on a sticker, bag, label, board or shop tag is **not** the cover price — leave it out, and never report what anyone is asking); `asking_price`, `sticker_price`, `seller_price` and `sale_price` join the refusal list. **`ID_TEMPLATE_VERSION` holds at 1** — the field contract does not change, only what may fill one of its fields (HT-D64's distinction).
+
+**Gated in BOTH directions**, as the cover-price control was:
+
+| case | asserts |
+|---|---|
+| **ID14** | the template names the sticker/bag/label/board case **by name** — on the copy-prompt path the words are the only mechanism (HT-D64); `asking_price` is on the refusal list and `cover_price` is **not**; an asking price **and** a sticker price in one reply are refused **and counted**; **the printed cover price survives that same reply**; and the asking price reaches no surface at all |
+
+**Defect pass — three rows, each failing by name:**
+
+| planted defect | verdict | first case to fail |
+|---|---|---|
+| the asking price accepted as identification data | GATE: FAIL | `ID14` (the refusal-list assertion) |
+| the refusal **over-reaches** and swallows the printed cover price | GATE: FAIL | `ID3` — the earlier of the two "printed price survives" assertions; `ID14`'s half asserts the same property |
+| the template's sticker line removed | GATE: FAIL | `ID14` (the wording assertion) |
+
+That second row is the point of the both-directions rule: a refusal that killed the legitimate field would be the `R1-identity-first` error over again, so the gate is defect-tested in the direction that *keeps* the field as well as the one that refuses.
+
+**Result: `SUITE: PASS (2 of 2)`, 299/299 assertions, pinned 294 → 299 (+5), re-pinned in this commit.**
+
+**The device test still runs, reframed:** it is evidence about **model behaviour**, not the gate on closing the hole. Photograph a stickered book — if the reply leaves the sticker out, the template is working; if it does not, that is a template-hardening finding on the copy-prompt path.
+
 ### Corrections made to the pre-registration before building (recorded as corrections)
 
 1. **`R1-identity-first` was wrong as pre-registered.** It asked for *no price field anywhere in the draft*, with a planted `$` as its control — but the **printed cover price is a field and must render**. Restated: no **grade control**, no **valuation vocabulary**, plus a control asserting the printed price is present.

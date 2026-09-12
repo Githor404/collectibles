@@ -158,6 +158,21 @@ report "grade control in the draft" "ID6" "$(run_dl)"; restore
 mutate 's/const ID_SAMPLE = .\{"title"/const ID_SAMPLE = \x27{"titel"/' app.js
 report "sample drifts from the parser" "ID1" "$(run_dl)"; restore
 
+# ---- R1.1: the asking price (D2 amendment) --------------------------------
+
+# 24. the asking price accepted as identification data
+mutate "s/'key_issue', 'key', 'asking_price'/'key_issue', 'key'/" app.js
+report "asking price accepted" "ID14" "$(run_dl)"; restore
+
+# 25. the refusal OVER-REACHES and swallows the printed cover price -- the other
+#     direction, and the error R1-identity-first made once already
+mutate "s/const ID_REFUSED_KEYS = \['value',/const ID_REFUSED_KEYS = ['cover_price', 'value',/" app.js
+report "refusal swallows cover price" "ID14|ID3" "$(run_dl)"; restore
+
+# 26. the template's sticker line removed (the copy-prompt path has only words)
+mutate 's/\x27- "cover_price" is the price PRINTED[\s\S]*?anyone is asking for the book\.\\n\x27 \+\n//' app.js
+report "sticker line removed" "ID14" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 echo "restored: app.js $(sha256sum app.js | cut -c1-12) (was ${ORIG_APP:0:12}) · index.html $(sha256sum index.html | cut -c1-12) (was ${ORIG_IDX:0:12})"
 echo "git status (expect nothing but untracked tests/.tmp):"
