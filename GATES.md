@@ -144,6 +144,23 @@ The contract (six printed fields, a closed marker vocabulary, absence as a state
 
 ---
 
+### Carried forward to the pricing slice — the ASKING PRICE (received 2026-09-12; NOT pre-registered)
+
+Recorded here so the pricing slice is built on it rather than discovering it. The brief's domain rules 3–5 carry the binding form.
+
+- **The asking price needs a home, beside the grade**, as the second thing only the user can supply: a sticker, a sign, a verbal quote, or a **bulk rate** ("3 for $10"). Attested, never perceived.
+- **The output is the comparison** — *"raw modelled at $X, they're asking $Y"* — not a valuation with the comparison left to the user's head.
+- **Cover price and asking price are never conflated**, in the record or on a surface: one is printed on the book and read from the photo (identification, `cover_price`); the other is the seller's number, attested (pricing).
+
+**A hazard this exposes in the contract already shipped (R1/D2), flagged rather than silently patched.** At a flea market the *asking* price is very often **visible in the photo** — a sticker on the bag, a price written on a board behind the stack. The identification template currently says `cover_price` is "the price printed on the cover", and a model reading a $5 sticker on a 1988 book whose cover says $1.00 would be **supplying pricing data through the identification path**, which is exactly the conflation rule 5 forbids. Two candidate repairs, neither taken without a ruling:
+
+1. **A one-line template amendment plus `asking_price` on the refusal list** (a small R1.1): the template says a price on a sticker, bag, board or label is **not** the cover price and must be left out, and a model that volunteers an asking price is refused and counted, like a value or a grade. Cheap, and it closes the hole at the perception layer where it opens.
+2. **Leave R1 as it is** and handle the distinction entirely in the pricing slice's own surface. Cheaper now, but it accepts that a sticker price can enter the record labelled `cover_price`, where nothing downstream can tell it from a printed one.
+
+Seed gates for whichever slice takes it: the asking price never enters the identification contract; a record carries both numbers under **distinct names with distinct provenance**; the comparison surface states both and never prints one where the other belongs; a bulk rate is representable without inventing a per-book number the seller did not quote.
+
+---
+
 ### The pre-registration, as it was written before building (kept verbatim)
 
 **Numbering.** The first slice in this repo: **R1**; its ruling becomes **D2**. D1 carries no R-number because the port was not a slice.
