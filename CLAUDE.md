@@ -6,7 +6,9 @@ Structure and discipline are ported from HealthTracker (`../healthtracker`). The
 
 ## Status
 
-**No features yet.** The repo holds the ported infrastructure and its gates (D1, `GATES.md`). The first feature slice, identification, has not been pre-registered.
+**No features yet.** The repo holds the ported infrastructure and its gates (D1, `GATES.md`).
+
+The first feature slice — **R1, identification** — is **pre-registered with its forks open** in `GATES.md` (2026-09-12) and is **not built**. Its ruling becomes D2. Seven forks await a decision, the central one being where identification ends: at the confirmed reading (A1), or at a PriceCharting product id (A2, which requires a live search probe with the subscriber's token first).
 
 ## Domain rules (from the brief that opened this repo, 2026-09-11)
 
