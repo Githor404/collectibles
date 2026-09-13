@@ -60,7 +60,7 @@ window.setLS({});
       var e = document.createElement(tag); e.id = id; if (cls) e.className = cls;
       (parent || document.body).appendChild(e); return e;
     };
-    ['storeBadge','dataStatus','captureBox','credBox-vision','credBox-prices','replyReport','toast','prerestoreWrap'].forEach(function (id) { mk('div', id); });
+    ['storeBadge','dataStatus','captureBox','credBox-vision','credBox-prices','credBox-comps','confirmedBox','compsBox','replyReport','toast','prerestoreWrap'].forEach(function (id) { mk('div', id); });
     mk('textarea', 'replyBox'); mk('textarea', 'prerestoreBox');
     mk('div', 'outcomeScrim', 'scrim oscrim');
     var w = mk('div', 'captureOutcome', 'omodal');
@@ -74,6 +74,9 @@ window.setLS({});
 
   var SECRET = 'xai-SUPERSECRET-0123456789';
   var TOKEN = 'PCTOKEN-SECRET-' + '0123456789abcdef012345678';   // 40 chars, the documented length
+  // R2b. Carries the real prefix so credKeyIssue's shape check passes cleanly --
+  // a fixture that trips a warning tests the warning, not the thing under test.
+  var CTOKEN = 'apify_api_' + 'SECRETCOMPS0123456789abcdef';
   // The SYNTHETIC contract. `probe` must be a string; every other key rides along,
   // so a long reply makes a long result (the scroll case).
   var OK_TEXT = '{"probe":"alpha","n":1}';
@@ -197,16 +200,19 @@ window.setLS({});
     credReset();
     CT.credSave('vision', 'grok', SECRET, 20);
     CT.credSave('prices', 'pricecharting', TOKEN);
+    CT.credSave('comps', 'apify', CTOKEN);
   }
   function surfacesText() {
-    return ['credBox-vision', 'credBox-prices', 'captureBox', 'dataStatus', 'storeBadge', 'toast', 'outcomeMsg', 'outcomeTitle', 'outcomeFoot', 'captureResult', 'replyReport']
+    return ['credBox-vision', 'credBox-prices', 'credBox-comps', 'captureBox', 'dataStatus', 'storeBadge', 'toast', 'outcomeMsg', 'outcomeTitle', 'outcomeFoot', 'captureResult', 'replyReport', 'confirmedBox', 'compsBox']
       .map(function (id) { var e = document.getElementById(id); return e ? e.innerHTML : ''; }).join('|');
   }
 
   setLS({}); CT.boot(); withKeys();
-  res(CT.credConfigured('vision') && CT.credConfigured('prices'), 'K1: both credentials configure');
+  res(CT.credConfigured('vision') && CT.credConfigured('prices') && CT.credConfigured('comps'), 'K1: all three credentials configure');
   var stj = JSON.stringify(CT.state());
-  res(stj.indexOf(SECRET) < 0 && stj.indexOf(TOKEN) < 0, 'K1 GATE: NEITHER credential is in the state object -- nothing that serializes the state can carry one');
+  res(stj.indexOf(SECRET) < 0 && stj.indexOf(TOKEN) < 0 && stj.indexOf(CTOKEN) < 0,
+      'K1 GATE: NO credential is in the state object -- nothing that serializes the state can carry one. ' +
+      'Repointed for the comps token (HT-D60 Clause 3): a THIRD role must be covered by construction, not by a list that stopped at two');
   var expK = CT.exportJSON();
   res(expK.indexOf(SECRET) < 0 && expK.indexOf(TOKEN) < 0 && expK.indexOf('cred') < 0,
       'K1: absent from the export, and so is any trace of their stores');
@@ -958,11 +964,17 @@ window.setLS({});
     var credBoxes = Array.prototype.map.call(D.querySelectorAll('[id^="credBox-"]'), function (e) { return e.id; });
     res(!!sp && sp.contains(D.getElementById('credBox-vision')) && !!D.getElementById('replyBox'),
         'SH1: the vision credential card lives in Settings, and the reply box exists');
-    res(credBoxes.length === 1 && credBoxes[0] === 'credBox-vision',
-        'SH1 GATE (D9): the shipped shell carries EXACTLY ONE credential field, the vision key -- no input for a provider with no call behind it',
+    // REPOINTED AGAIN (HT-D60 Clause 3), and D9 now runs FORWARD. R2b built the
+    // call, so the comps field arrives WITH it -- the count moves 1 -> 2 because a
+    // call was added, never to make room for a field. The property is unchanged:
+    // one credential box per role that can actually call something.
+    res(credBoxes.length === 2 && credBoxes.indexOf('credBox-vision') >= 0 && credBoxes.indexOf('credBox-comps') >= 0,
+        'SH1 GATE (D9): the shipped shell carries EXACTLY ONE credential field PER CALLING ROLE -- vision and comps, and nothing else',
         credBoxes.join(','));
     res(D.body.innerHTML.indexOf('PriceCharting') < 0,
-        'SH1 GATE (D9): and the shell names no deferred provider at all -- nothing invites a credential that nothing would use');
+        'SH1 GATE (D9): and the shell still names no deferred provider -- nothing invites a credential that nothing would use');
+    res(D.body.innerHTML.indexOf('credBox-prices') < 0,
+        'SH1 GATE (D9): the deferred price role has NO field, though its provider row and pacing are still live -- machinery without an invitation');
     // A token saved by an EARLIER build must not be stranded: it appears in
     // Storage with a way out, and only when it exists.
     W.CT.credClear('prices');
@@ -1344,12 +1356,194 @@ window.setLS({});
       'ID9: Confirm produces the confirmed identity and its query');
   res(CT.captureResult() === null && CT.captureOutcomeState() === 'none', 'ID9: and the modal closes behind it');
   var cfHTML = document.getElementById('confirmedBox').innerHTML;
-  res(cfHTML.indexOf('Amazing Spider-Man 308') >= 0 && cfHTML.indexOf('Pricing is not built yet') >= 0,
-      'ID9 GATE: the confirmed surface carries the query AND states plainly that this build stops at the identity');
+  // REPOINTED (HT-D60 Clause 3), not weakened. R1 asserted the surface said
+  // "Pricing is not built yet"; R2b BUILT it, so the honest dead end is replaced
+  // by the honest offer. The property is the same one: the surface states what
+  // happens next rather than leaving it to be discovered.
+  res(cfHTML.indexOf('Amazing Spider-Man 308') >= 0 && cfHTML.indexOf('Pricing is not built yet') < 0,
+      'ID9 GATE: the confirmed surface carries the query, and the R1 dead-end line is GONE now that the lookup exists');
+  res(cfHTML.indexOf('Look up sold comps') >= 0 || cfHTML.indexOf('No comps token saved') >= 0,
+      'ID9 GATE (D2 Fork G1 shape): and it offers the lookup, or names the route when no token is saved -- never silence');
   res(CT.exportJSON() === exportBefore9 && JSON.stringify(CT.state()).indexOf('Spider-Man') < 0,
       'ID9 GATE (D2 Fork F1): nothing is saved -- not a record, not a byte of the export');
   CT.clearConfirmed();
   res(CT.confirmedIdentity() === null && document.getElementById('confirmedBox').innerHTML === '', 'ID9: and Start over clears it');
+
+  // ======== R2b / D10: SOLD COMPS -- one scatter, no groups, no range ========
+  // The probe (2026-09-13) is the fixture's source. Every shape below came off a
+  // real run: condition is `Pre-Owned` for everything slabbed or not, grade lives
+  // in the title as free text in no format, and there is no certification field
+  // to group on. HT-D60 Clause 4: a fixture that cannot exhibit the failure is
+  // not a test, so the raw/slab trap is planted explicitly -- a RAW book whose
+  // title says "CGC READY", which is how sellers actually write them.
+  var COMPROWS = JSON.stringify([
+    { itemId: 'a1', title: 'AMAZING SPIDER-MAN 151 VG- complete', condition: 'Pre-Owned', conditionId: 3000,
+      endedAt: '2026-09-02T11:00:00Z', soldPrice: 16.21, soldCurrency: 'USD', listingType: 'buy_it_now', isBestOfferAccepted: false },
+    { itemId: 'a2', title: 'Amazing Spider-Man #151 CGC 9.8 WHITE PAGES', condition: 'Pre-Owned', conditionId: 3000,
+      endedAt: '2026-09-05T11:00:00Z', soldPrice: 145, soldCurrency: 'USD', listingType: 'auction', isBestOfferAccepted: false },
+    { itemId: 'a3', title: 'AMAZING SPIDER-MAN 151 NM- CGC READY would grade 9.6', condition: 'Pre-Owned', conditionId: 3000,
+      endedAt: '2026-09-06T11:00:00Z', soldPrice: 9, soldCurrency: 'USD', listingType: 'buy_it_now', isBestOfferAccepted: true },
+    { itemId: 'a4', title: 'Amazing Spider-Man 151 VF- 7.5', condition: 'Pre-Owned', conditionId: 3000,
+      endedAt: '2026-09-08T11:00:00Z', soldPrice: 49.99, soldCurrency: 'USD', listingType: 'buy_it_now', isBestOfferAccepted: false },
+    { itemId: 'a5', title: 'LOT OF 12 AMAZING SPIDER-MAN comics incl 151', condition: 'Pre-Owned', conditionId: 3000,
+      endedAt: '2026-09-09T11:00:00Z', soldPrice: 89, soldCurrency: 'USD', listingType: 'auction', isBestOfferAccepted: false },
+    { itemId: 'a6', title: 'Amazing Spider-Man 151 FACSIMILE reprint 2019', condition: 'Pre-Owned', conditionId: 3000,
+      endedAt: '2026-09-10T11:00:00Z', soldPrice: 4.5, soldCurrency: 'USD', listingType: 'buy_it_now', isBestOfferAccepted: false },
+    { itemId: 'a7', title: 'AMAZING SPIDER-MAN 151 GD 1 CF staple detached', condition: 'Pre-Owned', conditionId: 3000,
+      endedAt: '2026-09-11T11:00:00Z', soldPrice: 18.88, soldCurrency: 'USD', listingType: 'buy_it_now', isBestOfferAccepted: false },
+    { itemId: 'a8', title: 'Amazing Spider-Man 151 VG', condition: 'Pre-Owned', conditionId: 3000,
+      endedAt: '2026-09-12T11:00:00Z', soldPrice: 29.99, soldCurrency: 'USD', listingType: 'buy_it_now', isBestOfferAccepted: false }
+  ]);
+
+  // ---- CQ1: the eBay query is eBay's, and D4's GCD rules do NOT transfer -----
+  CT.captureDiscard(); CT.clearConfirmed();
+  CT.openCaptureResult('{"title":"The Amazing Spider-Man","issue":"#151","publisher":"Marvel","markers":[]}');
+  CT.captureAccept();
+  res(CT.compsQuery() === 'Amazing Spider-Man 151',
+      'CQ1 GATE (D4 per-source): the leading article and the # are dropped, and THE ISSUE NUMBER STAYS -- ' +
+      'GCD returns 0 for a series query carrying the number, eBay needs it as the most discriminating token',
+      CT.compsQuery());
+  res(CT.confirmedIdentity().fields.title === 'The Amazing Spider-Man' && CT.confirmedIdentity().fields.issue === '#151',
+      'CQ1 GATE (D4): and the READING is untouched by the query -- two objects, the derivation never rewrites the evidence');
+  res(CT.compsBody(CT.compsQuery()).keywords[0] === 'Amazing Spider-Man 151',
+      'CQ1: the query reaches the request body as the single keyword');
+
+  // ---- CQ2: visible AND EDITABLE, and editing changes what is SENT ----------
+  CT.compsSetQuery('spider-man 151 newsstand');
+  res(CT.compsQuery() === 'spider-man 151 newsstand', 'CQ2: the typed query replaces the derived one');
+  res(CT.compsBody(CT.compsQuery()).keywords[0] === 'spider-man 151 newsstand',
+      'CQ2 GATE (D4): editing changes THE REQUEST BODY, not merely the surface -- ' +
+      'a query you can see but not actually send is a label, not a control');
+  res(document.getElementById('confirmedBox').innerHTML.indexOf('readonly') < 0,
+      'CQ2 GATE (D4): the query input is no longer read-only -- R1 recorded that making it editable was R2s job');
+  CT.compsResetQuery();
+  res(CT.compsQuery() === 'Amazing Spider-Man 151', 'CQ2: and it can be put back');
+
+  // ---- CQ3: the request body is PINNED, every field of it -------------------
+  var body3 = CT.compsBody('x');
+  res(body3.daysToScrape === 90,
+      'CQ3 GATE (Fork C): the window is pinned to 90 -- the actor DEFAULTS TO 30, so unset ships a third of the ruled window silently', String(body3.daysToScrape));
+  res(body3.includeCompletedListings === true,
+      'CQ3 GATE (brief rule 7): includeCompletedListings is pinned TRUE. Set false, the actor reports a Best-Offer sale\'s ' +
+      'ASKING price in soldPrice -- the conflation this product exists to refuse, committed inside the source');
+  res(body3.categoryId === '259104' && typeof body3.categoryId === 'string',
+      'CQ3 GATE: categoryId is the STRING "259104" -- the console labels it numeric and the wire schema says string', typeof body3.categoryId);
+  res(body3.count === 100 && body3.keywords.length === 1,
+      'CQ3 GATE (R2b-cost): count is bounded and there is EXACTLY ONE keyword -- count is PER KEYWORD, so keywords.length is half the bill');
+  var bound3 = CT.compsBound(body3);
+  res(bound3.results === 100 && Math.abs(bound3.usd - 0.40) < 0.001,
+      'CQ3 GATE (R2b-cost): the bill is computed BEFORE the call and is $0.40 -- bounded and stated, never discovered after', String(bound3.usd));
+  res(CT.compsBound({ keywords: ['a', 'b'], count: 100 }).results === 200,
+      'CQ3 CONTROL: two keywords would double it -- the bound tracks the product, not the count alone');
+  // MEASURED 2026-09-13. The actor's aspectFilter DOES reach eBay for Publisher
+  // ({"Publisher":"DC Comics"} on a Spider-Man query returns ZERO -- live and
+  // narrowing) and IGNORES Grade and Certification entirely (both return a full
+  // unfiltered 100). So the tempting move is to send Publisher, and it is a trap:
+  // aspects are filled by the sellers who fill structured fields -- the slabbed,
+  // professional minority. Filtering on Publisher would silently DROP the raw
+  // listings whose sellers left it blank, biasing the scatter toward the graded
+  // end. D10's corruption by SELECTION rather than by mislabelling, and a dropped
+  // row leaves no trace on the surface where a mislabelled one at least renders.
+  res(!('aspectFilter' in CT.compsBody('x')),
+      'CQ3 GATE (D10): the request sends NO aspectFilter -- Publisher is queryable and WOULD narrow, ' +
+      'and that is precisely why it is refused: it selects for sellers who fill structured fields, which is the slabbed minority');
+
+  // ---- CQ4: the human's two inputs never enter a lookup ---------------------
+  res(CT.compsBodyIsClean(CT.compsBody('Amazing Spider-Man 151')) === true,
+      'CQ4: a real body carries no grade and no asking price');
+  res(CT.compsBodyIsClean({ keywords: ['x'], grade: '9.4' }) === false &&
+      CT.compsBodyIsClean({ keywords: ['x'], asking_price: 12 }) === false,
+      'CQ4 GATE (brief rules 3,4): a body carrying the grade or the asking price is REFUSED -- ' +
+      'asserted on the request body, because a surface that does not show them proves nothing about what was sent');
+
+  // ---- CQ5: the contract as one real run returned it ------------------------
+  var p5 = CT.parseComps(COMPROWS);
+  res(p5.ok === true && p5.rows.length === 8, 'CQ5: eight rows parse', String(p5.rows.length));
+  res(CT.parseComps('[{"itemId":"z","title":"t","soldPrice":0}]').rows.length === 0,
+      'CQ5 GATE: a listing with no price is NOT a comp -- it is dropped rather than rendered as $0');
+  res(CT.parseComps('not json').ok === false && CT.parseComps('{"a":1}').ok === false,
+      'CQ5: malformed and non-list replies are refused, not coerced');
+  res(CT.COMP_KEYS.indexOf('grade') < 0 && CT.COMP_KEYS.indexOf('certification') < 0 && CT.COMP_KEYS.indexOf('categoryId') < 0,
+      'CQ5 GATE (D3): the contract is what ARRIVED -- no grade, no certification, and no category either, ' +
+      'though the vendor\'s own schema documentation claims the output carries one');
+
+  // ---- CQ6: the client-side filter, and what it hides it SHOWS --------------
+  var f6 = CT.compsFilter(p5.rows);
+  res(f6.kept.length === 6 && f6.dropped.length === 2,
+      'CQ6: the lot and the facsimile are filtered out, six comps remain', f6.kept.length + '/' + f6.dropped.length);
+  res(f6.dropped.map(function (d) { return d.why; }).sort().join(',') === 'lot,reprint',
+      'CQ6: and each exclusion names ITS OWN reason, not a generic one');
+  res(f6.kept.every(function (r) { return !/LOT OF|FACSIMILE/i.test(r.title); }),
+      'CQ6 CONTROL: nothing excluded survived the filter');
+
+  // ---- CQ7 (D10): ONE SCATTER. No groups, no range, no average -------------
+  CT.clearConfirmed();
+  CT.openCaptureResult('{"title":"Amazing Spider-Man","issue":"151","markers":[]}');
+  CT.captureAccept();
+  CT.renderComps();
+  res(document.getElementById('compsBox').innerHTML === '',
+      'CQ7: with no lookup run, the comps surface is EMPTY -- it never speculates');
+  CT.__setComps(CT.compsFilter(p5.rows).kept, CT.compsFilter(p5.rows).dropped, 'Amazing Spider-Man 151');
+  var c7 = document.getElementById('compsBox').innerHTML;
+  res(/\bvalue\b/i.test(c7) === false,
+      'CQ7 GATE (D8): the word "value" appears NOWHERE on the comps surface -- a comp is a sale, not a valuation');
+  res(c7.indexOf('9 sold') < 0 && c7.indexOf('6 sold') >= 0,
+      'CQ7: the count is the KEPT count and rides on the surface', c7.indexOf('6 sold') >= 0 ? '6 sold' : '(no count)');
+  res(c7.indexOf('last 90 days') >= 0,
+      'CQ7 GATE (Fork C): the window is stated WITH the count, on the surface, every render');
+  // WAS A TAUTOLOGY, and its own defect row is what found it. The original read
+  //   (c7.indexOf('raw') < 0 && c7.indexOf('slab') < 0) || c7.indexOf('cannot tell...') >= 0
+  // and `||` binds looser than `&&`, so the whole expression was (A && B) || C --
+  // where C is the D10 warning line renderComps emits on EVERY render. It could
+  // never fail. It passed 347/347 every run because it was incapable of anything
+  // else. Defect row 34 planted real grouping, the gate said PASS, and that is
+  // the only reason this was caught (HT-D60's whole point).
+  //
+  // Fused clauses are how it happened, so the three claims are now three
+  // SEPARATE assertions. An `||` inside a res() condition can hide a clause that
+  // is always true; three independent checks cannot.
+  //
+  // What actually discriminates: grouping changes the ORDER (slabbed first
+  // instead of cheapest first) and injects a heading. Neither can be satisfied
+  // by the warning sentence's wording.
+  var prices7 = (c7.match(/<span class="cmpprice">\$([0-9.,]+)</g) || [])
+    .map(function (s) { return Number(s.replace(/[^0-9.]/g, '')); });
+  res(prices7.length === 6 && prices7.every(function (p, i) { return i === 0 || prices7[i - 1] <= p; }),
+      'CQ7 GATE (D10): comps render in ASCENDING PRICE order -- grouping by raw/slabbed reorders them, ' +
+      'so order is the property that detects a group where the warning text cannot',
+      prices7.join(','));
+  res(/<h[1-6][^>]*>/.test(c7) === false,
+      'CQ7 GATE (D10): no heading element appears among the comps -- a group header is a claim about what the app knows');
+  res(c7.indexOf('cannot tell a raw copy from a graded slab') >= 0,
+      'CQ7 GATE (D10): and the inability to separate the two markets is STATED, where the numbers are');
+  res(c7.indexOf('$9') >= 0 && c7.indexOf('$145') >= 0 && c7.indexOf('$9–$145') < 0 && c7.indexOf('$9-$145') < 0,
+      'CQ7 GATE (D8 amended): both ends of the scatter render as SALES, and no range spans them -- ' +
+      'the endpoints come from two different markets, so the span describes no book anyone can buy');
+  res(c7.indexOf('CGC READY') >= 0,
+      'CQ7 GATE (D10): the seller\'s own title renders VERBATIM -- including "CGC READY" on a $9 raw book, ' +
+      'which is exactly the string a title-parsing split would have mis-grouped as slabbed');
+  res(c7.indexOf('1 lot') >= 0 && c7.indexOf('1 reprint') >= 0,
+      'CQ7: what the filter hid is COUNTED ON THE SURFACE -- a filter the user cannot see is one they cannot correct');
+
+  // ---- CQ8 (D8): below three, the surface says so --------------------------
+  CT.__setComps(CT.compsFilter(p5.rows).kept.slice(0, 2), [], 'Amazing Spider-Man 151');
+  var c8 = document.getElementById('compsBox').innerHTML;
+  res(c8.indexOf('Too few recent sales') >= 0 && c8.indexOf('it is no answer') >= 0,
+      'CQ8 GATE (D8): with two comps the surface STATES ABSENCE and says a thin result is not a low price');
+  CT.__setComps([], [], 'Amazing Spider-Man 151');
+  res(document.getElementById('compsBox').innerHTML.indexOf('none in the last 90 days') >= 0,
+      'CQ8 GATE (HT-D60 Clause 4): and ZERO comps reaches the same branch -- the fixture can actually exhibit it');
+  CT.compsClear();
+
+  // ---- CQ9 (D1): the token's route, and the cost warning -------------------
+  CT.renderCred('comps');
+  var cc9 = document.getElementById('credBox-comps').innerHTML;
+  res(cc9.indexOf(CTOKEN) < 0, 'CQ9 GATE (D1): the comps card never prints the token');
+  res(cc9.indexOf('SPENDS MONEY') >= 0,
+      'CQ9 GATE (D1/HT-D53): the card warns that this credential SPENDS -- keyed to the provider row, not to a role name. ' +
+      'Gated on role === "prices" the spending token was the one with no warning at all');
+  res(CT.PROVIDERS.apify.auth === 'bearer',
+      'CQ9 GATE (D1): the Apify token rides as a BEARER HEADER, never a URL parameter -- PriceCharting\'s t= is the lesson');
 
   // ---- ID15 (R1.2): an issue that ARRIVES with a # renders with exactly one --
   // From the first device capture: STAR WARS #2 came back with issue "#2" -- as

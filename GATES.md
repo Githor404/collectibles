@@ -4,6 +4,18 @@ Pre-registered, re-runnable gate evidence. **HT-D60 binds** (adopted by D1): a n
 
 Run everything: `bash tests/run-all-gates.sh`. Defect pass: `bash tests/defect-pass.sh`.
 
+> **Incident, 2026-09-13 — a restore destroyed uncommitted work for the second time, and the rule written after the first did not prevent it.**
+>
+> After the first incident this repo recorded: *restore by copy, never by `git checkout --`; a restore must return a file to what it was, not to what was last committed.* That rule was followed exactly. The work was still lost.
+>
+> **What happened.** A backgrounded defect pass was killed by the OS (~42 headless Chrome launches in one job, memory exhausted) during the *baseline* step — so `defect-pass.sh` never started, never wrote backups, and never mutated anything. The `tests/.tmp/*.orig` files sitting there were **the previous session's**, timestamped ten minutes before the last commit. A recovery step compared `app.js` to one of them, found the difference that was three hours of new R2b work, classified it as mid-mutation corruption, and restored. Four files were reverted to a state older than HEAD.
+>
+> **Why the existing rule missed it.** It governs the *method* of a restore, not the *provenance* of the backup. A copy that is verified by `cmp` and taken from the wrong run passes every check the rule imposes. Freshness was the unstated half.
+>
+> **Fixed structurally, not by resolve:** `defect-pass.sh` now clears `*.orig` on a clean exit, so a leftover backup means *interrupted*, never *finished* — the one question the failing step could not answer. See `tests/README.md`.
+>
+> **What survived is the argument for where rulings live.** `DECISIONS.md` and everything under `tests/` are not in `MUTATED`, so **D10, D4's per-source amendment, D7/D8's amendments, all thirteen R2b cases, defect rows 31–40 and the 347 pin were untouched**. Only the implementation was lost, and a gate record plus a decision log is enough to rebuild an implementation. The reverse would not have been true.
+
 ---
 
 ## Port slice — HealthTracker's infrastructure, copied (D1) — 2026-09-11
@@ -489,7 +501,7 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 
 ---
 
-## R2b — Price via eBay sold comps — PRE-REGISTERED, FORKS OPEN (received 2026-09-13; NOT built)
+## R2b — Price via eBay sold comps — **BUILT, GATED, DEFECT-PASSED** (2026-09-13)
 
 **What it is for:** the number that makes the triage a decision — *"N recent solds at $X–$Y, they're asking $Z, you'd grade it W."* **Actual sales, not guide values.** It is the first slice that prices anything.
 
@@ -500,7 +512,7 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 | CORS | **`access-control-allow-origin: *`**, methods `GET, POST`, `Authorization` permitted — **the page can call it**, unlike GCD |
 | store search `?search=ebay` | **2,532 actors**; six on page one, including four sold-listings scrapers |
 | candidate actor | **`caffein.dev/ebay-sold-listings`** — "eBay Sold Listings Search". **574,056 runs · 3,139 users · 4.38★ (14 reviews) · last run 2026-09-13** |
-| its cost model | `PAY_PER_EVENT`: **"1000 items (no details)" = $2.00**, "result" = $0.00001, "Actor Start" = $0.00005 |
+| its cost model | `PAY_PER_EVENT`: **"1000 items (no details)" = $2.00**, "result" = $0.00001, "Actor Start" = $0.00005 — **the $2.00 read was WRONG; the console charges $4.00/1,000** (probe, 2026-09-13) |
 | its stated filters | *"date window, result limit, category/subcategory selection (subcategory overrides category), marketplace"* |
 | its stated result fields | sale price + currency, **sale completion timestamp**, listing title, item URL and identifier, **localized condition label plus a mapped numeric condition code**, **category label/ID**, listing type, best-offer-accepted flag, bid count, shipping cost and type, combined total price, images, **seller identifier and feedback metrics**, scrape timestamp |
 | a two-stage alternative | **`blackfalcondata/ebay-sold-listings-scraper`** prices **"Fast item (search-card / sold)"** separately from **"Detailed item (full item page)" at $0.005** |
@@ -508,9 +520,9 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 
 **Three findings:**
 
-1. **The ~$2/1,000 estimate is exact, not approximate** — it is a literal charge event, *"1000 items (no details)"*, $2.00. "No details" is the important half: it is the **cheap search-card tier**, and Item Specifics are not in it.
-2. **The two-stage pipeline has a price tag per stage.** One actor already sells exactly that split — cheap search-card events versus $0.005 per full item page. So "how many survivors do we deepen?" is a **cost fork**, not a style question: 200 survivors deepened = $1.00 on top of a $0.20 search.
-3. **Condition arrives as a label plus a numeric code, and category as a label plus ID** — so category 259104 and raw-vs-slab have real fields behind them rather than string-matching hope.
+1. ~~**The ~$2/1,000 estimate is exact, not approximate**~~ — **WRONG BY 2×; the probe measured $4.00/1,000.** The payload's charge event was read *as verification* and it was not one: a machine-readable number felt like evidence in a way a marketing page would not have, and only the console actually charges. The half that held: "no details" is the **cheap search-card tier**, and Item Specifics are not in it.
+2. **The two-stage pipeline has a price tag per stage.** One actor already sells exactly that split — cheap search-card events versus $0.005 per full item page. So "how many survivors do we deepen?" is a **cost fork**, not a style question: 200 survivors deepened = $1.00 on top of a ~~$0.20~~ **$0.80** search — so deepening adds **125%** to a lookup, not 400% as the wrong rate implied. *(The cost fork survives the correction; its direction reverses.)*
+3. ~~**Condition arrives as a label plus a numeric code, and category as a label plus ID**~~ — **FALSIFIED by the probe, and it is the finding that mattered most.** Condition does arrive as label plus code, but it carries **no grade information at all**; and **there is no category field on a result whatsoever**. The clause that was doing the work — *"raw-vs-slab have real fields behind them rather than string-matching hope"* — is **exactly backwards**: string-matching hope is precisely what stage one leaves us. This is what an actor's *advertised* field list is worth against one real run, and the advertised list is where that sentence came from.
 
 **Not verified, and blocking the build:** the actor's **input parameter names** (the example input is a placeholder), whether **Item Specifics** are exposed at all by any of these actors, whether category can be pinned to **259104**, and what a real comics query actually returns. Those need one paid run against a token — **the subscriber's**, per D1.
 
@@ -518,7 +530,7 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 
 | fork | ruling |
 |---|---|
-| **A** | **one stage first**, on the $2/1,000 tier. The $0.005-per-item deepening is **deferred until stage one's output is seen** — HT-D65's discipline (measure before tuning), and it makes the first probe cost pennies |
+| **A** | **one stage first**, on the ~~$2~~ **$4**/1,000 tier. The $0.005-per-item deepening is **deferred until stage one's output is seen** — HT-D65's discipline (measure before tuning), and it makes the first probe cost pennies |
 | **B** | **N = 5** for a range; **3–4 shown as individual sales**; below 3 **says so** |
 | **C** | **90 days**, stated on every render |
 | **D** | filtering is **ours, client-side, visible and gateable** — and **D5 binds the actor's own filters too**: passing `category=259104` must be **proven to have narrowed**, not merely to have returned 200 |
@@ -539,6 +551,8 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 
 **Expected cost.** The actor's charge events, read from the API on 2026-09-13: **`Actor Start` $0.00005**, **`result` $0.00001**, and **`1000 items (no details)` $2.00**. How those combine is *not* clear from the payload — which is itself worth knowing — so a 100-result run should land somewhere between a fraction of a cent and about **$0.20**. **Check the run's cost readout and paste it**; that number settles the model.
 
+> **Settled, 2026-09-13: the estimate was wrong and the instruction that caught it was right.** The rate is **$4.00/1,000**, so a 100-result run is **$0.40** — double the top of the range predicted here. The run itself was billed **$0.00** against a **$5.00 free-tier credit that required no payment method**. Asking for the readout rather than trusting the payload is the only reason the record is now correct; the prediction was the part that failed.
+
 **Paste back four things:**
 1. **The Input JSON** the console shows for the run (its **parameter names** are what we cannot get any other way).
 2. **Two or three complete result objects**, verbatim — field names and values as returned.
@@ -548,6 +562,118 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 **Do not paste the token.** Nothing about the run needs it here, and D1's hygiene applies to this transcript as much as to the app.
 
 **One design note that comes out of the probe's own shape:** when the app calls this, the token rides as an **`Authorization` header**, never as a URL parameter — Apify's CORS response permits `Authorization`, and D1 forbids a credential in a request URL after PriceCharting's `t=` lesson.
+
+### The probe RETURNED — 2026-09-13 (run by the subscriber; $0.00 charged, under 5 seconds)
+
+**It cost nothing and needed no card.** Apify's free tier carries **$5.00 of credit and asked for no payment method**. Two consequences worth recording: the D5 follow-up below is affordable out of the same credit, and **a tester without billing can run this** — which is not true of PriceCharting, and was the open question planted at step 2 of the setup instructions above.
+
+**The rate is $4.00 per 1,000 results, not $2.00.** Every `$2` figure above is struck. At $4.00/1,000 a 100-result lookup is **$0.40**, and the $0.005-per-item deepening is **$0.50 per 100** — so **stage two more than doubles a lookup**.
+
+**The input schema, as the console shows it.** Exactly what the placeholder `exampleRunInput` withheld:
+
+| input | shape |
+|---|---|
+| **`Keywords`** | **an ARRAY** — and **`Keyword` and `Search` are DEPRECATED**. We never guessed a parameter name, so nothing is repointed. Had we guessed, we would have guessed the deprecated singular and built against it |
+| `Category`, `Subcategory` | reported as **numeric** |
+| filters offered | Days to Scrape · Count · Sort order · Min/Max price · Buying format · Item location · Condition · Condition ID · **Aspect Filter (a JSON object)** |
+
+**The result fields, as returned.** Ten — and the **absences** carry the slice:
+
+`keyword` · `itemId` · `title` · `condition` · `conditionId` · `endedAt` · `soldPrice` · `soldCurrency` · `listingType` · `isBestOfferAccepted`
+
+**Four findings.**
+
+1. **The data is on-target.** Every visible row was the right book; **no lots or bundles in the first eight**. Noise is lower than this pre-registration assumed, which demotes Fork D's client-side filter from load-bearing to a safety net. *Eight rows is a thin sample and lots are a tail risk — a lead, not a settled number.*
+2. **No Item Specifics at stage one.** No **Grade**, **Certification** or **Variant** field exists on a result. They live on the listing page — the $0.005 tier. **Stage one alone cannot split raw from slabbed structurally.**
+3. **D7 is confirmed empirically, not merely argued.** Three books all at **`Pre-Owned / 3000`** sold for **$9, $29.99 and $89** — a **10× spread at an identical condition code**. D7 was reasoned from a vocabulary mismatch; it is now measured. **The condition field carries no grade information whatsoever.**
+4. **Grade lives in the TITLE as free text**, in the seller's own words, with no consistent format: *"VF- 1 CF staple detached"*, *"GD"*, *"VG-"*, *"VF- 7.5"*. It is the **only** grade signal stage one has.
+
+**The scatter — one book, 90 days:** **9 · 16.21 · 18.88 · 29.99 · 40 · 49.99 · 89 · 145.** Eight comps spanning **16×**. **D8 is confirmed the way D7 was:** no average across that is honest, and a refusal pre-registered on principle is now backed by data.
+
+**What the probe BROKE — a ruled fork, not a detail.** `R2b-groups` asserted that *"a comp cannot move between them without its **certification field** changing."* **There is no certification field.** **Fork A ruled one stage; Fork E ruled two groups; finding 2 says the split needs stage two's data — A and E could not both hold.** The gate was unsatisfiable against real stage-one output: HT-D60 Clause 4's problem (a fixture that cannot exhibit the behaviour it asserts), found on the *source* rather than on the fixture, and found because the probe ran **before** the build rather than after. **Ruled 2026-09-13 → D10**, and `R2b-groups` is rewritten below to the property that replaced it.
+
+**Newly the most interesting unknown: the Aspect Filter.** It takes a JSON object, and eBay aspects *are* Item Specifics. If it filters on **Grade** or **Certification** as a *query parameter*, it may separate raw from slabbed **without paying the deepening tier at all** — which would settle D10's fork cheaply and in the right direction. Flagged by the subscriber, and it earns its own probe.
+
+> **PROBED, 2026-09-13 — the door is shut, and measured shut.**
+>
+> | aspect sent | result | reading |
+> |---|---|---|
+> | `{"Publisher":"Marvel Comics"}` | ~100 | **uninformative by construction** — a true value cannot separate a working filter from an ignored one |
+> | `{"Publisher":"DC Comics"}` | **ZERO** | **live and narrowing** |
+> | `{"Grade": …}` | 100, unfiltered | **ignored** — never reaches eBay's aspect layer through this actor |
+> | `{"Certification": …}` | 100, unfiltered | **ignored** |
+>
+> **Grade and Certification are not queryable here, so deepening would buy a field that cannot be queried anyway.** D10 stands on measurement; Fork E stays closed.
+>
+> **And the standing fact closes it harder than the measurement does:** even a *working* Grade aspect would reach only the slabbed minority, because **most raw books are sold by people who never fill a structured field at all**. Grade lives in the title text regardless — D7, ruled from vocabulary, now evidenced.
+>
+> **Publisher is REFUSED precisely BECAUSE it works** (D10, gated at `CQ3`, defect row 41). Aspects are populated by the sellers who populate aspects — the professional, slabbed end — so filtering on Publisher would silently drop raw listings whose sellers left it blank and pull the scatter toward the graded end. **A filter that narrows correctly can still corrupt, by selection** — and a dropped row leaves no trace on a surface, where a mislabelled one at least renders.
+
+### The input schema, fetched from the build — 2026-09-13 (unauthenticated, free)
+
+**Why this was fetched at all.** The probe returned the console's **display labels**. Labels are not wire keys, and the request body is where a wrong guess bills money silently. Apify publishes an actor's input schema without a token: `GET /v2/acts/caffein.dev~ebay-sold-listings` → `taggedBuilds.latest.buildId` → `GET /v2/actor-builds/{id}` → `inputSchema`. **17 properties, `required: []`.**
+
+**The labels would have produced three errors in the two fields that matter most:**
+
+| label, as reported | actual wire key | type | note |
+|---|---|---|---|
+| `Keywords` | **`keywords`** | array | lowercase; the capital was the *title* |
+| `Category` — *"numeric"* | **`categoryId`** | **string**, default `"0"` | **not numeric.** Maps to eBay's `_sacat`. `"0"` = All Categories |
+| `Subcategory` — *"numeric"* | **`subcategoryId`** | string, default `""` | **overrides `categoryId` when set.** Left blank |
+| `Days to Scrape` | **`daysToScrape`** | integer, **default 30** | **Fork C ruled 90.** Unset ships a third of the ruled window |
+| `Count` | **`count`** | integer, default 100 | |
+| `Sort order` | **`sortOrder`** | string, default `"endedRecently"` | |
+
+**`count` is PER KEYWORD** — *"each keyword runs as a separate search with the same filters applied to all."* So the billable bound is **`count × keywords.length`**, not `count`. `R2b-cost` asserts on the product, and the app sends **exactly one keyword**.
+
+**The 17th property nobody had seen, and it is the dangerous one: `includeCompletedListings` (boolean, default `true`).** Its own description makes it a trap in **both** directions:
+
+- **`false`** → *"all results are guaranteed sold items, but Best Offer Accepted items will appear as regular `buy_it_now` **with the asking price shown as `soldPrice`**."* **An asking price silently occupying a sold-price field** — brief rule 7's conflation, committed *inside the data source*, at field level, invisibly. For this app that is the worst failure on the menu: the one distinction the product exists to keep.
+- **`true`** → applies Completed alongside Sold, which is eBay's ordinary sold query (`LH_Sold=1&LH_Complete=1`), and is what makes `isBestOfferAccepted` and `listingType` trustworthy.
+
+**Ruled: `true`, and pinned EXPLICITLY rather than taken as a default.** The safe value and the default coincide today; a vendor's default flip would move the app into the asking-price mode with **no visible change and no error**. Pinning what you depend on is D5's family — a filter that stops filtering looks exactly like one that works, and so does a flag that stops meaning what it meant.
+
+**One documented claim contradicts the probe.** `subcategoryId`'s text says *"the output record's `categoryId` / `category` fields reflect the effective category actually used for the search."* **The returned field list has neither.** One of the two is wrong. If the documentation is right, **the D5 question below collapses from four runs and $1.60 to reading a field off the run already paid for** — so that is checked before the four runs are spent.
+
+**Both endpoint paths confirmed against the live API, unauthenticated, $0.00, no actor started.** `GET /v2/users/me` → **401 `token-not-provided`**; `POST /v2/acts/caffein.dev~ebay-sold-listings/run-sync-get-dataset-items` → **401**, while a *misspelled* endpoint on the same actor (`…-itemz`, `run-syncX…`) → **404 `page-not-found`**. Apify resolves the endpoint name before the credential, so the 401 is a signal rather than the blanket reply. *A first attempt at this probe was unsound and is recorded as such: it hardcoded 401 as the only healthy answer and read a 402 as a wrong path, when its own control showed 402 is returned before the actor is resolved — at that endpoint a real actor and a fake one are indistinguishable. The actor's identity is established from `GET /v2/acts/…` returning its public record, not from a POST.*
+
+### The D5 follow-up — does `Category=259104` narrow, or did the keyword do all the work?
+
+> **SUPERSEDED 2026-09-13 — the four-run design below is retired, and the reason is worth more than the design was.**
+>
+> It spent **$1.60** on a filtered/unfiltered set difference and would have concluded from *"fewer results"*. **That inference does not hold:** fewer results is equally consistent with a filter that works and a query that happened to match less.
+>
+> The subscriber's aspect probe settled the analogous question in **one run** by sending a **value that must exclude everything** — `{"Publisher":"DC Comics"}` against a Spider-Man query, returning **ZERO**. Nothing but a live filter produces that; the true value (`"Marvel Comics"`, ~100) proved nothing at all.
+>
+> **The method, now D5's amendment: to prove a filter narrows, pass a value that must exclude everything.** It is the planted control the gate scripts already use, applied to a *source's* filter instead of our own — cheaper, and conclusive rather than suggestive.
+>
+> **So `categoryId` is settled by one run**, not four: send a category that cannot contain comics and expect zero. The design below is kept only as the record of how it was first approached.
+
+**D5 requires this and there is no shortcut.** The probe set the category, and a filter that changes nothing looks exactly like one that works. **There is no category field on a result**, so narrowing cannot be checked by inspecting rows: the only available method is a **set difference between a filtered and an unfiltered run**.
+
+**One specimen is not enough — this is D3's rule applied to a filter.** A category pin is inert on an *unambiguous* keyword (nothing but comics is called *"amazing spider-man 151"*) and can still be load-bearing on an *ambiguous* one, where toys, DVDs, shirts and trading cards share the words. **Testing only the unambiguous case would read "inert, remove it" — and remove the filter that carries the ambiguous books.**
+
+**Four runs. `count = 100`, 90 days, everything else identical:**
+
+| run | `keywords` | `categoryId` |
+|---|---|---|
+| A | `["amazing spider-man 151"]` | `"0"` (All Categories) |
+| B | `["amazing spider-man 151"]` | `"259104"` |
+| C | `["hulk 181"]` | `"0"` |
+| D | `["hulk 181"]` | `"259104"` |
+
+`hulk 181` is chosen for maximum ambiguity: a famous key issue, so it has deep comic listings, **and** a merchandise tail deep enough that a working filter must visibly cut it.
+
+**Cost: 4 × $0.40 = $1.60** of the $5.00 credit. (`count = 50` halves it, at the price of seeing less of the tail — and the tail is where the merch lives.)
+
+**Paste back the `itemId` list from each run.** Ids alone, not the rows; that is all the comparison needs.
+
+**What each outcome means, ruled in advance so the result cannot be read to taste:**
+
+- **B ≡ A and D ≡ C** (identical id sets) → the pin is **inert**, and **D5 says remove it** rather than ship a filter that lies about what the query did.
+- **D ⊊ C** (strictly fewer, and a proper subset) → it narrows **where it matters**; keep it, and record that it is **inert on unambiguous keywords** rather than pretending it always works.
+- **B ⊊ A as well** → it narrows everywhere; keep it unconditionally.
+- **Any id present in a filtered set but absent from its unfiltered twin** → the pin is **not a filter at all but a different query**, and both the gate and the query builder must say so.
 
 ### Carried in, as ruled
 
@@ -562,7 +688,7 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 
 ### The forks
 
-**Fork A — which actor, and one-stage or two.** A1 (leaning): `caffein.dev/ebay-sold-listings` for stage one on its $2/1,000 tier, and **stage two deferred until stage one's output is seen** — if titles alone separate raw from slabbed well enough, the $0.005-per-item stage may be unnecessary for most lookups. A2: `blackfalcondata`'s split actor, which sells both stages natively. **Unresolvable without the paid probe.**
+**Fork A — which actor, and one-stage or two.** A1 (leaning): `caffein.dev/ebay-sold-listings` for stage one on its ~~$2~~ **$4**/1,000 tier, and **stage two deferred until stage one's output is seen** — if titles alone separate raw from slabbed well enough, the $0.005-per-item stage may be unnecessary for most lookups. A2: `blackfalcondata`'s split actor, which sells both stages natively. **Unresolvable without the paid probe.**
 
 **Fork B — the minimum comp count N before any range is shown.** Leaning: **N = 5**, with 3–4 shown as individual sales rather than a range, and below 3 as "too few to compare". Every option needs the real noise level first.
 
@@ -591,6 +717,69 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 | R1/R2a-repointed | every existing case still holds — repointed, not weakened (HT-D60 Clause 3) |
 
 **Defect pass required** (HT-D60), with rows at minimum for: provenance stripped from a rendered number, raw and slabbed blended, a range shown below N, a synthesised ladder, a filter that does not narrow, the grade or asking price entering the request body, and the token reaching a surface.
+
+### BUILT — evidence, 2026-09-13
+
+**`SUITE: PASS (2 of 2 produced a verdict, and every verdict was PASS)`.**
+**Assertions: executed 350 · pinned 350** — 310 → 350 across this slice (+40), re-pinned three times and **each time to a measured number, never an assumed one**.
+**Defect pass: 11 rows for R2b (31–41), every one `GATE: FAIL` naming its own case.** Zero vacuous, zero unnamed, zero restore failures.
+
+| row | planted defect | named by |
+|---|---|---|
+| 31 | `includeCompletedListings: false` | `CQ3 GATE (brief rule 7): includeCompletedListings is pinned TRUE` |
+| 32 | `daysToScrape` left to the actor's default of 30 | `CQ3 GATE (Fork C): the window is pinned to 90` |
+| 33 | a min–max range across the mixed scatter | `CQ7 GATE (D8 amended): … no range spans them` |
+| 34 | raw/slabbed grouping from a title heuristic | `CQ7 GATE (D10): comps render in ASCENDING PRICE order` |
+| 35 | the issue number stripped from the eBay query | `CQ1 GATE (D4 per-source): … THE ISSUE NUMBER STAYS` |
+| 36 | the query made read-only again | `CQ2 GATE (D4): the query input is no longer read-only` |
+| 37 | the grade entering the request body | `CQ4 GATE (brief rules 3,4): a body carrying the grade or the asking price is REFUSED` |
+| 38 | the spend warning re-gated to `role === 'prices'` | `CQ9 GATE (D1/HT-D53): the card warns that this credential SPENDS` |
+| 39 | a second keyword doubling the bill | `CQ3 GATE (R2b-cost): … EXACTLY ONE keyword` |
+| 40 | the filter hiding rows without counting them | `CQ7: what the filter hid is COUNTED ON THE SURFACE` |
+| 41 | the Publisher aspect used because it demonstrably works | `CQ3 GATE (D10): the request sends NO aspectFilter` |
+
+#### The demand list above, answered item by item — including the three not met
+
+**The wording above is left exactly as it was written.** It was drafted before D10 and before D8's amendment, so two of its seven demands describe defects the code can no longer commit, and three have no row behind them. **Eleven rows is not the same as seven demands satisfied**, and a future reader should not have to reconcile those numbers alone.
+
+| the demand, as pre-registered | status |
+|---|---|
+| the grade or asking price entering the request body | **MET AS WRITTEN** — row 37, asserted on the request body rather than the surface |
+| the token reaching a surface | **MET, by an existing row** — the ported redaction row (row 8, `PC3\|TC4`) already covers it; `CQ9` adds that the comps card never prints its token |
+| **raw and slabbed blended** | **SUPERSEDED by D10.** The groups were removed, so "blended" is not a state this code can reach — there is nothing to blend. **Row 34 gates the inverse defect**, which is the live risk: grouping *introduced* from a title heuristic |
+| **a range shown below N** | **SUPERSEDED by D8's amendment.** No range is computed at *any* N while the markets cannot be separated, so "below N" is no longer the boundary. **Row 33 gates the live form**: any range at all across a mixed scatter |
+| provenance stripped from a rendered number | **NOT MET.** `CQ7` asserts the count and window *are* rendered, but **no row removes them**, so that assertion has not been seen to fail. Outstanding |
+| a synthesised ladder | **NOT MET.** No ladder exists to plant against, and no row constructs one. `CQ7`'s scatter assertions cover the render; the *defect* is ungated. Outstanding |
+| a filter that does not narrow | **NOT MET for the SOURCE's filter.** Row 40 covers *our* client-side filter hiding rows without counting them — a different claim. **`categoryId=259104` is still unproven** (D5), and now costs one run, not four |
+
+**Three demands outstanding, named rather than quietly absorbed into a count of eleven.**
+
+**Four defects found while BUILDING — all in ported code being extended, none in new code:**
+
+1. **`credTest` dispatched on two roles with a ternary** (`role === 'vision' ? visionCall() : pricesPing()`). A third role would have sent **the Apify token to PriceCharting as a `t=` URL parameter** — a dead test *and* a credential handed to the wrong provider in a query string, which is precisely what D1 forbids after the `t=` lesson. Replaced with a dispatch table: adding a role can no longer silently inherit another role's call.
+2. **The extractability warning was gated on `role === 'prices'`**, so the one credential that can **spend money** rendered no warning at all while the subscription one had it. Keyed to the provider row now — a credential's cost is a property of the provider, so the provider declares it.
+3. **`noun` was derived from the auth mechanism**, labelling the Apify row "API key" while the card summary, `ROLE_LABEL` and the settings note all said "token". D3's shape at its smallest.
+4. **A connection test built the obvious way would have cost $0.40 a tap.** `compsPing` hits `/v2/users/me`, which authenticates the token and starts no actor.
+
+**Endpoint paths confirmed against the live API — unauthenticated, $0.00, no actor started.** `/v2/users/me` and `/v2/acts/caffein.dev~ebay-sold-listings/run-sync-get-dataset-items` both answer **401 `token-not-provided`**, while a *misspelled* endpoint on the same actor answers **404 `page-not-found`** — Apify resolves the endpoint name before the credential, so the 401 is a signal rather than the blanket reply.
+
+### What the defect pass caught in the GATES themselves
+
+**`CQ7`'s D10 assertion was a TAUTOLOGY that had never been capable of failing.** It read `(c7.indexOf('raw') < 0 && c7.indexOf('slab') < 0) || c7.indexOf('cannot tell…') >= 0`, and `||` binds looser than `&&`, so the expression was `(A && B) || C` — where **C is the D10 warning line `renderComps` emits on every render**. It passed on every run because it could do nothing else. **Defect row 34 planted real grouping, the gate said PASS, and that is the only reason it was found.** Replaced by three independent assertions — ascending price order, no heading element, and the statement — because fusing clauses with `||` is how it happened. A sweep of every `&&`/`||` mix in the suite found no other instance.
+
+**Two rows initially reported a vacuous `GATE: PASS`.** Their `perl -0pi` replacements embedded JS template literals and inline functions, so `$` and backticks were consumed before perl saw them (`syntax error near "sorted["`); the mutation never applied and the gate passed against unmutated source. The repo had already moved every mutation to `perl -0pi` to fix this class on the **pattern** half — the **replacement** half was never covered. Rewritten to plain concatenation, and **every remaining mutation is now dry-run against a copy before it is spent**: a one-second check that would have saved three four-minute rows.
+
+**One row failed correctly and could not name what caught it.** Its `report` pattern still grepped for a phrase deleted when the tautology was rewritten. **D3 at its smallest — an assertion was renamed and its consumer did not follow** — and the cross-reference census cannot see it, because that census scans the *docs*, not these patterns. A sweep of all 40 patterns against every gate's printable text found no others.
+
+*(The harness failures of the same day — a stale backup that destroyed uncommitted work, two concurrent passes that destroyed each other's backups, and a `ROWS=` filter that did not cover two rows' plants — are in `tests/README.md` and in the incident note at the top of this file.)*
+
+### What this slice does NOT prove — stated, not left to be assumed
+
+- **`compsLookup` has never run against the live API.** Every case drives the `__setComps` seam or a pure function. The actor id, endpoint path, bearer header and response shape are verified against Apify's published schema and unauthenticated probes — **not against a round trip with a real token**. The first real lookup is a device test, and it is exactly where a contract mismatch would surface: R1's `##` bug reached a device because a gate measured the document instead of the header.
+- **`categoryId=259104` is still unproven** (D5). One run settles it: send a category that cannot contain comics and expect zero.
+- **Provenance-stripping and a synthesised ladder are ungated**, per the demand table above.
+- **No device pass on the comps surface.** The scatter at phone width, the dropped-rows disclosure and the no-token floor are unmeasured on a real screen.
+- **Eight comps is a thin sample.** "No lots in the first eight" is a lead, not a settled noise level, and a lot at the top of a scatter is the tail risk the client-side filter exists for.
 
 ### What this pre-registration does not settle
 

@@ -142,6 +142,9 @@
       <!-- R1: the confirmed identity lands here, above the capture controls,
            because it is the answer to what the user just did. -->
       <div id="confirmedBox"></div>
+      <!-- R2b: the scatter lands directly under the confirmed identity, because a
+           price is only ever a claim ABOUT a specific book (brief rule 8). -->
+      <div id="compsBox"></div>
       <div id="captureBox"></div>
       <!-- HT-D58: TWO inputs, and the difference between them is the `capture`
            attribute, which is what forces the camera. The source is derived from
@@ -160,7 +163,7 @@
       <button class="btn" onclick="doReplyPaste()">Read reply</button>
       <div id="replyReport"></div>
     </div>
-    <div class="about">collectibles — flea-market triage for comics. All data stays on this device; no accounts, no telemetry. <b>Identification only:</b> this build confirms what a book is. It does not price it.</div>
+    <div class="about">collectibles — flea-market triage for comics. All data stays on this device; no accounts, no telemetry. <b>Identify, then see what copies actually sold for.</b> Recent eBay sold listings, shown as individual sales — never averaged, never called a value. It cannot tell a raw copy from a graded slab, and it says so where the numbers are.</div>
   </div>
 
   <div id="settingsScrim" class="scrim" style="display:none" onclick="closeSettings()"></div>
@@ -174,6 +177,16 @@
         <details open>
           <summary>Vision key (Grok)</summary>
           <div id="credBox-vision"></div>
+        </details>
+      </div>
+      <!-- D9, running FORWARD for the first time: a credential field exists only
+           where a call exists that uses it. R2b builds that call, so the field
+           arrives with it -- in the same commit, never ahead of it. -->
+      <div class="card" data-setting="comps">
+        <details open>
+          <summary>Comps token (Apify)</summary>
+          <div id="credBox-comps"></div>
+          <div class="note">Sold eBay listings, looked up one book at a time. Apify's free tier covers roughly twelve lookups; each one after that costs about $0.40. Nothing is looked up unless you ask for it.</div>
         </details>
       </div>
       <div class="card" data-setting="prompt">

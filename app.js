@@ -282,11 +282,33 @@ const PROVIDERS = {
   // parameter; "limited to 1 call every second ... account permissions revoked
   // if it persists". The pacing is HERE, not in each feature's memory.
   pricecharting: { role: 'prices', label: 'PriceCharting', base: 'https://www.pricecharting.com', auth: 'query',
-                   authParam: 't', keyLength: 40, minIntervalMs: 1000 },
+                   authParam: 't', keyLength: 40, minIntervalMs: 1000, noun: 'Token',
+                   warn: 'This token is a paid-subscription credential, and anyone with access to this browser can read it. Only use it on your own device.' },
+  // R2b. Verified 2026-09-13: Apify sends `access-control-allow-origin: *` and
+  // permits `Authorization`, so the page calls it directly -- unlike GCD, which
+  // is why R2b goes before R2a (D6). The token rides as a BEARER HEADER, never a
+  // URL parameter: PriceCharting's `t=` above this line is the lesson.
+  //
+  // `actor` uses `~`, not `/` -- `caffein.dev/ebay-sold-listings` is the store
+  // path, `caffein.dev~ebay-sold-listings` is the API id (actor oTtB3VgfuE9GtxQt2,
+  // public). Both endpoint paths confirmed unauthenticated 2026-09-13: the real
+  // ones answer 401 token-not-provided, a misspelled one answers 404, so the 401
+  // is a signal rather than the blanket reply.
+  //
+  // COST IS CONFIGURATION, because it is what a wrong guess spends. The API
+  // payload advertises "$2.00 / 1000"; the console charges $4.00. The measured
+  // number is the one here.
+  apify: { role: 'comps', label: 'Apify', base: 'https://api.apify.com/v2', auth: 'bearer',
+           actor: 'caffein.dev~ebay-sold-listings', keyPrefix: 'apify_api_',
+           minIntervalMs: 1000, usdPer1000: 4.00, noun: 'Token',
+           categoryId: '259104',            // eBay Comics & Graphic Novels -> `_sacat`
+           site: 'ebay.com',
+           warn: 'This token SPENDS MONEY — about $0.40 each time you look up comps, charged to your Apify account. ' +
+                 'Anyone with access to this browser can read it and spend it. Only use it on your own device.' },
 };
-const ROLES = ['vision', 'prices'];
-const ROLE_DEFAULT = { vision: 'grok', prices: 'pricecharting' };
-const ROLE_LABEL = { vision: 'Vision key', prices: 'Price-guide token' };
+const ROLES = ['vision', 'prices', 'comps'];
+const ROLE_DEFAULT = { vision: 'grok', prices: 'pricecharting', comps: 'apify' };
+const ROLE_LABEL = { vision: 'Vision key', prices: 'Price-guide token', comps: 'Comps token' };
 
 // ---- credentials: OUTSIDE THE STATE OBJECT, one store per role (D1, HT-D45) --
 // The credential never enters APP_STATE, so export, the pre-restore backup and
@@ -1083,7 +1105,17 @@ function credTest(role) {
           ' seconds. The provider may be slow or unreachable.'));
       }, TEST_TIMEOUT_MS);
     });
-    const call = (role === 'vision' ? visionCall(null, { ping: true }) : pricesPing()).then(function (r) {
+    // DISPATCH BY ROLE, not by "vision or the other one". A two-role ternary sent
+    // the THIRD role's token to PriceCharting as a `t=` URL parameter -- a dead
+    // test and a credential handed to the wrong provider in a query string, which
+    // is the exact thing D1 forbids. A table is the fix: adding a role must not
+    // be able to silently inherit another role's call.
+    const PING = { vision: function () { return visionCall(null, { ping: true }); },
+                   prices: pricesPing, comps: compsPing };
+    const ping = PING[role];
+    if (!ping) return Promise.resolve(credPaint(role, 'tested', false,
+      'No connection test exists for this role yet.'));
+    const call = ping().then(function (r) {
       settled = true;
       credSetStatus(role, r.ok ? 'verified' : 'failed', r.ok ? '' : String(r.error || ''));
       return credPaint(role, 'tested', r.ok, r.ok
@@ -1123,11 +1155,19 @@ function renderCred(role) {
     : '';
   const opts = Object.keys(PROVIDERS).filter((k) => PROVIDERS[k].role === role).map((k) =>
     `<option value="${esc(k)}"${k === s.provider ? ' selected' : ''}>${esc(PROVIDERS[k].label)}</option>`).join('');
-  const noun = row.auth === 'query' ? 'Token' : 'API key';
+  // The noun comes from the ROW, not from the auth mechanism. Keyed to
+  // `auth === 'query'` it labelled the Apify row "API key" while the card summary,
+  // ROLE_LABEL and the settings note all said "token" -- a name disagreeing with
+  // itself across a seam, which is D3's shape at its smallest.
+  const noun = row.noun || (row.auth === 'query' ? 'Token' : 'API key');
   // D1: the extractability warning is SAFETY text, so it is visible, never folded
   // behind a disclosure (HT-D53: provenance may hide, safety may not).
-  const warn = role === 'prices'
-    ? `<div class="note warnline">This token is a paid-subscription credential, and anyone with access to this browser can read it. Only use it on your own device.</div>`
+  //
+  // KEYED TO THE ROW, NOT TO A ROLE NAME. Gated on `role === 'prices'`, the comps
+  // token -- which can SPEND, not merely subscribe -- rendered no warning at all.
+  // A credential's cost is a property of the provider, so the provider declares it.
+  const warn = row.warn
+    ? `<div class="note warnline">${esc(row.warn)}</div>`
     : '';
   el.innerHTML =
     `<div class="row"><div><label>Provider</label><select id="credProv-${role}">${opts}</select></div>` +
@@ -1397,6 +1437,7 @@ let CONFIRMED = null;
 function confirmedIdentity() { return CONFIRMED; }
 function identityAccept(v) {
   const q = identityQuery(v);
+  COMPS = null; COMPS_EDITED = null;      // see clearConfirmed: nothing carries over
   CONFIRMED = {
     fields: JSON.parse(JSON.stringify(v.fields)), markers: v.markers.slice(),
     ai: JSON.parse(JSON.stringify(v.ai)), query: q, at: new Date(nowMs()).toISOString(),
@@ -1404,7 +1445,14 @@ function identityAccept(v) {
   renderConfirmed();
   return { ok: true, query: q };
 }
-function clearConfirmed() { CONFIRMED = null; renderConfirmed(); return { ok: true }; }
+// A new book inherits NOTHING from the last one: not its comps, not its edited
+// query. A scatter left over from the previous lookup sitting under a new
+// identity would be the confidently-wrong pairing brief rule 8 exists to stop.
+function clearConfirmed() {
+  CONFIRMED = null; COMPS = null; COMPS_EDITED = null;
+  renderConfirmed(); renderComps();
+  return { ok: true };
+}
 function renderConfirmed() {
   const el = document.getElementById('confirmedBox');
   if (!el) return;
@@ -1416,17 +1464,29 @@ function renderConfirmed() {
   el.innerHTML = `<div class="confirmed">` +
     `<div class="cfhead">Confirmed: ${esc(head)}</div>` +
     `<div class="cfsub">${sub ? esc(sub) + ' · ' : ''}markers: ${esc(marks)}</div>` +
-    `<label for="confirmedQuery">Search the price guide for</label>` +
-    `<div class="cfq"><input id="confirmedQuery" type="text" readonly value="${esc(CONFIRMED.query)}">` +
+    // D4, finally satisfied: R1 rendered this READ-ONLY and recorded that making
+    // it editable was R2's. A normalisation that silently mangles a search is
+    // worse than one the user can see and fix -- and typing here changes what is
+    // SENT, not merely what is shown.
+    `<label for="confirmedQuery">Search eBay sold listings for</label>` +
+    `<div class="cfq"><input id="confirmedQuery" type="text" value="${esc(compsQuery())}" ` +
+    `oninput="compsSetQuery(this.value)" aria-label="Search eBay sold listings for">` +
     `<button class="btn" onclick="copyQuery(this)">Copy</button></div>` +
-    // Stated where the result is, not in a footnote: this build stops here.
-    `<div class="note warnline">Pricing is not built yet. This build stops at the identity — nothing looks up a price, and nothing is saved.</div>` +
-    `<button class="btn" onclick="clearConfirmed()">Start over</button></div>`;
+    `<div class="note">From the cover as printed, minus the leading article and the #. ` +
+    `eBay is a full-text search, so the issue number belongs in it — edit this if it is wrong.</div>` +
+    (credConfigured('comps')
+      ? `<button class="btn primary" onclick="compsLookup()">Look up sold comps</button> ` +
+        `<button class="btn" onclick="clearConfirmed()">Start over</button></div>`
+      // D2 Fork G1's shape: without a token there is still a route, and it is
+      // named here rather than left to be discovered.
+      : `<div class="note warnline">No comps token saved. Add one in Settings to look up what copies actually sold for — ` +
+        `or copy the search text above into eBay yourself and set the filter to Sold.</div>` +
+        `<button class="btn" onclick="clearConfirmed()">Start over</button></div>`);
 }
 function copyQuery() {
   if (!CONFIRMED) return { ok: false };
   const box = document.getElementById('confirmedQuery');
-  const text = CONFIRMED.query;
+  const text = compsQuery();          // what would be SENT, not what R1 derived
   if (box) { try { box.focus(); box.select(); box.setSelectionRange(0, text.length); } catch (e) {} }
   let done = false;
   try { done = document.execCommand('copy'); } catch (e) { done = false; }
@@ -1439,6 +1499,290 @@ function copyQuery() {
   }
   toast('The text is in the box — select it and copy');
   return { ok: true, via: 'manual' };
+}
+
+// ---- R2b / D10: PRICE VIA eBAY SOLD COMPS ------------------------------------
+// What a book ACTUALLY SOLD FOR -- not what a guide models it at. Two different
+// claims that never share a label (brief rule 7's shape, applied to sources).
+//
+// THE QUERY IS eBAY'S AND ONLY eBAY'S (D4's per-source amendment). GCD returns 0
+// results for `the AMAZING SPIDER-MAN 151` because it resolves series first and
+// issue second. eBay is full-text over listing titles, where the issue number is
+// the single most DISCRIMINATING token in the string -- drop it and you get every
+// issue of the series ever sold. One rule, measured on two sources, opposite
+// answers: a query builder belongs to its source.
+const COMPS_WINDOW_DAYS = 90;     // Fork C, stated on every render. Actor default: 30.
+const COMPS_COUNT       = 100;    // Fork A's bound: 100 x $4.00/1000 = $0.40 a lookup.
+const COMPS_MIN_SHOWN   = 3;      // D8: below three, the surface says so.
+const COMPS_BUDGET_MS   = 60000;  // the probe returned in <5s; run-sync may queue.
+const COMPS_ARTICLE_RE  = /^(?:the|an?)\s+/i;
+
+let COMPS = null;         // the last lookup. Memory only -- R2b persists nothing.
+let COMPS_EDITED = null;  // the query the user typed, if they typed one.
+
+// D4: the reading is EVIDENCE and is never normalised; the query is DERIVED and
+// is a different object. Drop the leading article (universal -- a fact about the
+// reading). Drop the `#` (eBay-scoped -- punctuation to a full-text index). Keep
+// the issue number (eBay-scoped, and the exact opposite of GCD's rule).
+function compsDefaultQuery(cf) {
+  const f = (cf && cf.fields) || {};
+  const title = String(f.title || '').replace(COMPS_ARTICLE_RE, '').trim();
+  const issue = String(f.issue || '').replace(/^#+/, '').trim();
+  return [title, issue].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+}
+function compsQuery() {
+  return (COMPS_EDITED !== null) ? COMPS_EDITED : compsDefaultQuery(confirmedIdentity());
+}
+// VISIBLE AND EDITABLE (D4). A normalisation that silently mangles a search is
+// worse than one the user can see and fix -- and editing must change what is
+// SENT, not just what is shown, which is what the gate asserts on the body.
+function compsSetQuery(raw) {
+  COMPS_EDITED = String(raw == null ? '' : raw);
+  return { ok: true, query: compsQuery() };
+}
+function compsResetQuery() { COMPS_EDITED = null; renderConfirmed(); return { ok: true, query: compsQuery() }; }
+
+// EVERY input pinned; none left to the actor's default.
+//
+// `includeCompletedListings` above all. Set FALSE, the actor's own documentation
+// says a Best-Offer sale reports the seller's ASKING PRICE in `soldPrice` -- brief
+// rule 7's conflation committed INSIDE THE DATA SOURCE, silently, in the single
+// field this app reads. TRUE is both correct and safe, and it is pinned rather
+// than inherited: today's default agrees, and a vendor changing its default
+// would not announce it.
+//
+// `daysToScrape` defaults to 30 and Fork C ruled 90 -- unset, the app would have
+// shipped a third of its window with nothing on the surface to show for it.
+//
+// `count` is PER KEYWORD ("each keyword runs as a separate search"), so the bill
+// is count x keywords.length. Exactly one keyword is what keeps it bounded.
+function compsBody(query) {
+  const row = PROVIDERS.apify;
+  return {
+    keywords: [String(query == null ? '' : query)],
+    categoryId: String(row.categoryId),
+    subcategoryId: '',
+    daysToScrape: COMPS_WINDOW_DAYS,
+    count: COMPS_COUNT,
+    sortOrder: 'endedRecently',
+    ebaySite: String(row.site),
+    includeCompletedListings: true,
+  };
+}
+// R2b-cost: the bill is BOUNDED AND STATED BEFORE the call, never discovered
+// after it. A lookup cannot silently deepen.
+function compsBound(body) {
+  const n = ((body && body.keywords) || []).length * num(body && body.count);
+  return { results: n, usd: n * (num(PROVIDERS.apify.usdPer1000) / 1000) };
+}
+
+// The contract as ONE REAL RUN returned it. Nine fields kept of the ten sent --
+// and the ABSENCES are what shape the whole slice: no Grade, no Certification, no
+// Variant, and NO CATEGORY either, though the vendor's own schema documentation
+// claims the output carries one. D3: the contract is what ARRIVED, not what was
+// advertised, and the two disagreed here on the very first run.
+const COMP_KEYS = ['itemId', 'title', 'condition', 'conditionId', 'endedAt',
+                   'soldPrice', 'soldCurrency', 'listingType', 'isBestOfferAccepted'];
+function parseComps(raw) {
+  let arr;
+  try { arr = JSON.parse(String(raw == null ? '' : raw)); }
+  catch (e) { return { ok: false, error: 'The provider sent something that is not JSON.' }; }
+  if (!Array.isArray(arr)) return { ok: false, error: 'The provider did not send a list of listings.' };
+  const rows = [];
+  for (let i = 0; i < arr.length; i++) {
+    const o = arr[i];
+    if (!o || typeof o !== 'object') continue;
+    const price = Number(o.soldPrice);
+    if (!(price > 0)) continue;                  // a comp with no price is not a comp
+    rows.push({
+      itemId: String(o.itemId == null ? '' : o.itemId),
+      title: String(o.title == null ? '' : o.title),
+      condition: String(o.condition == null ? '' : o.condition),
+      endedAt: String(o.endedAt == null ? '' : o.endedAt),
+      soldPrice: price,
+      soldCurrency: String(o.soldCurrency || 'USD'),
+      bestOffer: !!o.isBestOfferAccepted,
+    });
+  }
+  return { ok: true, rows: rows };
+}
+
+// OURS, CLIENT-SIDE, so the rules are visible and gateable rather than buried in
+// a vendor's query string (Fork D). The probe saw no lots in the first eight
+// rows, so this is a safety net rather than the main event -- but eight rows is a
+// thin sample, and one lot at the top of a scatter is exactly the tail risk that
+// would mislead. WHAT IS DROPPED IS COUNTED AND SHOWN, never silently removed:
+// a filter the user cannot see is a filter they cannot correct.
+const COMPS_EXCLUDE = [
+  { re: /\blots?\b/i,                                 why: 'lot' },
+  { re: /\bbundles?\b|\bset of\b/i,                   why: 'bundle' },
+  { re: /\breprints?\b|\bfacsimiles?\b/i,             why: 'reprint' },
+  { re: /\btpb\b|\btrade paperbacks?\b|\bomnibus\b/i, why: 'collection' },
+];
+function compsFilter(rows) {
+  const kept = [], dropped = [];
+  (rows || []).forEach(function (r) {
+    let why = '';
+    for (let i = 0; i < COMPS_EXCLUDE.length && !why; i++)
+      if (COMPS_EXCLUDE[i].re.test(r.title)) why = COMPS_EXCLUDE[i].why;
+    if (why) dropped.push({ title: r.title, why: why }); else kept.push(r);
+  });
+  return { kept: kept, dropped: dropped };
+}
+
+// THE GRADE AND THE ASKING PRICE NEVER ENTER A LOOKUP (brief rules 3 and 4).
+// Asserted against the REQUEST BODY, not the surface: a surface that does not
+// show them proves nothing about what was sent.
+const COMPS_NEVER_SENT = ['grade', 'asking', 'asking_price', 'askingPrice', 'sticker', 'sticker_price'];
+function compsBodyIsClean(body) {
+  const s = JSON.stringify(body || {}).toLowerCase();
+  return !COMPS_NEVER_SENT.some(function (k) { return s.indexOf('"' + k.toLowerCase() + '"') >= 0; });
+}
+
+// A CONNECTION TEST MUST NOT SPEND. `pricesPing` is free; a run-sync call bills
+// $0.40, so testing the token by doing a lookup would make the Test button cost
+// money -- R2b-cost's prohibition, arrived at from the opposite direction.
+// `/v2/users/me` authenticates the token and starts no actor.
+function compsPing() {
+  const s = credSettings('comps');
+  return egress('comps', { path: '/users/me', method: 'GET', budget: TEST_TIMEOUT_MS }).then(function (t) {
+    if (!t.transport) return t;
+    let j = null; try { j = JSON.parse(t.raw); } catch (e) {}
+    if (t.httpOk && j && j.data) return { ok: true, text: '' };
+    const pmsg = providerMessage(t.raw, s.key);
+    if (t.status === 401 || t.status === 403)
+      return errOf('auth', pmsg || 'Apify rejected the token. Check it in Settings.');
+    if (t.status === 429) return errOf('ratelimit', 'Apify is rate-limiting. Wait before trying again.');
+    if (!j) return errOf('malformed', 'Apify did not answer with JSON.');
+    return errOf('http', 'Apify returned ' + t.status + '. ' + pmsg);
+  });
+}
+
+function compsLookup() {
+  const cf = confirmedIdentity();
+  if (!cf) return Promise.resolve({ ok: false, error: 'Confirm a book first.' });
+  const q = compsQuery();
+  if (!q) return Promise.resolve({ ok: false, error: 'There is nothing to search for.' });
+  const body = compsBody(q);
+  const bound = compsBound(body);
+  COMPS = { phase: 'loading', query: q, bound: bound, rows: [], dropped: [], error: '', at: '' };
+  renderComps();
+  return egress('comps', {
+    path: '/acts/' + PROVIDERS.apify.actor + '/run-sync-get-dataset-items',
+    json: body, budget: COMPS_BUDGET_MS,
+  }).then(function (r) {
+    const fail = function (msg) {
+      COMPS = { phase: 'error', query: q, bound: bound, rows: [], dropped: [], error: msg, at: '' };
+      renderComps();
+      return { ok: false, error: msg };
+    };
+    if (!r.transport) return fail(r.message || r.error || 'The lookup could not be made.');
+    if (!r.httpOk) return fail('The provider answered ' + r.status + '. ' +
+      (r.status === 401 || r.status === 403 ? 'Check the comps token in Settings.'
+       : 'Nothing was looked up; your account may still have been charged for a started run.'));
+    const parsed = parseComps(r.raw);
+    if (!parsed.ok) return fail(parsed.error);
+    const split = compsFilter(parsed.rows);
+    COMPS = { phase: 'done', query: q, bound: bound, rows: split.kept, dropped: split.dropped,
+              error: '', at: new Date(nowMs()).toISOString(), returned: parsed.rows.length };
+    renderComps();
+    return { ok: true, kept: split.kept.length, dropped: split.dropped.length };
+  });
+}
+function compsClear() { COMPS = null; renderComps(); return { ok: true }; }
+// TEST SEAM. The render is what D10 and D8 are asserted against, and driving it
+// through a live egress call would make those cases a network test. This sets the
+// state a completed lookup would have produced and paints it -- the same code
+// path from `phase: 'done'` onward, which is where every rendering rule lives.
+function __setComps(rows, dropped, query) {
+  const body = compsBody(query);
+  COMPS = { phase: 'done', query: String(query || ''), bound: compsBound(body),
+            rows: rows || [], dropped: dropped || [], error: '',
+            at: new Date(nowMs()).toISOString(), returned: (rows || []).length + (dropped || []).length };
+  renderComps();
+  return COMPS;
+}
+
+function compsMoney(n, cur) {
+  const s = (Math.round(Number(n) * 100) / 100).toFixed(2).replace(/\.00$/, '');
+  return (String(cur || 'USD') === 'USD' ? '$' : '') + s +
+         (String(cur || 'USD') === 'USD' ? '' : ' ' + String(cur));
+}
+function compsDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  return m ? (m[3] + '/' + m[2]) : '';
+}
+
+// D10: ONE SCATTER, NO GROUPS. The search tier returns no Grade, no Certification
+// and no Variant, so nothing here CONSTITUTES a raw/slabbed split -- and a group
+// header is a claim about what the app knows. The seller's own title rides beside
+// every price, VERBATIM, because that is where the grade actually is: free text,
+// no format ("VF- 7.5", "GD", "VF- 1 CF staple detached"). The human splits them
+// by eye, the same division of labour as the grade and the asking price.
+//
+// D8 AS AMENDED: NO RANGE AT ANY N. The min and the max would come from two
+// different markets -- the probe's own scatter runs $9 to $145 -- and "$9-$145"
+// describes no book anyone can buy. A span is not a claim. The word "value"
+// appears nowhere near a comp, and no average, midpoint or ladder is computed.
+function renderComps() {
+  const el = document.getElementById('compsBox');
+  if (!el) return;
+  if (!COMPS) { el.innerHTML = ''; return; }
+  const win = COMPS_WINDOW_DAYS + ' days';
+  if (COMPS.phase === 'loading')
+    return void (el.innerHTML = `<div class="comps"><div class="opend"><span class="byokspin"></span>` +
+      `Looking up sold listings for “${esc(COMPS.query)}”…</div>` +
+      `<div class="note">Up to ${esc(COMPS.bound.results)} results, about ${esc(compsMoney(COMPS.bound.usd))}.</div></div>`);
+  if (COMPS.phase === 'error')
+    return void (el.innerHTML = `<div class="comps"><div class="omsg obad">${esc(COMPS.error)}</div>` +
+      `<button class="btn" onclick="compsLookup()">Try again</button></div>`);
+
+  const n = COMPS.rows.length;
+  const sorted = COMPS.rows.slice().sort(function (a, b) { return a.soldPrice - b.soldPrice; });
+  const head = `<div class="cmphead">${n} sold · last ${esc(win)}</div>`;
+  // D8: below three, the surface SAYS SO rather than showing a thin scatter as
+  // though it were a finding.
+  if (n < COMPS_MIN_SHOWN)
+    return void (el.innerHTML = `<div class="comps">${head}` +
+      `<div class="note warnline">Too few recent sales to compare — ${n === 0 ? 'none' : 'only ' + n} in the last ${esc(win)}. ` +
+      `That is not a low price or a high one; it is no answer. Try a broader search, or decide without this.</div>` +
+      (n ? sorted.map(compsRowHTML).join('') : '') +
+      compsFootHTML() + `</div>`);
+
+  return void (el.innerHTML = `<div class="comps">${head}` +
+    // D10, stated WHERE THE NUMBERS ARE and not in a footnote.
+    `<div class="note warnline">These are mixed: this lookup cannot tell a raw copy from a graded slab. ` +
+    `eBay's search results carry no grade and no certification field, so the seller's own words below are the only grade there is. ` +
+    `Read them — a slabbed 9.8 and a beaten reading copy are both in this list.</div>` +
+    `<div class="cmplist">${sorted.map(compsRowHTML).join('')}</div>` +
+    compsFootHTML() + `</div>`);
+}
+function compsRowHTML(r) {
+  return `<div class="cmprow">` +
+    `<span class="cmpprice">${esc(compsMoney(r.soldPrice, r.soldCurrency))}</span>` +
+    `<span class="cmptitle">${esc(r.title)}</span>` +
+    `<span class="cmpmeta">${esc(compsDate(r.endedAt))}${r.bestOffer ? ' · best offer accepted' : ''}</span>` +
+    `</div>`;
+}
+function compsFootHTML() {
+  const d = COMPS.dropped || [];
+  const byWhy = {};
+  d.forEach(function (x) { byWhy[x.why] = (byWhy[x.why] || 0) + 1; });
+  const bits = Object.keys(byWhy).map(function (k) { return byWhy[k] + ' ' + k + (byWhy[k] === 1 ? '' : 's'); });
+  return (bits.length
+      ? `<div class="note">${esc(bits.join(', '))} hidden — the title said so. ` +
+        `<button type="button" class="linklike" onclick="compsShowDropped(this)">show what was hidden</button>` +
+        `<span class="cmpdrop" hidden>${d.map(function (x) { return `<div class="cmprow"><span class="cmptitle">${esc(x.title)}</span><span class="cmpmeta">${esc(x.why)}</span></div>`; }).join('')}</span></div>`
+      : '') +
+    `<div class="note">eBay sold listings via Apify · searched “${esc(COMPS.query)}” · ` +
+    `about ${esc(compsMoney(COMPS.bound.usd))} for this lookup. No average, no estimate — these are the sales.</div>`;
+}
+function compsShowDropped(btn) {
+  const box = btn && btn.parentElement ? btn.parentElement.querySelector('.cmpdrop') : null;
+  if (!box) return { ok: false };
+  box.hidden = !box.hidden;
+  btn.textContent = box.hidden ? 'show what was hidden' : 'hide';
+  return { ok: true, shown: !box.hidden };
 }
 
 // ---- the no-key floor (D2 Fork G1) ------------------------------------------
@@ -1550,6 +1894,7 @@ function refresh() {
   // a box that was empty.
   renderPromptCard();
   renderConfirmed();
+  renderComps();
   renderCaptureBtn(); renderCaptureOutcome();
 }
 function openSettings() {
@@ -1598,6 +1943,12 @@ window.CT = {
   IDENTITY_CONTRACT, ID_TEMPLATE_VERSION, ID_PROMPT, ID_SAMPLE, ID_FIELDS, ID_FIELD_KEYS, ID_MARKERS,
   ID_REFUSED_KEYS, parseIdentity, identityQuery, identitySetField, identityToggleMarker,
   identityAccept, renderIdentityHTML, confirmedIdentity, clearConfirmed, renderConfirmed, copyQuery,
+  // R2b / D10 -- sold comps: one scatter, no groups, no range
+  COMPS_WINDOW_DAYS, COMPS_COUNT, COMPS_MIN_SHOWN, COMPS_EXCLUDE, COMPS_NEVER_SENT, COMP_KEYS,
+  compsDefaultQuery, compsQuery, compsSetQuery, compsResetQuery, compsBody, compsBound,
+  parseComps, compsFilter, compsBodyIsClean, compsLookup, compsClear, renderComps, compsPing,
+  compsRowHTML, compsShowDropped, compsMoney, __setComps,
+  compsState: () => COMPS,
   promptBoxes, promptBoxFor, renderPromptCard, copyPrompt,
   state: () => APP_STATE,
   resave: () => Store.saveState(APP_STATE),

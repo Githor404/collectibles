@@ -31,6 +31,25 @@ mkdir -p "$TMP"
 # UNCOMMITTED work. One row here did exactly that and destroyed edits made
 # minutes earlier. A restore must return the file to what it was, not to what
 # was last committed.
+# ONE PASS AT A TIME, ENFORCED. Two concurrent passes share one set of .orig
+# backups and destroy each other: whichever finishes first deletes them, and the
+# other is left with a mutation applied and nothing to restore from. That is not
+# hypothetical -- a backgrounded row-37 run was still in its cleanup when a
+# rows-38-39 run started, its trailing `rm -f *.orig` removed the newer run's
+# backups mid-flight, and all four files reported RESTORE FAILED.
+#
+# A process check is NOT a substitute for this: the running process is `bash`,
+# not `defect-pass`, so `ps | grep defect-pass` returns nothing while a pass is
+# very much alive. The lock is the only honest answer.
+LOCK="$TMP/.pass.lock"
+if [ -e "$LOCK" ] && kill -0 "$(cat "$LOCK" 2>/dev/null)" 2>/dev/null; then
+  echo "!! ANOTHER DEFECT PASS IS RUNNING (pid $(cat "$LOCK"))."
+  echo "!! Refusing to start: two passes share one set of backups and will"
+  echo "!! destroy each other's, leaving files mutated with nothing to restore."
+  exit 2
+fi
+echo $$ > "$LOCK"
+
 MUTATED="app.js index.html CLAUDE.md GATES.md"
 for f in $MUTATED; do cp "$f" "$TMP/$(basename "$f").orig"; done
 ORIG_APP=$(sha256sum app.js | cut -d' ' -f1)
@@ -46,9 +65,30 @@ restore() {
   [ -z "$MOVED" ] || { mv "$MOVED" tests/capture-outcome-gate.ps1 2>/dev/null; MOVED=""; }
   [ -z "$bad" ] || { echo "!! RESTORE FAILED for:$bad -- check git status before doing anything else"; return 9; }
 }
-trap 'restore >/dev/null 2>&1' EXIT INT TERM
+trap 'restore >/dev/null 2>&1; rm -f "$LOCK"' EXIT INT TERM
+
+# RUN A SUBSET:  ROWS=31-40 bash tests/defect-pass.sh
+#
+# Forty rows is forty headless browser launches, and this machine has had ~1.3 GB
+# free with the user's own browsers resident -- a single forty-row job was killed
+# by the OS mid-run, and that kill is what left stale backups for a later step to
+# trust. Batching is a data-safety measure here, not a convenience.
+#
+# KEYED ON `report`, NOT ON `mutate`. There are 38 mutates and 40 reports: rows 5
+# and 15 plant their defect WITHOUT one (row 5 moves the gate script aside). A
+# mutate-keyed counter would mis-number every row after 5, so `ROWS=31-40` would
+# quietly run the wrong ten and report them under the right names -- a worse
+# outcome than not batching at all.
+#
+# The mutation happens BEFORE its report, so the counter has to look ahead: a row
+# is in range if the report it is heading for is in range.
+ROWS="${ROWS:-1-999}"
+ROW_LO=${ROWS%-*}; ROW_HI=${ROWS#*-}
+ROW=0
+row_wanted() { local n=$((ROW + 1)); [ "$n" -ge "$ROW_LO" ] && [ "$n" -le "$ROW_HI" ]; }
 
 mutate() { # perl-expression, file
+  row_wanted || return 0
   # The guard compares against the file's OWN backup, so it covers every file in
   # MUTATED. Keyed to two hardcoded hashes it silently skipped the rest, and a
   # mutation that failed to apply would have produced a row that proves nothing --
@@ -56,9 +96,30 @@ mutate() { # perl-expression, file
   perl -0pi -e "$1" "$2"
   cmp -s "$TMP/$(basename "$2").orig" "$2" && echo "!! MUTATION DID NOT APPLY (the text moved): $1"
 }
-run_dl() { timeout 300 bash tests/run-data-layer.sh 2>&1; }
+# REAP AFTER EVERY ROW. Forty rows is forty headless Chrome launches, and a
+# profile process that outlives its --dump-dom accumulates. A backgrounded pass
+# was killed by the OS partway through with 75 browsers alive -- and the kill is
+# what left stale backups lying around for a later step to trust, which cost
+# three hours of work. Flat memory is therefore a DATA-SAFETY property here, not
+# a tidiness one.
+#
+# Matched on `--headless`, NOT on the profile path: an earlier attempt keyed to
+# the profile found ZERO while 51 browsers were running, so that discriminator
+# does not hold. Nobody browses headless, so this cannot touch a real window.
+reap() {
+  powershell -NoProfile -Command "
+    Get-CimInstance Win32_Process -Filter \"Name='chrome.exe' OR Name='msedge.exe'\" |
+      Where-Object { \$_.CommandLine -like '*--headless*' -or \$_.CommandLine -like '*dl-profile*' } |
+      ForEach-Object { try { Stop-Process -Id \$_.ProcessId -Force -ErrorAction Stop } catch {} }
+  " >/dev/null 2>&1 || true
+}
+run_dl() { local o; o=$(timeout 300 bash tests/run-data-layer.sh 2>&1); reap; printf '%s' "$o"; }
 report() { # name, expected-case-pattern, output
   local name="$1" pat="$2" out="$3" verdict named
+  ROW=$((ROW + 1))
+  # Advance unconditionally so numbering is identical whether or not a subset is
+  # running -- a row's number must mean the same thing in every invocation.
+  if [ "$ROW" -lt "$ROW_LO" ] || [ "$ROW" -gt "$ROW_HI" ]; then return 0; fi
   verdict=$(printf '%s\n' "$out" | grep -oE 'GATE: (PASS|FAIL)' | tail -1)
   named=$(printf '%s\n' "$out" | grep -E "^FAIL +.*(${pat})" | head -1 | sed -E 's/^FAIL +//' | cut -c1-80)
   [ -n "$named" ] || named=$(printf '%s\n' "$out" | grep -E "(${pat})" | head -1 | cut -c1-80)
@@ -86,7 +147,13 @@ mutate 's/  const ok = credPatch\(role, next\);/  const ok = credPatch(role, nex
 report "key written into APP_STATE" "K1" "$(run_dl)"; restore
 
 # 5. a second network site, outside egress (D1)
-printf '\nfunction phoneHome(u) { return fetch(u); }\n' >> app.js
+# GUARDED, like mutate(). This plant does NOT go through mutate(), so a ROWS=
+# subset executed it anyway -- appending phoneHome to app.js on every run whatever
+# the range. Harmless while the restore works; when a concurrent pass destroyed
+# the backups it survived, failed the egress census, and the diagnosis had to
+# start from "+44 unexplained bytes" because a mutation-signature sweep does not
+# know about a defect planted by append.
+row_wanted && printf '\nfunction phoneHome(u) { return fetch(u); }\n' >> app.js
 report "a second fetch site" "egress: FAIL" "$(run_dl)"; restore
 
 # 6. credential writes REBUILD instead of merging (HT-D49)
@@ -127,7 +194,9 @@ mutate "s/function credMask\(role\) \{/function credMask(role) { throw new Error
 report "a case throws mid-suite" "HARNESS|ASSERTION COUNT" "$(run_dl)"; restore
 
 # 15. the gate-script census: a gate renamed away
-mv tests/capture-outcome-gate.ps1 "$TMP/capture-outcome-gate.ps1.moved"; MOVED="$TMP/capture-outcome-gate.ps1.moved"
+# GUARDED for the same reason as row 5's plant: it bypasses mutate(), so a ROWS=
+# subset moved the gate script aside regardless of range.
+row_wanted && { mv tests/capture-outcome-gate.ps1 "$TMP/capture-outcome-gate.ps1.moved"; MOVED="$TMP/capture-outcome-gate.ps1.moved"; }
 report "gate script renamed away" "CENSUS" "$(run_dl)"; restore
 
 # ---- R1 / D2: the identification contract ---------------------------------
@@ -213,9 +282,122 @@ report "duplicate rule number" "DUPLICATE" "$(run_dl)"; restore
 mutate 's/brief rules 3, 4 and 7/brief rules 3, 4 and 77/' GATES.md
 report "citation to a nonexistent rule" "not a rule in the brief" "$(run_dl)"; restore
 
+# ============ R2b / D10 — the sold-comps rows (31-40) ============
+# Thirteen CQ cases arrived with R2b and NONE of them was evidence until it had
+# been seen to fail. These are the defects each one closes.
+
+# --- 31. the asking price wears the sold price's clothes ---------------------
+# The worst failure available to this product, and it is ONE BOOLEAN. The actor's
+# own docs: with includeCompletedListings false, a Best-Offer sale reports the
+# seller's ASKING price in `soldPrice`. Brief rule 7's conflation, committed
+# inside the data source, in the single field the app reads, with nothing on any
+# surface to show it happened.
+mutate 's/    includeCompletedListings: true,/    includeCompletedListings: false,/' app.js
+report "asking price as soldPrice" "includeCompletedListings is pinned TRUE" "$(run_dl)"; restore
+
+# --- 32. the window quietly becomes the vendor's default ---------------------
+# Fork C ruled 90 days. The actor defaults to 30. Deleting the line does not
+# error, does not warn, and still renders "last 90 days" from the constant --
+# a surface stating a window the request never asked for.
+mutate 's/    daysToScrape: COMPS_WINDOW_DAYS,\n//' app.js
+report "window falls back to the default" "the window is pinned to 90" "$(run_dl)"; restore
+
+# --- 33. the mixed scatter gets a range across it ---------------------------
+# D8 as amended. The endpoints come from two different markets, so "$9-$145"
+# describes no book anyone can buy -- and it reads as a valuation exactly the way
+# an average would.
+# NO TEMPLATE LITERAL IN THE REPLACEMENT. A first version spliced `${...}` and
+# backticks into the replacement half and perl never saw them intact: it died with
+# "syntax error near sorted[", the mutation did not apply, and the row reported
+# GATE: PASS against UNMUTATED source -- a vacuous row, Clause 4's own failure.
+# The repo moved every mutation to perl -0pi to fix this class on the PATTERN
+# half; the REPLACEMENT half was never covered. Plain concatenation instead.
+mutate 's/  const head = .<div class="cmphead">\$\{n\} sold · last \$\{esc\(win\)\}<\/div>.;/  const head = "<div class=\\"cmphead\\">" + n + " sold · last " + esc(win) + " · " + compsMoney(sorted[0].soldPrice) + "-" + compsMoney(sorted[sorted.length - 1].soldPrice) + "<\/div>";/' app.js
+report "a range across two markets" "no range spans them" "$(run_dl)"; restore
+
+# --- 34. raw and slabbed, split on what the title says -----------------------
+# THE defect D10 exists to refuse, and the fixture is built to catch it in the
+# adversarial direction: a $9 RAW book titled "CGC READY". A grader's name in a
+# title is a marketing claim, not a certification field.
+# Same lesson as the row above: no inline function, no template literal, no
+# backtick in the replacement. The defect is planted UPSTREAM instead -- `sorted`
+# is reordered into slabbed-then-raw with a heading injected between, which is
+# exactly the grouping D10 forbids, and the render below is left untouched.
+mutate 's/  const sorted = COMPS\.rows\.slice\(\)\.sort\(function \(a, b\) \{ return a\.soldPrice - b\.soldPrice; \}\);/  var _slab = COMPS.rows.filter(function (r) { return \/CGC|CBCS|PGX\/i.test(r.title); });\n  var _raw = COMPS.rows.filter(function (r) { return !\/CGC|CBCS|PGX\/i.test(r.title); });\n  const sorted = _slab.concat(_raw);\n  COMPS.groupHeadings = "Slabbed\/Raw";/' app.js
+# PATTERN REPOINTED. It used to grep for "never as group headers" -- a phrase that
+# stopped existing when the tautological CQ7 assertion was replaced by three real
+# ones. The row still FAILED correctly; it just could not name what caught it, and
+# reported (NOTHING NAMED MATCHED -- SUSPECT THE FIXTURE) instead. D3 at its
+# smallest: an assertion was renamed and its consumer did not follow. The
+# cross-reference census cannot see this, because it scans the DOCS, not these
+# patterns. The mutation reorders comps to 145,9,16.21,... so the ordering
+# assertion is the one that fires.
+report "groups from a title heuristic" "ASCENDING PRICE" "$(run_dl)"; restore
+
+# --- 35. D4's GCD rule is applied to eBay again ------------------------------
+# The over-generalisation this slice found: "never append the issue number" was
+# measured on GCD, where it is right, and written as binding on any catalog
+# search. On eBay it returns every issue of the series ever sold.
+mutate 's/  return \[title, issue\]\.filter\(Boolean\)\.join\(. .\)/  return [title].filter(Boolean).join(" ")/' app.js
+report "issue number dropped from eBay" "THE ISSUE NUMBER STAYS" "$(run_dl)"; restore
+
+# --- 36. the query goes back to read-only ------------------------------------
+# D4 recorded that making it editable was R2's job. A query you can see but not
+# send is a label, not a control.
+# NO BACKTICK IN THE REPLACEMENT (the third row to carry this shape; two of them
+# reported a vacuous GATE: PASS before it was caught). The target line lives
+# INSIDE a backticked template string, so the mutation matches only the attribute
+# text and leaves every backtick where it is.
+mutate 's/oninput="compsSetQuery\(this\.value\)" aria-label="Search eBay/readonly aria-label="Search eBay/' app.js
+report "query editable in name only" "no longer read-only" "$(run_dl)"; restore
+
+# --- 37. the grade rides along in the request body ---------------------------
+# Brief rules 3 and 4. The surface would look identical; only the body changes.
+mutate 's/    includeCompletedListings: true,/    includeCompletedListings: true,\n    grade: "9.4",/' app.js
+report "grade enters the lookup" "carrying the grade or the asking price is REFUSED" "$(run_dl)"; restore
+
+# --- 38. the spending token loses its warning --------------------------------
+# The defect found while building: gated on a role NAME, the one credential that
+# can spend money was the one with no warning at all.
+mutate "s/  const warn = row\.warn/  const warn = (role === 'prices') \&\& row.warn/" app.js
+report "spend warning re-gated to a role" "SPENDS" "$(run_dl)"; restore
+
+# --- 39. a second keyword quietly doubles the bill ---------------------------
+# `count` is PER KEYWORD, so keywords.length is half the bill. A bound that reads
+# only `count` cannot see this.
+mutate 's/    keywords: \[String\(query == null \? .. : query\)\],/    keywords: [String(query == null ? "" : query), "comic"],/' app.js
+report "a second keyword doubles cost" "EXACTLY ONE keyword" "$(run_dl)"; restore
+
+# --- 40. the filter hides rows without saying so -----------------------------
+# A filter the user cannot see is a filter they cannot correct -- and the thing
+# it hid might have been the right book.
+mutate 's/    if \(why\) dropped\.push\(\{ title: r\.title, why: why \}\); else kept\.push\(r\);/    if (!why) kept.push(r);/' app.js
+report "silent exclusions" "COUNTED ON THE SURFACE" "$(run_dl)"; restore
+
+# --- 41. the Publisher aspect is used because it demonstrably works ----------
+# Measured queryable 2026-09-13 ({"Publisher":"DC Comics"} -> ZERO) and refused
+# anyway. eBay aspects are filled by the sellers who fill structured fields, so
+# filtering on one drops the raw majority and biases the scatter toward the
+# graded end. A filter that narrows CORRECTLY can still corrupt, by selection --
+# and a dropped row leaves no trace on the surface.
+mutate 's/    includeCompletedListings: true,/    includeCompletedListings: true,\n    aspectFilter: { Publisher: "Marvel Comics" },/' app.js
+report "publisher aspect biases the sample" "sends NO aspectFilter" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
   printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"
 done
+# A BACKUP MUST NOT OUTLIVE ITS RUN. These .orig copies were left behind on exit,
+# and a later session found them, compared a file against a backup FROM A
+# DIFFERENT RUN, read the legitimate difference as mid-mutation corruption, and
+# overwrote three hours of work with a three-hour-old copy. The file was restored
+# correctly by copy, exactly as the rule above demands -- and the rule was not
+# enough, because it says nothing about WHICH run the copy came from.
+#
+# Deleting them on a clean exit makes the presence of .orig meaningful: it now
+# means A RUN IS IN PROGRESS OR WAS KILLED, which is the one question the restore
+# could not answer. A kill still leaves them, and that is the point.
+rm -f "$TMP"/*.orig
+echo "backups cleared (a leftover .orig now means a run was interrupted, not that one finished)"
 echo "git status (expect nothing but untracked tests/.tmp):"
 git status --short

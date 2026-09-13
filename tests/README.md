@@ -56,9 +56,33 @@ Each row plants one defect in the shipped file, runs the gate, and prints the ve
 - **`(NOTHING NAMED MATCHED -- SUSPECT THE FIXTURE)`** — the gate failed but the case written for that defect never spoke. Clause 4's own diagnostic; it happened once here (see `../GATES.md`).
 - **`!! MUTATION DID NOT APPLY`** — the code moved and the mutation no longer targets anything, so the row proves nothing.
 
-Every mutated file (`app.js`, `index.html`, `CLAUDE.md`, `GATES.md`) is restored after each row and **verified against its own pre-run copy**, with an exit trap so an interrupted run cannot leave a mutation behind. Verify a restore with `git status` / a comparison, never with the next run.
+Every mutated file (`app.js`, `index.html`, `CLAUDE.md`, `GATES.md`) is restored after each row and **verified against this run's pre-run copy**, with an exit trap so an interrupted run cannot leave a mutation behind. Verify a restore with `git status` / a comparison, never with the next run.
 
 **Restore by COPY, never by `git checkout --`.** One row once restored `GATES.md` with git, which resets from **HEAD** — so it silently discarded edits made minutes earlier and not yet committed. A restore must return a file to **what it was**, not to what was last committed. The `mutate` helper compares each file against that same copy, so a mutation that fails to apply says so instead of producing a row that proves nothing.
+
+**And the copy must be from THIS run — the rule above is not enough on its own.** It happened again, differently. A backgrounded pass was killed by the OS partway through, and a later step found the `.orig` files, compared `app.js` against one, saw a large difference, read it as mid-mutation corruption, and restored — **from a backup three hours old, belonging to a previous run**. Three hours of uncommitted work in four files were overwritten. The restore was by copy. It was verified by `cmp`. It returned the file to what it was *at some point*, and that was the whole defect.
+
+So:
+
+- **A backup must not outlive its run.** `defect-pass.sh` now deletes `tests/.tmp/*.orig` on a clean exit, which makes their **presence meaningful**: a leftover `.orig` means *a run is in progress or was killed*, never *a run finished*. A kill still leaves them, and that is precisely the point.
+- **Check the timestamp before trusting a backup**, and compare it against the work you are about to overwrite. The `.orig` files here were stamped ten minutes *before* the last commit; the file they clobbered was three hours *after* it. One `ls` would have caught it.
+- **`git status` is the cheap sanity check.** A file you have been editing all session that suddenly shows as *unmodified* has not been repaired — it has been reverted.
+- **Recovery, when it happens:** the survivors are whatever is not in `MUTATED`. Here that was `DECISIONS.md` and everything under `tests/`, so the rulings, the cases and the pin all lived and only the implementation had to be rebuilt.
+
+**NEVER RUN TWO PASSES AT ONCE — and the script now refuses to.** Both write the *same* `tests/.tmp/*.orig` backups, so whichever finishes first deletes them out from under the other, which is then left with a mutation applied and nothing to restore from. It happened: a backgrounded row-37 run was still in its cleanup when a rows-38-39 run started; the older run's trailing `rm -f *.orig` removed the newer run's backups mid-flight; all four files reported `RESTORE FAILED`, and two mutations were left live in `app.js`.
+
+- **The lock.** `defect-pass.sh` writes its PID to `tests/.tmp/.pass.lock` at start, refuses to run if a live PID holds it, and clears it in the exit trap. A second pass now exits 2 instead of causing damage.
+- **A process check is NOT a substitute, and trusting one is what caused this.** The running process is `bash`, so `ps | grep defect-pass` returns **nothing** while a pass is very much alive. It reports safe at exactly the moment it matters.
+- **The reliable signal is the runner's own bookkeeping: a background job is running until its completion notification arrives.** Not until a process list looks quiet, not until the log stops growing.
+- **Recovering with no backup at all:** every mutation has a known, greppable signature (`const warn = (role === 'prices')`, `), "comic"]`, `aspectFilter`, `_slab.concat(_raw)`, …). Sweep for all of them, reverse the ones found by hand — watching for incidental changes the mutation made, such as swapping `'` for `"` — and then **let the suite prove it**: a surviving mutation fails a gate by name, so a green run is the evidence that the reversal restored the original rather than something merely plausible.
+
+### `ROWS=` must cover every way a row plants, not just `mutate()`
+
+`ROWS=31-40 bash tests/defect-pass.sh` runs a subset, which is how the pass fits on a machine where each row costs ~250s. The filter hooks `mutate()` and `report()` — and **two rows do not plant through `mutate()` at all**: one appends `function phoneHome(u) { return fetch(u); }` to `app.js` with `>>` (to fail the egress census), another `mv`s the gate script aside (to fail the census). Both bypassed the range check, so **every subset run executed them whatever the range**.
+
+That is invisible while the restore works, and it is not academic. When a concurrent pass destroyed the backups, the appended `phoneHome` survived into the working tree. The suite then failed on the egress census, and because a **mutation-signature sweep only knows about `mutate()`-based defects**, the diagnosis had to start from "`app.js` is 44 bytes larger than it should be" and work backwards. Both plants now carry `row_wanted &&`.
+
+**The general form, and it is this repo's own rule turned on its own tooling:** a filter that covers *most* of the sites it should cover **looks exactly like one that covers all of them** — which is D5, verbatim, applied to a test harness instead of a query. When you add a filter, enumerate the sites it must cover and check each one, rather than the ones that came to mind. `grep -nE '^\s*(cat|echo|printf).*>>|^\s*mv ' tests/defect-pass.sh` is the enumeration for this file.
 
 The fixture must be able to exhibit the failure (Clause 4). A gate that cannot fail on this machine says so in its own text and is paired with one that can (Clause 2): see `CL5 BEHAVIOURAL` and its structural twin. Defect runs are recorded in `../GATES.md`.
 

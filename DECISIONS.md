@@ -120,6 +120,25 @@ D4 fixed the shape and left the rules open. **The GCD probe (2026-09-12) measure
 
 **And Fork E, ruled:** a **canonical identity is `(source, series id, issue index)`** plus the **as-printed reading kept beside it**. Two objects, per this entry — the identity names a row in someone else's catalog, the reading is what the cover said, and neither is ever rewritten into the other.
 
+### Amendment — the rules are PER SOURCE; "never append the issue number" is not universal (2026-09-13)
+
+The amendment above adopted the GCD-measured rules **"now, for any catalog search — including eBay's title filter."** **That generalisation was wrong, and R2b's probe falsified it inside a day.**
+
+- **GCD:** `the AMAZING SPIDER-MAN 151` → **0 results.** The catalog has a **series/issue hierarchy**; the number belongs to a second lookup, not to the series name.
+- **eBay:** `amazing spider-man 151` → **clean, on-target results, no lots in the first eight.** It is **full-text search over listing titles**, where the issue number is the single most **discriminating** token in the query. Removing it returns every issue of the series ever sold.
+
+**Same rule, opposite outcomes — because these are not the same kind of source.** A hierarchical catalog resolves *series, then issue*. A full-text index over listings has no hierarchy to walk, so every token has to earn its place in one string.
+
+**So a query builder belongs to its source, and the rules are scoped to one.** What survives as universal is the **shape** this entry ruled: the reading is never normalised, the query is derived from it, the derivation is inspectable. What does not survive is **any rule phrased "for any catalog search."**
+
+| rule | scope |
+|---|---|
+| drop the leading article · case is free | **universal** — these are facts about the *reading*, not about a catalog |
+| the issue number is a **separate lookup**; the publisher **ranks, never queries** | **GCD only** |
+| the issue number is **required**; the `#` marker is dropped; the publisher stays out, untested | **eBay only (R2b)** |
+
+**This is D3 again, and it is worth naming as a pattern rather than filing as an incident.** A contract measured against **one** consumer was written as though it bound **all** of them. The measurement was sound; the generalisation was the defect. **A rule should carry the scope of the evidence that produced it** — and where this entry said "any catalog search," it had evidence from exactly one.
+
 ## D2 — Identification: the model reads the cover, the human confirms it (R1, 2026-09-12)
 
 Forks **A1, B1, C1, D1, E1, F1, G1** ruled as recommended. Two of them carry a note that belongs in the record rather than in a commit message.
@@ -207,6 +226,20 @@ Doc-only, general, and binding on **every future data source**.
 
 D5 was written against a query parameter this app constructs. It binds equally to **a filter the source advertises**: if we pass `category=259104` to a scraper that documents category selection, **the gate proves the result set NARROWED** — a known out-of-category item present in the unfiltered call and absent from the filtered one. Not that the call returned 200.
 
+### Amendment — the METHOD: prove a filter with a value that must exclude everything (2026-09-13)
+
+**This entry named the problem and left the method to invention, and the method I invented was the weak one.** For R2b I designed a four-run set difference — the same query filtered and unfiltered, twice, at **$1.60** — and read *"fewer results"* as narrowing. **That inference does not hold.** Fewer results is equally consistent with a filter that works and with a query that happened to match less; a proper subset is suggestive, never conclusive.
+
+**The subscriber's probe settled it in one run, with a FALSE value.** `aspectFilter {"Publisher":"Marvel Comics"}` on an *Amazing Spider-Man* query returned ~100 — **uninformative by construction**, because the true value cannot distinguish a working filter from an ignored one. `{"Publisher":"DC Comics"}` returned **ZERO**. Nothing but a live, narrowing filter produces that.
+
+**So the rule, and it is general:**
+
+> **To prove a filter narrows, pass a value that must exclude everything.** A true value tests nothing — an ignored filter returns the same rows the keyword would have. **The falsifying value is the evidence; the confirming one never was.**
+
+It is cheaper (one run, not four), it is conclusive rather than suggestive, and it is the same discipline the gate scripts already use in the other direction: **a planted control that must fail.** This entry had the control idea for *our* filters and lost it for a *source's*.
+
+**Adopted for `categoryId` too**, retiring the four-run design in `GATES.md`: one run with a category that cannot contain comics, expecting zero.
+
 A vendor that silently ignores a documented parameter is exactly GCD's failure wearing a supplier's badge, and it is **more** likely, not less, when the parameter is one of many on a scraper whose upstream layout can change under it.
 
 ## D6 — No standing infrastructure before the table (Fork A ruled A5, 2026-09-13)
@@ -231,6 +264,41 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 
 **What was removed, and what was not.** The prices Settings card is gone; the prices **role keeps every piece of its machinery**, which the gates still exercise — pacing at 1 call/s, redaction of an echoing provider, and the `auth: 'none'` proof that the metering server of D1 is a table edit. **The capability is intact; only the invitation is gone.**
 
+## D10 — A group exists only where a field exists that constitutes it (2026-09-13)
+
+**Ruled on R2b's probe, and it resolves a collision between two already-ruled forks.** Fork E had ruled *"raw and slabbed are two markets; show them as two groups, never blend."* Fork A had ruled **one stage**. The probe then showed the search tier returns **no Grade, no Certification and no Variant field** — **the split E requires is not in the data A buys.** Both were ruled before anyone had seen a real result.
+
+**The ruling: the app does not render the groups, and says why.** One scatter; each comp beside **the seller's own title, verbatim** — which is where the grade actually is, as free text in no consistent format (*"VF- 7.5"*, *"GD"*, *"VF- 1 CF staple detached"*) — and the surface **states plainly that this tier cannot tell raw from slabbed**. The human reads the titles and splits them by eye. That is the same division of labour as the grade and the asking price (brief rule 3): the app supplies what it can evidence, the person supplies the judgement.
+
+**What was rejected, and it is the interesting half.** Parsing `CGC`/`CBCS`/`PGX` out of the title would have produced two groups for free. It fails in a **known adversarial direction**: sellers write *"CGC READY"*, *"would grade 9.8"*, *"CGC candidate"* on **raw** books precisely to borrow a slab's credibility. The heuristic would move cheap raw copies **into** the slabbed group — **lowering the slabbed floor and the raw ceiling at once, corrupting both groups rather than one**, and doing it invisibly behind a layout that looks authoritative. A heuristic that fails *randomly* degrades; one that fails *where sellers have an incentive to push it* is being aimed.
+
+**The general rule — and it is D9's shape applied to data.** D9: a **credential field** exists only where a call exists that uses it. This: a **grouping exists only where a field exists that constitutes it.** An absent distinction is **stated as absent** — never inferred from free text, never implied by a layout. **A group header is a claim about what the app knows.**
+
+**Not deferred, and the door is named.** The **Aspect Filter** (a JSON object input, and eBay aspects *are* Item Specifics) may filter on Grade or Certification as a *query parameter*; the **$0.005 deepening tier** definitely reaches the listing page. Either would supply the constituting field, and either turns the groups back on. **Until one is probed, the groups do not exist.**
+
+### The door was probed, and it is shut — measured, not inferred (2026-09-13)
+
+**The Aspect Filter reaches eBay, but not for the fields this needed.**
+
+| aspect | result | reading |
+|---|---|---|
+| `{"Publisher":"Marvel Comics"}` | ~100 | uninformative **by construction** — a true value cannot separate a working filter from an ignored one (D5's amendment) |
+| `{"Publisher":"DC Comics"}` | **ZERO** | **live and narrowing** |
+| `{"Grade": …}` | 100, unfiltered | **ignored** — never reaches eBay's aspect layer through this actor |
+| `{"Certification": …}` | 100, unfiltered | **ignored** |
+
+**So D10 stands on measurement rather than on inference, and the cheap escape is gone.** Grade and Certification are not queryable here, and **deepening would buy a field that cannot be queried anyway**. Fork E stays closed.
+
+**And a standing fact that closes it more firmly than the measurement does.** Even a *working* Grade aspect would have covered only the slabbed minority: **most raw books are sold by people who never fill a structured grade field at all.** The structured path was never going to reach the majority of this market. **Grade lives in the title text regardless** — which is what D7 ruled from vocabulary alone, now with evidence behind it.
+
+### The Publisher aspect is REFUSED, and it is refused *because* it works
+
+Publisher is live and narrowing, so using it looks free. **It is not.** An eBay aspect is populated by the seller, and **the sellers who fill structured fields are the slabbed, professional minority** — the same population the standing fact above identifies. Filtering on Publisher would **silently drop the raw listings whose sellers left it blank**, pulling the scatter toward the graded end and thinning exactly the half a flea-market buyer is standing in front of.
+
+**This is the CGC-READY heuristic's corruption reached by a different route.** That one mislabelled comps; this one **removes them before they are ever seen** — and a missing row leaves no trace on the surface, where a mislabelled one at least renders. **A filter that narrows correctly can still corrupt, by selection.**
+
+**Gated, not merely noted** (`CQ3`, defect row 41): the request body carries **no `aspectFilter` at all**. A future session will rediscover that Publisher works, and the gate is what tells it why that is not the question.
+
 ## D7 — Never map a marketplace condition to a collectors' grade (2026-09-13)
 
 **A rule, not a slice parameter.** eBay's condition field is a generic marketplace vocabulary — **Brand New / Like New / Very Good / Good / Acceptable** — that was never built for comics, and the collector community said so when eBay imposed it. **Mapping "Very Good" to VG 4.0 would be a false translation between two scales that share words and mean different things.**
@@ -243,6 +311,14 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 
 **And it is the grade half of brief rule 3:** the grade is the user's to supply. A grade inferred from a marketplace dropdown would be the app guessing exactly what it promised never to guess.
 
+### Confirmed empirically — and one clause of it corrected (2026-09-13)
+
+**The probe measured what this entry argued.** Three books, all at condition **`Pre-Owned / 3000`**, sold for **$9, $29.99 and $89** — a **10× spread at an identical code**. D7 was reasoned from a vocabulary mismatch; it is now a measurement, and it lands harder than the argument did: the condition field does not merely *translate badly* into grade vocabulary, it **carries no grade information whatsoever**.
+
+**Corrected.** The first bullet said the condition label and code are used *"only to split raw from slabbed."* **They cannot do even that.** At the search tier every comic is `Pre-Owned`, slabbed or not, and a result carries **no Certification field and no Item Specifics at all**. The bullet described a capability the source does not have — it was written from the actor's *advertised* field list, before a real run.
+
+**What this entry forbids stands unchanged. What it permitted was never available.** See **D10**.
+
 ## D8 — A scatter is the claim; a single number derived from it is not (2026-09-13)
 
 **A rule, not a display preference.** Sold comps are individual sales at whatever grades happened to sell. **No average, no midpoint, no "estimated value" — anywhere.**
@@ -254,3 +330,13 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 **Why it is a rule.** A single number derived from a sparse scatter *reads* as a valuation — the one claim this product exists to refuse (brief rules 4 and 7, D2's refusal of model-supplied value). The arithmetic would be easy and the sentence it produces would be false: the data cannot support it, and a user at a table cannot see that from the number alone.
 
 **The honest output stays the comparison:** *"N recent solds at $X–$Y, they're asking $Z, you'd grade it W"* — three stated quantities from three different sources, none of them collapsed into one.
+
+### Amendment — where the markets cannot be separated, the RANGE goes too (2026-09-13)
+
+**This entry permits a range at N ≥ 5** — *"N recent solds at $X–$Y"*. That range is the scatter's **extent**, not a central tendency, which is exactly why it survived the no-average rule above.
+
+**It does not survive a *mixed* scatter.** eBay's search tier carries no field that separates raw from slabbed (**D10**), so the endpoints of $X–$Y would be drawn from **two different markets**. The probe's own scatter: **9 · 16.21 · 18.88 · 29.99 · 40 · 49.99 · 89 · 145**. *"$9–$145"* describes no book anyone can actually buy. A range whose ends come from different markets is a **span, not a claim** — and on a surface it reads as a valuation in precisely the way an average would, which is the harm this entry exists to prevent.
+
+**So: at a tier that cannot separate the markets, no range is computed at any N.** Individual sales render, each beside the seller's own words, with the count and the window riding on them. **The range returns when — and only when — a field exists that says which market a comp belongs to.**
+
+**Recorded as a correction to my own framing, not to the subscriber's ruling.** The fork was put to them with the claim that *"D8 already forbids computing a range at all."* **It does not**, and this entry is the proof: it forbids the average, the midpoint and the estimated value, and permits the min–max span. The ruling was made on a description of D8 that was wrong. The stricter reading that ruling *implied* is what gets built — but the error is recorded here rather than the entry being quietly reshaped to match what I said about it. **A decision log that edits itself to agree with the last thing said about it is not a record.**
