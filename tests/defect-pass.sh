@@ -113,7 +113,22 @@ reap() {
       ForEach-Object { try { Stop-Process -Id \$_.ProcessId -Force -ErrorAction Stop } catch {} }
   " >/dev/null 2>&1 || true
 }
-run_dl() { local o; o=$(timeout 300 bash tests/run-data-layer.sh 2>&1); reap; printf '%s' "$o"; }
+# GUARDED -- and the absence of this guard was costing ~20x on every subset run.
+#
+# `report "name" "pat" "$(run_dl)"` evaluates the command substitution BEFORE
+# calling report, so an unguarded run_dl ran the FULL SUITE for all 40 rows on
+# every invocation. ROWS= skipped the mutation and the reporting; it never
+# skipped the expensive part.
+#
+# The evidence was visible and was misread: ROWS=31-32 took 497s, ROWS=34-36 took
+# 494s, ROWS=40-41 took 541s. A constant elapsed time with NO relationship to the
+# number of rows selected is the signature of a fixed cost -- it was read as
+# "~250s per row" instead, and every batching and timeout decision was built on
+# that. One suite run is ~12s; a full 41-row pass is ~500s.
+run_dl() {
+  row_wanted || return 0
+  local o; o=$(timeout 300 bash tests/run-data-layer.sh 2>&1); reap; printf '%s' "$o"
+}
 report() { # name, expected-case-pattern, output
   local name="$1" pat="$2" out="$3" verdict named
   ROW=$((ROW + 1))

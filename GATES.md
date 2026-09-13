@@ -2,7 +2,49 @@
 
 Pre-registered, re-runnable gate evidence. **HT-D60 binds** (adopted by D1): a new or changed gate is not evidence until it has been **run against the defect it closes and seen to fail**, with a fixture capable of exhibiting that failure (Clause 4). The failing run is part of the evidence and is recorded here beside the passing one.
 
-Run everything: `bash tests/run-all-gates.sh`. Defect pass: `bash tests/defect-pass.sh`.
+Run everything: `bash tests/run-all-gates.sh`. Defect pass: `bash tests/defect-pass.sh`. Recovery after an interrupted pass: `bash tests/restore-backups.sh`.
+
+### The two recovery mechanisms, run against their own defects — 2026-09-13
+
+**HT-D60 Clause 1 binds a safety mechanism exactly as it binds a gate: a check that has never been seen to fail is a claim, not evidence.** Both were tested by recreating the conditions that defeated their predecessors.
+
+| test | planted condition | result |
+|---|---|---|
+| **PID lock — defect** | a live PID holding `tests/.tmp/.pass.lock` | **FIRED BY NAME**: `!! ANOTHER DEFECT PASS IS RUNNING (pid 357).` — **exit 2**, no backups written |
+| **PID lock — control** | a lock naming a dead PID (`999999`) | **correctly ignored**, the pass ran — it refuses a live race without blocking on its own debris |
+| **Freshness gate — defect** | `app.js.orig` back-dated to before HEAD (the exact 2026-09-13 shape) | **FIRED BY NAME**: `FRESHNESS GATE: FAIL - app.js.orig is OLDER THAN HEAD.` — **exit 1**, nothing written |
+| **Freshness gate — control** | all four backups freshly written | **PASS**, exit 0 — the gate is not simply refusing everything, which is the only thing that makes the defect result mean anything |
+
+**The freshness gate did not exist as code until this test.** It had been written as a *procedure* in `tests/README.md` — a promise to check, and a promise is what failed in the first place. It is now `tests/restore-backups.sh`: dry-run by default, `--apply` to act.
+
+#### What they do NOT cover
+
+**The PID lock:**
+- **Only pass-versus-pass.** It does not stop anything *else* touching those files mid-run — and that is the deeper cause of the incident it was written for: files were edited while a pass was in flight. **The lock would not have prevented that.**
+- **Checked only at startup.** A pass that begins legitimately and an edit five minutes later collide with no warning at all.
+- **PID identity is environment-scoped.** `kill -0` resolves MSYS PIDs; a pass launched from a different shell environment may be invisible to it.
+
+**The freshness gate:**
+- **It proves provenance, not content.** "Newer than HEAD and recent" says nothing about whether the backup holds the *right* bytes. A pass that backed up an already-mutated file yields a backup that passes cleanly and restores a defect.
+- **Its strength is proportional to commit frequency.** Its sharpest signal is "newer than HEAD" — so on a repo committed once in six hours, which is precisely what this one was on 2026-09-13, the check is weakest exactly when exposure is greatest. **Committing before a pass remains the real protection; this is the backstop for when that was not done.**
+- **It does not run automatically.** `defect-pass.sh` writes and restores its own backups in the exit trap, fresh by construction. This guards the **ad-hoc** recovery path — where the loss actually happened — and only if it is run instead of typing `cp`.
+- **It is blind to concurrency.** A backup written seconds ago by a *second* pass passes cleanly. That is the lock's job, and the two checks know nothing about each other.
+
+### The cost model was wrong by 20×, and the evidence was on screen all day
+
+`report "name" "pat" "$(run_dl)"` evaluates the substitution **before** calling `report`, so an unguarded `run_dl` ran the full suite for **all 40 rows on every invocation**. `ROWS=` skipped the mutation and the reporting; it never skipped the expensive part.
+
+| invocation | rows selected | elapsed |
+|---|---|---|
+| `ROWS=31-32` | 2 | 497s |
+| `ROWS=33-34` | 2 | 504s |
+| `ROWS=34-36` | **3** | 494s |
+| `ROWS=38-39` | 2 | 542s |
+| `ROWS=40-41` | 2 | 541s |
+
+**A constant elapsed time with no relationship to the number of rows selected is the signature of a fixed cost.** It was read as "~250s per row", and that estimate drove every batching decision, every timeout, and a planning figure given to the subscriber. Guarding `run_dl` took `ROWS=31-32` from **497s to 59s**.
+
+**Corrected model, measured rather than estimated:** ~35s fixed (backups, 40 `report` calls, restore) **+ ~12s per selected row**. A full 41-row pass is **~8.5 minutes**, not the 2.7 hours the wrong model implied.
 
 > **Incident, 2026-09-13 — a restore destroyed uncommitted work for the second time, and the rule written after the first did not prevent it.**
 >
