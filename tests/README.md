@@ -26,7 +26,8 @@ In order, each failing the whole gate:
 1. **Gate-script census** (HT-D53): the `*-gate.ps1` set must equal a pinned manifest. A quarantined gate does not run and does not say so; naming it ends the hunt.
 2. **Port residue** (D1): no `healthtracker-` storage key, no HT console seam, no meal-domain identifiers in `app.js` / `index.html`. The match is on code shapes, with a planted control.
 3. **Egress census** (`check-egress.sh`, D1): every network primitive in the shell is enumerated and mapped to its enclosing function. **Exactly one site, inside `egress()`.** Planted control first.
-4. **`data-layer.test.html`** in headless Chrome: the real `app.js`, plus the real `index.html` in an iframe. The **executed assertion count must equal the pin** (`EXPECTED_ASSERTIONS`), so a silently dropped case fails the gate.
+4. **Cross-reference census** (`check-refs.sh`, D3): every `Dnn`, `HT-Dnn`, `HT-Rnn`, `Rn` and `rule(s) N` cited in `CLAUDE.md` / `DECISIONS.md` / `GATES.md` must resolve to a heading or rule that exists, and the brief's rule list must be 1..N with no duplicates or gaps. Planted control first. **It catches unresolvable citations and an inconsistent list — not a citation that resolves to the wrong thing.**
+5. **`data-layer.test.html`** in headless Chrome: the real `app.js`, plus the real `index.html` in an iframe. The **executed assertion count must equal the pin** (`EXPECTED_ASSERTIONS`), so a silently dropped case fails the gate.
 
 **Harness limitation (HT-D47), stated rather than hidden:** `createImageBitmap` never settles under `--virtual-time-budget`. The harness therefore proves the **leash** and the fallback decoder, and cannot exercise the preferred decoder. `capture-outcome-gate.ps1` runs in real time and does.
 
@@ -55,7 +56,9 @@ Each row plants one defect in the shipped file, runs the gate, and prints the ve
 - **`(NOTHING NAMED MATCHED -- SUSPECT THE FIXTURE)`** — the gate failed but the case written for that defect never spoke. Clause 4's own diagnostic; it happened once here (see `../GATES.md`).
 - **`!! MUTATION DID NOT APPLY`** — the code moved and the mutation no longer targets anything, so the row proves nothing.
 
-The file is restored after every row and **verified by hash**, with an exit trap so an interrupted run cannot leave a mutated `app.js`. Verify a restore with `git status` / a hash, never with the next run.
+Every mutated file (`app.js`, `index.html`, `CLAUDE.md`, `GATES.md`) is restored after each row and **verified against its own pre-run copy**, with an exit trap so an interrupted run cannot leave a mutation behind. Verify a restore with `git status` / a comparison, never with the next run.
+
+**Restore by COPY, never by `git checkout --`.** One row once restored `GATES.md` with git, which resets from **HEAD** — so it silently discarded edits made minutes earlier and not yet committed. A restore must return a file to **what it was**, not to what was last committed. The `mutate` helper compares each file against that same copy, so a mutation that fails to apply says so instead of producing a row that proves nothing.
 
 The fixture must be able to exhibit the failure (Clause 4). A gate that cannot fail on this machine says so in its own text and is paired with one that can (Clause 2): see `CL5 BEHAVIOURAL` and its structural twin. Defect runs are recorded in `../GATES.md`.
 

@@ -148,7 +148,7 @@ The brief that opened this repo asked vision for *"whether it looks like a key i
 
 ### Correction, query, confirmation, floor
 
-- **A correction keeps what the model read** beside the accepted value (HT-D55/D57's correction-loop shape). Clearing a field restores *absent*, never an empty string.
+- **A correction keeps what the model read** beside the accepted value (HT-D55 / HT-D57's correction-loop shape). Clearing a field restores *absent*, never an empty string.
 - **The query is derived from the CONFIRMED fields**, never the model's originals: correcting a misread issue number changes what will be searched. Title and issue only — whether publisher or date help the search is R2's probe to answer, not this slice's guess.
 - **Confirm** (Fork E1) produces the identity and its query, and the surface states plainly, where the result is, that pricing is not built. **Nothing persists** (Fork F1): no record, no schema change, and the export is byte-unchanged.
 - **The no-key floor ships** (Fork G1) and is gated on **content and outcome** — every prompt box holds the prompt, Copy fills the box unconditionally, and a pasted reply opens the same modal. HT-D63 is the reason that wording matters: HealthTracker's floor sat dead for weeks behind a gate that asserted a box *existed*.

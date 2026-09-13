@@ -20,6 +20,24 @@ Run everything: `bash tests/run-all-gates.sh`. Defect pass: `bash tests/defect-p
 | gate-script census (HT-D53) | the `*-gate.ps1` set equals the pinned manifest — a quarantined or renamed gate fails **by name** |
 | port residue (D1) | no `healthtracker-` storage key, no HT console seam, no meal-domain identifier in `app.js` / `index.html`; matched on code shapes, with a planted control |
 | egress census (D1) | every network primitive in the shell maps to its enclosing function, and there is **exactly one site, inside `egress()`**; planted control first |
+| **cross-reference census (D3)** — added 2026-09-13 | every `Dnn`, `HT-Dnn`, `HT-Rnn`, `Rn` and `rule(s) N` cited in `CLAUDE.md` / `DECISIONS.md` / `GATES.md` **resolves to a heading or a rule that exists**, and the brief's rule list is **1..N with no duplicates and no gaps**; a planted control of six synthetic breaks runs first |
+
+#### The cross-reference census — what it caught, and what it cannot
+
+**Why it exists:** renumbering is a **rename**, and a rename its consumers do not follow is D3 every time. Inserting two rules mid-list left the brief numbered 1–7 then 3,4 with seven references pointing at the wrong rules across four files. Nothing failed; attention did not catch it.
+
+**On its first run it found three genuine breaks** that had survived review: an unprefixed decision number (from writing the pair as `HT-D55` followed by a second number that never got its prefix, where only the first carries the prefix, so the second read as *this* repo's), an unprefixed slice number meaning HealthTracker's, and `R2` — cited twenty times across three files while only `R2a` and `R2b` had headings. The first two were repointed; `R2` was given the heading it deserved, since the docs legitimately name the pricing work as a whole.
+
+**Defect pass:**
+
+| planted defect | verdict | named |
+|---|---|---|
+| a duplicate rule number (the original break) | GATE: FAIL | `rule list has DUPLICATE number(s): 3` |
+| a citation to a rule that does not exist | GATE: FAIL | named the phrase and the number: *"…but 77 is not a rule in the brief"* |
+
+**The limit, stated because the first version of the second row PASSED against its own defect.** Planting the *original* break — `rules 3, 4 and 7` → `rules 3-5` — does **not** fail the census, because rules 3, 4 and 5 all exist. **Resolution cannot see a citation that resolves to the wrong thing.** What the census catches is an *unresolvable* citation and an *inconsistent* rule list; the original break is caught by the **numbering half**, which is what was broken at the time. A citation that quietly points at the wrong existing rule, while the list is consistent, remains beyond a mechanical check — HT-D60 Clause 2, said out loud rather than assumed away.
+
+**Also deliberately not checked:** harness case names (`ID15`, `PACE1`, …) cited in prose. The assertion-count pin already guards the suite, and matching prose against case names would be a looser census with a worse false-positive rate.
 
 ### Behavioural cases, by group
 
@@ -285,7 +303,7 @@ Seed gates for whichever slice takes it: the asking price never enters the ident
 - **C3: keep it as the brief wrote it.** Rejected here: it puts a market claim inside the perception contract the whole design separates.
 
 **Fork D — alternates (`alts`/`p`, HT-R30's shape).**
-- **D1 (recommended): none in v1.** R30 itself ruled the threshold is the weaker defence and the **shape of the question** is load-bearing. Here the question is already *what is this*, every field is correctable, and the real off-ramp is R2's candidate list. A confidence number now is a constant with no consumer and no calibration data.
+- **D1 (recommended): none in v1.** HT-R30 itself ruled the threshold is the weaker defence and the **shape of the question** is load-bearing. Here the question is already *what is this*, every field is correctable, and the real off-ramp is R2's candidate list. A confidence number now is a constant with no consumer and no calibration data.
 - D2: per-field alternates — revisit when the candidate list exists and can be compared against them.
 
 **Fork E — what "Use this" does** (under A1).
@@ -318,7 +336,7 @@ What the answer has to settle: the field names per match, whether issue numbers 
 | R1-coverprice | the **printed** cover price survives while a market value in the same reply is refused — both directions asserted, so the distinction is the gate rather than a comment |
 | R1-absent | an unreadable field is **absent**, never guessed and never zero-filled; the surface says it was not legible rather than printing an empty value |
 | **R1-identity-first** | the success state asks **what it is** before anything else; no grade control and no price field exists anywhere in the draft |
-| R1-correct | every perceived field is correctable, and a correction **keeps the model's original beside it** (`ai_*`, HT-D55/D57's correction-loop shape) |
+| R1-correct | every perceived field is correctable, and a correction **keeps the model's original beside it** (`ai_*`, HT-D55 / HT-D57's correction-loop shape) |
 | R1-query | the search string is derived from the **confirmed** fields, not the model's originals, and changes when a field is corrected |
 | R1-parity | call path and paste path still produce byte-identical results — repointed to the real contract, not weakened (HT-D60 Clause 3) |
 | R1-escape | hostile strings in every new field are escaped (P2 repointed) |
@@ -332,6 +350,15 @@ What the answer has to settle: the field names per match, whether issue numbers 
 Grade and price; records and schema v2; the matcher and any corpus; the candidate off-ramp's destination (A2 / R2); and whether a wrong identification is ever recorded for calibration (HT-R30 Fork H's shape, which needs a consumer first).
 
 ---
+
+## R2 — Pricing, re-scoped into two slices (2026-09-12)
+
+**R2 is the pricing work as a whole**, and the docs cite it by that name. It is **not a slice**: it is two, sequenced.
+
+- **R2a — canonical identity** via the Grand Comics Database. **Ruled and deferred** (D6).
+- **R2b — price via eBay sold comps** through an Apify scraper. **Pre-registered, forks ruled**, blocked only on the subscriber's probe.
+
+**PriceCharting was withdrawn as R2's dependency** on 2026-09-12 — ~$600/year for modelled values with no sold comps and no history, not committed before the app has been used at a table. It remains a named provider behind the same seam (D1's provider table).
 
 ## R2a — Canonical identity via the Grand Comics Database — RULED AND DEFERRED (2026-09-13; NOT built)
 

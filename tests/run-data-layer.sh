@@ -67,6 +67,15 @@ if ! bash "$DIR/check-egress.sh"; then
   exit 1
 fi
 
+# CROSS-REFERENCE CENSUS (D3): every identifier the docs cite must resolve, and
+# the brief's rule list must have no duplicate numbers. Renumbering is a rename,
+# and a rename consumers do not follow is D3 every time.
+if ! bash "$DIR/check-refs.sh"; then
+  echo "REFS CHECK: FAIL"
+  echo "GATE: FAIL"
+  exit 1
+fi
+
 if command -v cygpath >/dev/null 2>&1; then
   URL="file:///$(cygpath -m "$HTML")"
   PROFILE="$(cygpath -w "$TMP/dl-profile")"

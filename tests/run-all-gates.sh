@@ -36,7 +36,7 @@ PASSED=""
 DL_OUT=$(bash "$DIR/run-data-layer.sh" 2>&1)
 DL_RC=$?
 DL_VERDICT=$(printf '%s\n' "$DL_OUT" | grep -oE 'GATE: (PASS|FAIL)' | tail -1)
-printf '%s\n' "$DL_OUT" | grep -E 'gate-script census|residue|egress:|assertions:|SUMMARY' || true
+printf '%s\n' "$DL_OUT" | grep -E 'gate-script census|residue|egress:|refs:|assertions:|SUMMARY' || true
 if [ -z "$DL_VERDICT" ]; then
   echo "  data-layer          : FAIL - produced NO VERDICT (rc=$DL_RC)"
   printf '%s\n' "$DL_OUT" | tail -5 | sed 's/^/      /'

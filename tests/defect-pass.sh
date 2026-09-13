@@ -26,28 +26,35 @@ cd "$(dirname "$0")/.."
 
 TMP="tests/.tmp"
 mkdir -p "$TMP"
-cp app.js "$TMP/app.js.orig"
-cp index.html "$TMP/index.html.orig"
+# EVERY mutated file is backed up by COPY and restored by COPY, verified by hash.
+# NEVER `git checkout --` : that restores from HEAD, so it silently discards
+# UNCOMMITTED work. One row here did exactly that and destroyed edits made
+# minutes earlier. A restore must return the file to what it was, not to what
+# was last committed.
+MUTATED="app.js index.html CLAUDE.md GATES.md"
+for f in $MUTATED; do cp "$f" "$TMP/$(basename "$f").orig"; done
 ORIG_APP=$(sha256sum app.js | cut -d' ' -f1)
 ORIG_IDX=$(sha256sum index.html | cut -d' ' -f1)
 MOVED=""
 
 restore() {
-  cp "$TMP/app.js.orig" app.js
-  cp "$TMP/index.html.orig" index.html
+  local f bad=""
+  for f in $MUTATED; do
+    cp "$TMP/$(basename "$f").orig" "$f"
+    cmp -s "$TMP/$(basename "$f").orig" "$f" || bad="$bad $f"
+  done
   [ -z "$MOVED" ] || { mv "$MOVED" tests/capture-outcome-gate.ps1 2>/dev/null; MOVED=""; }
-  local a i
-  a=$(sha256sum app.js | cut -d' ' -f1); i=$(sha256sum index.html | cut -d' ' -f1)
-  [ "$a" = "$ORIG_APP" ] && [ "$i" = "$ORIG_IDX" ] || { echo "!! RESTORE FAILED -- check git status before doing anything else"; return 9; }
+  [ -z "$bad" ] || { echo "!! RESTORE FAILED for:$bad -- check git status before doing anything else"; return 9; }
 }
 trap 'restore >/dev/null 2>&1' EXIT INT TERM
 
 mutate() { # perl-expression, file
+  # The guard compares against the file's OWN backup, so it covers every file in
+  # MUTATED. Keyed to two hardcoded hashes it silently skipped the rest, and a
+  # mutation that failed to apply would have produced a row that proves nothing --
+  # a vacuous gate, which is what HT-D60 Clause 4 is about.
   perl -0pi -e "$1" "$2"
-  local n want
-  n=$(sha256sum "$2" | cut -d' ' -f1)
-  case "$2" in app.js) want="$ORIG_APP" ;; index.html) want="$ORIG_IDX" ;; *) want="" ;; esac
-  [ "$n" != "$want" ] || echo "!! MUTATION DID NOT APPLY (the code moved): $1"
+  cmp -s "$TMP/$(basename "$2").orig" "$2" && echo "!! MUTATION DID NOT APPLY (the text moved): $1"
 }
 run_dl() { timeout 300 bash tests/run-data-layer.sh 2>&1; }
 report() { # name, expected-case-pattern, output
@@ -178,7 +185,31 @@ report "sticker line removed" "ID14" "$(run_dl)"; restore
 mutate "s/issueLabel\(f\.issue\)/(f.issue ? '#' + f.issue : '')/g" app.js
 report "double # in the header" "ID15" "$(run_dl)"; restore
 
+# ---- the cross-reference census: renumbering is a rename (D3) --------------
+# CLAUDE.md and GATES.md are in MUTATED, so restore() covers them by copy.
+
+# 28. a duplicate rule number -- the exact break that went unnoticed
+mutate 's/^7\. \*\*Cover price and asking price/3. **Cover price and asking price/m' CLAUDE.md
+report "duplicate rule number" "DUPLICATE" "$(run_dl)"; restore
+
+# 29. a citation to a rule that does not exist.
+#
+# A LIMIT OF THIS GATE, not a detail. The break that prompted it was "rules 3-5"
+# pointing at the WRONG rules after a renumber -- and 3, 4 and 5 all still EXIST,
+# so RESOLUTION ALONE CANNOT SEE IT. The first version of this row planted exactly
+# that and the gate PASSED, which is why it is written this way instead.
+#
+# What the census does catch: an unresolvable citation, and a duplicated or gapped
+# rule list. The original break is caught by the NUMBERING half (row 28), which is
+# what was inconsistent at the time. A citation that resolves to the wrong thing,
+# while the list is consistent, is beyond a mechanical check -- stated here rather
+# than left for someone to assume otherwise (HT-D60 Clause 2).
+mutate 's/brief rules 3, 4 and 7/brief rules 3, 4 and 77/' GATES.md
+report "citation to a nonexistent rule" "not a rule in the brief" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
-echo "restored: app.js $(sha256sum app.js | cut -c1-12) (was ${ORIG_APP:0:12}) · index.html $(sha256sum index.html | cut -c1-12) (was ${ORIG_IDX:0:12})"
+for f in $MUTATED; do
+  printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"
+done
 echo "git status (expect nothing but untracked tests/.tmp):"
 git status --short
