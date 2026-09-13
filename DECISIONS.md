@@ -109,6 +109,17 @@ Ruled **before** R2 is pre-registered, so the slice is built on it rather than d
 
 **What this does not settle:** the rules themselves (which articles, what happens to `#`, whether the publisher enters the query), and whether a query survives into any record. Those are R2's forks; this ruling fixes their **shape** — two objects, one derived from the other, the derivation inspectable.
 
+### Amendment — the rules, measured rather than assumed (2026-09-13)
+
+D4 fixed the shape and left the rules open. **The GCD probe (2026-09-12) measured them**, and they are adopted **now**, for **any catalog search** — including eBay's title filter — rather than waiting for R2a:
+
+- **Drop the leading article.** `Amazing Spider-Man` → 322 matches; `the AMAZING SPIDER-MAN` → 146, a *different and worse* set whose top hit was *"Adventures in Reading Starring the Amazing Spider-Man"*.
+- **Never append the issue number to a series query.** `the AMAZING SPIDER-MAN 151` → **0 results**. The issue is a separate lookup, not part of the series name.
+- **Case is free.** `AMAZING` / `amazing` / `Amazing` are identical to the catalog.
+- **The publisher RANKS candidates; it never enters the query string.** It is not part of the catalog's series name, so including it narrows to nothing.
+
+**And Fork E, ruled:** a **canonical identity is `(source, series id, issue index)`** plus the **as-printed reading kept beside it**. Two objects, per this entry — the identity names a row in someone else's catalog, the reading is what the cover said, and neither is ever rewritten into the other.
+
 ## D2 — Identification: the model reads the cover, the human confirms it (R1, 2026-09-12)
 
 Forks **A1, B1, C1, D1, E1, F1, G1** ruled as recommended. Two of them carry a note that belongs in the record rather than in a commit message.
@@ -180,4 +191,26 @@ Found on the **first device capture**: the confirmed header rendered `STAR WARS 
 
 ### What R1 does not do
 
-It does not price, grade, save, or match a reading to a PriceCharting product. The product match is R2, and it is blocked on a live search probe that only the subscriber can run (D1's key handling; HT-D45's precedent that a vendor's own docs described a payload their endpoint rejects).
+It does not price, grade, save, or match a reading to any catalog. **Superseded detail (2026-09-12):** this entry originally said the match was blocked on a PriceCharting probe. That probe was **withdrawn** and PriceCharting deferred; the match is now R2a (GCD), itself deferred by D6, and price is R2b.
+
+## D5 — A filter that does not filter looks exactly like success (governance, 2026-09-13)
+
+Doc-only, general, and binding on **every future data source**.
+
+**The finding.** GCD's API **ignores query parameters**. `?name=`, `?search=`, `?name__icontains=` and `?q=` each return **HTTP 200**, well-formed JSON, and the **full unfiltered count** — 232,776 every time. Nothing errors, nothing warns, and the first page of results looks entirely plausible. A client built on any of them would quietly search the whole catalog forever.
+
+**The rule.** **Any source integration must prove its filter NARROWS — not merely that the call returns 200.** The gate asserts that a filtered call returns **fewer** results than the unfiltered one, and where possible that a known match is present and a known non-match is absent. Where the working search is a path form, the gate matches **the path shape**, not the status code.
+
+**Family.** This is D3 one layer out. There, a contract and its consumer disagreed while both passed their own assertions; here, a client and a server disagree about what a parameter *means*, and the server's success code hides it. The defence is identical: **assert the property, never the proxy for it.**
+
+## D6 — No standing infrastructure before the table (Fork A ruled A5, 2026-09-13)
+
+**R2a is deferred; R2b is built first.** The reasoning is recorded because it will be re-litigated the next time something is easier with a server:
+
+- A proxy for GCD would be **the first infrastructure in either project that must exist and stay up** — a thing to deploy, watch and pay for, in a codebase whose whole posture is a static page and the user's own keys.
+- It would **see every lookup**, against a README that promises no telemetry and data staying on the device.
+- **Neither cost is worth paying for a tool that has not yet been used at a table.**
+
+**When canonical identity is actually needed, A1 is the named path** — a credential-free, read-only, caching proxy. Two things are decided **then**, not now: **logging off by design, or the promise reworded**; and whether a data dump can serve instead of a live call.
+
+**What this does not forbid:** the metering server D1 anticipates for a paid credential. That is a different server for a different reason, and D1's bright line still governs it.

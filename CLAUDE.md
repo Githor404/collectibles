@@ -10,7 +10,7 @@ Structure and discipline are ported from HealthTracker (`../healthtracker`). The
 
 **R1 is a milestone, not a release: there is no price in this build.** It stops at the identity, saves nothing, and says so where the result is. The port's infrastructure and gates are D1 / `GATES.md`.
 
-**R2 is re-scoped into two slices** (2026-09-12): **R2a** — canonical identity via the Grand Comics Database (free, official) — is **pre-registered with its forks open** in `GATES.md`, and its central fork is that **GCD sends no CORS headers, so the page cannot call it directly**. **R2b** — price via eBay sold comps through an Apify scraper — is **recorded but not pre-registered**. PriceCharting is deferred (see Data sources).
+**R2 is two slices, and R2b goes first** (ruled 2026-09-13). **R2a** — canonical identity via the Grand Comics Database — is **ruled and deferred (D6)**: GCD sends no CORS headers, and the proxy that would fix it is the first infrastructure in either project that must exist and stay up, seeing every lookup against a no-telemetry promise. **R2b** — price via eBay sold comps through an Apify scraper — is being pre-registered now; Apify **is** callable from the page. PriceCharting stays deferred (see Data sources). **D4's query rules are adopted now for any catalog search**, eBay's title filter included.
 
 ## Domain rules (from the brief that opened this repo, 2026-09-11)
 

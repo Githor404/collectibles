@@ -333,7 +333,19 @@ Grade and price; records and schema v2; the matcher and any corpus; the candidat
 
 ---
 
-## R2a — Canonical identity via the Grand Comics Database — PRE-REGISTERED, FORKS OPEN (received 2026-09-12; NOT built)
+## R2a — Canonical identity via the Grand Comics Database — RULED AND DEFERRED (2026-09-13; NOT built)
+
+**Ruled 2026-09-13. Fork A → A5: defer R2a, build R2b first.**
+
+> A1 would be **the first infrastructure in either project that must exist and stay up**, and it would see every lookup against a README that promises no telemetry. **Not a cost worth paying for a tool that has not been used at a table yet.**
+
+**A1 is the named path for when canonical identity is actually needed** — and when it is built, the proxy means either **logging off by design or the promise reworded**, decided at that point rather than assumed away now.
+
+**Ruled with it:** **B1** (query rules — now adopted immediately for any catalog search, see D4's amendment), **C1** (candidates ranked by country → year → publisher on the existing confirm surface), **D1** (shared descriptors become variant candidates, never a guess), **F1** (corroborate, never auto-correct), **G1** (one shared surface with R2b). **Fork E ruled:** a canonical identity is **`(source, series id, issue index)`** plus the as-printed reading beside it — two objects (D4).
+
+**GCD's licence and attribution remain BLOCKING for R2a** and are **not** blocking for R2b. The gates below stand as pre-registered, for the day R2a is built.
+
+### The pre-registration, as written before the deferral
 
 **The re-scope that produced it.** PriceCharting is **withdrawn as R2's dependency**: ~$600/year for *modelled current values, no sold comps, no history* is not a commitment to make before the app has been used at a table. It remains a **named provider behind the same seam** for later. Price moves to **R2b** (eBay sold comps via Apify); identity comes first because it is free, official, and grounds D4's query rules in a real catalog instead of an assumed one. **R2a prices nothing.**
 
@@ -413,7 +425,7 @@ The confirmed as-printed reading and its derived query (R1/D4), the query curren
 
 **Defect pass required before any of this is evidence** (HT-D60), with rows at minimum for: the query built as a parameter, the article not dropped, the issue number appended, resolution crawling instead of indexing, corroboration overwriting the reading, and a credential attached to a `none` row.
 
-### R2b — recorded now, NOT pre-registered (stopping for rulings, as instructed)
+### R2b — the constraints as first recorded (superseded by R2b's own pre-registration below)
 
 Constraints to carry in, stated as given:
 
@@ -429,3 +441,79 @@ Open for R2b's own pre-registration: what an eBay sold-search string looks like 
 ### What this pre-registration does not settle
 
 Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candidates; whether a resolved identity persists (schema v2 is still unwritten); **GCD's licence and attribution requirements for displaying its data** — not yet checked, and it must be before anything ships; GCD's rate limits, which advertise no headers; and everything in R2b.
+
+*(Fork A was ruled A5 on 2026-09-13 — see the ruling log at the top of this section. GCD's licence remains blocking for R2a only.)*
+
+---
+
+## R2b — Price via eBay sold comps — PRE-REGISTERED, FORKS OPEN (received 2026-09-13; NOT built)
+
+**What it is for:** the number that makes the triage a decision — *"N recent solds at $X–$Y, they're asking $Z, you'd grade it W."* **Actual sales, not guide values.** It is the first slice that prices anything.
+
+### Verified against Apify's public API, 2026-09-13
+
+| probe | result |
+|---|---|
+| CORS | **`access-control-allow-origin: *`**, methods `GET, POST`, `Authorization` permitted — **the page can call it**, unlike GCD |
+| store search `?search=ebay` | **2,532 actors**; six on page one, including four sold-listings scrapers |
+| candidate actor | **`caffein.dev/ebay-sold-listings`** — "eBay Sold Listings Search". **574,056 runs · 3,139 users · 4.38★ (14 reviews) · last run 2026-09-13** |
+| its cost model | `PAY_PER_EVENT`: **"1000 items (no details)" = $2.00**, "result" = $0.00001, "Actor Start" = $0.00005 |
+| its stated filters | *"date window, result limit, category/subcategory selection (subcategory overrides category), marketplace"* |
+| its stated result fields | sale price + currency, **sale completion timestamp**, listing title, item URL and identifier, **localized condition label plus a mapped numeric condition code**, **category label/ID**, listing type, best-offer-accepted flag, bid count, shipping cost and type, combined total price, images, **seller identifier and feedback metrics**, scrape timestamp |
+| a two-stage alternative | **`blackfalcondata/ebay-sold-listings-scraper`** prices **"Fast item (search-card / sold)"** separately from **"Detailed item (full item page)" at $0.005** |
+| `exampleRunInput` | **a placeholder** (`{"helloWorld": 123}`) — **the actual parameter names are NOT verified** |
+
+**Three findings:**
+
+1. **The ~$2/1,000 estimate is exact, not approximate** — it is a literal charge event, *"1000 items (no details)"*, $2.00. "No details" is the important half: it is the **cheap search-card tier**, and Item Specifics are not in it.
+2. **The two-stage pipeline has a price tag per stage.** One actor already sells exactly that split — cheap search-card events versus $0.005 per full item page. So "how many survivors do we deepen?" is a **cost fork**, not a style question: 200 survivors deepened = $1.00 on top of a $0.20 search.
+3. **Condition arrives as a label plus a numeric code, and category as a label plus ID** — so category 259104 and raw-vs-slab have real fields behind them rather than string-matching hope.
+
+**Not verified, and blocking the build:** the actor's **input parameter names** (the example input is a placeholder), whether **Item Specifics** are exposed at all by any of these actors, whether category can be pinned to **259104**, and what a real comics query actually returns. Those need one paid run against a token — **the subscriber's**, per D1.
+
+### Carried in, as ruled
+
+- **eBay's structured layer:** category **259104** (Comics & Graphic Novels, flat since 2021); **Item Specifics** as the target schema — Series Title, Issue Number, Publisher, Year, Era, **Grade + Certification + Certification Number**, Variant Type, Signed, Reprint.
+- **Specifics live on the listing page, not the results grid.** So the pipeline is **two stages**: a **title-convention filter first** — *"Series #Issue Year Grade Note"*, excluding **lot, bundle, reprint, facsimile, TPB** — then **read specifics per surviving listing** to confirm grade and raw-vs-slab.
+- **Raw and slabbed are two markets. Two groups, never blended.**
+- **Provenance rides on every number:** *"14 recent eBay solds, last 90 days"* — **never "value"**. A comp, a guide figure and a modelled figure are three different claims and must be distinguishable at a glance.
+- **Sold comps are not a ladder.** They are a scatter at whatever grades happened to sell. **Below N comps, say so; never extrapolate.**
+- **Asking price and grade stay human-supplied** (brief rules 3–5) and **never enter a lookup**.
+- **It is a scraper**, grey-zone against eBay's terms, **P(works a year unmaintained) ≈ 0.5** — so it is replaceable **by configuration**: provider table, one `egress()`, exactly as vision is. D1's bright line holds for the Apify token: BYOK for the subscriber and testers, server-held before anyone else.
+- **D4's query rules apply to the title filter** (drop the leading article, never append the issue number, case is free, publisher ranks rather than queries) — and **D5 applies to this source**: prove the filter *narrows*, never that it merely returns 200.
+
+### The forks
+
+**Fork A — which actor, and one-stage or two.** A1 (leaning): `caffein.dev/ebay-sold-listings` for stage one on its $2/1,000 tier, and **stage two deferred until stage one's output is seen** — if titles alone separate raw from slabbed well enough, the $0.005-per-item stage may be unnecessary for most lookups. A2: `blackfalcondata`'s split actor, which sells both stages natively. **Unresolvable without the paid probe.**
+
+**Fork B — the minimum comp count N before any range is shown.** Leaning: **N = 5**, with 3–4 shown as individual sales rather than a range, and below 3 as "too few to compare". Every option needs the real noise level first.
+
+**Fork C — the recency window.** Leaning: **90 days**, stated on every render, with the count. Comics are not fast-moving; a 30-day window may return nothing for mid-grade back issues.
+
+**Fork D — how much filtering happens client-side.** The actor filters by date, limit and category; **the title-convention filter and the lot/reprint exclusions are ours**. Leaning: ours runs client-side over the returned set, so the rules are visible and gateable rather than hidden in a vendor's query string.
+
+**Fork E — condition mapping.** The actor returns a localized condition label and a numeric code; eBay's condition vocabulary is **not** a comics grade. Leaning: **never map a listing condition to a grade.** Use it only to split **raw vs slabbed** (with Certification/Certification Number from specifics when stage two runs), and show the seller's own words verbatim beside each comp.
+
+**Fork F — what the comparison surface shows**, and whether it is the same surface as the identity (G1 ruled one shared surface). Leaning: the confirmed identity, then two groups (raw / slabbed) each with count, window, and the scatter — no average, no midpoint, no "estimated value" anywhere.
+
+### Pre-registered gates
+
+| case | asserts |
+|---|---|
+| R2b-provenance | **every rendered number carries its count and window** — "14 solds · last 90 days" — and the string "value" appears nowhere near a comp |
+| R2b-groups | raw and slabbed render as **two groups**, never combined into one range, and a comp cannot move between them without its certification field changing |
+| R2b-minimum | below N comps the surface **states absence**; no range, no extrapolation, no midpoint — with a fixture holding N−1 comps so the case can actually reach the branch (HT-D60 Clause 4) |
+| R2b-scatter | individual sales with dates and stated grades; **no ladder is synthesised** from them, and no grade is inferred for a comp that lacks one |
+| R2b-filter-narrows | **D5:** the title filter and the category pin each return **fewer** results than the unfiltered call, with a known lot/reprint present in the unfiltered set and absent from the filtered one |
+| R2b-query | the eBay query derives from the **confirmed** reading under D4's rules, is **visible and editable**, and editing it changes what is searched |
+| R2b-no-human-inputs | the **asking price and the grade never enter any lookup** — asserted on the request body, not just the surface |
+| R2b-egress | the Apify call goes through `egress()` on its own provider row; the token rides as the row declares; **no request URL or token reaches any surface, trace or log** (D1) |
+| R2b-cost | the number of billable events per lookup is **bounded and stated** — a lookup cannot silently deepen 500 listings |
+| R2b-provider | PriceCharting and a replacement scraper can each be added as a **table row** with no code change (repointed from D1) |
+| R1/R2a-repointed | every existing case still holds — repointed, not weakened (HT-D60 Clause 3) |
+
+**Defect pass required** (HT-D60), with rows at minimum for: provenance stripped from a rendered number, raw and slabbed blended, a range shown below N, a synthesised ladder, a filter that does not narrow, the grade or asking price entering the request body, and the token reaching a surface.
+
+### What this pre-registration does not settle
+
+The actor's real input schema and output for a comics query (needs the paid probe); whether Item Specifics are reachable at all through any of these actors; N, the window, and the deepening budget, all of which want real noise data; eBay's terms position beyond "grey zone, personal tool"; and whether comps persist into any record — schema v2 is still unwritten.
