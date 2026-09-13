@@ -170,6 +170,46 @@ That second row is the point of the both-directions rule: a refusal that killed 
 
 ---
 
+### Device pass — the first two captures (2026-09-12)
+
+Reported from the device against the deployed build. **This is the first evidence that the contract survives a real model** — every gate above stubs the call, which is the limit those gates state about themselves.
+
+| capture | reply | what it establishes |
+|---|---|---|
+| **1** — `STAR WARS #2 · MARVEL · $1.00 · markers: newsstand` | correct on every field | identification correct **including publisher**; **the printed cover price survived**, which is the half of R1.1's sticker rule an over-eager refusal would have killed; and the **newsstand marker was read off the barcode box**, which had been rated a coin flip |
+| **2** — `the AMAZING SPIDER-MAN #151 · MARVEL COMICS GROUP · DEC · 25¢ · markers: none seen` (~2 s) | correct | **the absence contract working where guessing was tempting** — a 1975 book predates the direct-market box, and the reply said *nothing* rather than defaulting to `newsstand`; and **`DEC` stayed as printed**, not normalised to "December 1975" (Fork B1 holding) |
+
+Capture 1 is the same book **PriceCharting's own photo appraiser identified as "Lady Death: Rules Vol. 2 (2019)"** — the failure this slice's identity-first design exists to prevent, measured against the tool that produces it.
+
+**Still unmeasured after two captures:** the refusal counter (nothing has been volunteered yet), and **field-level** absence — capture 2 exercised absence on `markers`, not on a field that was illegible.
+
+**One bug, found here and fixed as R1.2 below:** the confirmed header rendered `STAR WARS ##2`. The model returns the issue as printed, so capture 1 gave `#2` and the header prepended a second; capture 2 gave a bare `151` and rendered correctly. **Intermittent by the model's output form** — which is what makes render-time normalisation the fix rather than a parser rule.
+
+### R1.2 — exactly one `#`, whatever arrives (D2 amendment, 2026-09-12)
+
+**Fixed at render, not at parse:** `issueLabel()` collapses any run of leading hashes to one and adds one when absent, on the draft header **and** the confirmed header. The parser is untouched — the field keeps what was printed (Fork B1).
+
+| case | asserts |
+|---|---|
+| **ID15** | an issue arriving as `#2` renders **exactly one** `#` in the draft header, and in the **confirmed** header — the surface the bug was reported from; a bare `1` still **gains** one (control); `##2` collapses to one; **the field still shows what the model sent**, so the normalisation is display-only and never rewrites the reading; and the derived query is untouched |
+
+**Defect pass:** restoring the unconditional prepend fails `ID15` **by name** — the device bug, reproduced. **27 rows now, every one failing, each naming its own case.**
+
+**Result: `SUITE: PASS (2 of 2)`, 305/305 assertions, pinned 299 → 305 (+6).**
+
+**A correction to my own first version of this gate.** It searched the whole draft for `##` and failed — because the issue **input** legitimately renders `value="##2"`, the field keeping what was printed. The assertion was measuring the document when the claim was about the header. It now reads the header element, and the field's raw value is asserted **in the opposite direction** in the same case. *The gate was wrong, not the fix* — HT-D60 Clause 4 one level out: an assertion that can fail for a reason unrelated to the property it names.
+
+**An unexplained flake, recorded rather than smoothed over.** One run produced **no SUMMARY at all** — "the suite did not finish" — with no failing assertion and no uncaught-exception line. The same suite then ran clean **nine times** (five at the 60 s virtual-time budget, three at 180 s, and the suite run above). I raised the budget on the hypothesis that the grown suite was exhausting it; **the evidence refuted that and the change was reverted**. What is established: the runner treated it as a **loud FAIL**, never a silent pass — the property HT-D56 exists to protect. What is **not** established is the cause. Recorded so that a second occurrence is a second data point rather than a surprise.
+
+### Carried forward to R2 — as-printed reading vs catalog spelling (received 2026-09-12; NOT pre-registered)
+
+Capture 2's derived query reads **`the AMAZING SPIDER-MAN 151`**. That is faithful to the cover; PriceCharting almost certainly catalogs the book as *Amazing Spider-Man #151*, without the leading "the". **The as-printed reading and the catalog's spelling are different objects, and something has to normalise between them.** Expect that fork in R2's pre-registration.
+
+Two consequences already visible, recorded so the fork is built on them:
+
+- **The query inherits the model's variance in the `#`.** Capture 1 produced `STAR WARS #2` (issue `#2`); capture 2 produced `the AMAZING SPIDER-MAN 151` (issue `151`). **R1.2 normalises the DISPLAY only, deliberately** — what the query should look like is R2's to rule, and normalising it now would be guessing at a search whose behaviour is still unverified.
+- **Whatever normalises must not overwrite the reading.** The as-printed fields are what the human confirmed; a catalog form is a **derived** query, not a correction of the cover (the same separation D2 draws between `ai` originals and accepted values).
+
 ### Carried forward to the pricing slice — the ASKING PRICE (received 2026-09-12; NOT pre-registered)
 
 Recorded here so the pricing slice is built on it rather than discovering it. The brief's domain rules 3–5 carry the binding form.

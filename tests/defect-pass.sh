@@ -173,6 +173,11 @@ report "refusal swallows cover price" "ID14|ID3" "$(run_dl)"; restore
 mutate 's/\x27- "cover_price" is the price PRINTED[\s\S]*?anyone is asking for the book\.\\n\x27 \+\n//' app.js
 report "sticker line removed" "ID14" "$(run_dl)"; restore
 
+# 27. the header prepends a # to an issue that already carries one -- the bug the
+#     first device capture reported, as "STAR WARS ##2" (R1.2)
+mutate "s/issueLabel\(f\.issue\)/(f.issue ? '#' + f.issue : '')/g" app.js
+report "double # in the header" "ID15" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 echo "restored: app.js $(sha256sum app.js | cut -c1-12) (was ${ORIG_APP:0:12}) · index.html $(sha256sum index.html | cut -c1-12) (was ${ORIG_IDX:0:12})"
 echo "git status (expect nothing but untracked tests/.tmp):"

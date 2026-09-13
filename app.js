@@ -1346,9 +1346,18 @@ function renderConfirmQuery() {
 // IDENTITY FIRST (D2, and HT-R30's rule): the question is what this IS. There is
 // no grade control and no market value anywhere in here -- the cover price is
 // present because it is PRINTED ON THE COVER, and it is labelled as such.
+// R1.2: the issue is stored AS PRINTED (D2 Fork B1), so a cover that prints "#2"
+// comes back as "#2". The header adds a # for the covers that print a bare "2" --
+// and must not add a second one. Reported from the first device capture as
+// "STAR WARS ##2"; the search string was right, because it never prepends.
+// Exactly one leading #, whatever arrives.
+function issueLabel(issue) {
+  const s = String(issue == null ? '' : issue).trim();
+  return s ? s.replace(/^#*/, '#') : '';
+}
 function renderIdentityHTML(v) {
   const f = v.fields;
-  const head = [f.title || 'Title not legible', f.issue ? '#' + f.issue : ''].filter(Boolean).join(' ');
+  const head = [f.title || 'Title not legible', issueLabel(f.issue)].filter(Boolean).join(' ');
   const sub = [f.publisher, f.cover_date, f.cover_price].filter(Boolean).join(' · ');
   const rows = ID_FIELDS.map(function (spec) {
     const val = f[spec.key];
@@ -1401,7 +1410,7 @@ function renderConfirmed() {
   if (!el) return;
   if (!CONFIRMED) { el.innerHTML = ''; return; }
   const f = CONFIRMED.fields;
-  const head = [f.title, f.issue ? '#' + f.issue : ''].filter(Boolean).join(' ') || '(nothing legible)';
+  const head = [f.title, issueLabel(f.issue)].filter(Boolean).join(' ') || '(nothing legible)';
   const sub = [f.publisher, f.cover_date, f.cover_price].filter(Boolean).join(' · ');
   const marks = CONFIRMED.markers.length ? CONFIRMED.markers.join(', ') : 'none seen';
   el.innerHTML = `<div class="confirmed">` +

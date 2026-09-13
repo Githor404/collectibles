@@ -1327,6 +1327,39 @@ window.setLS({});
   CT.clearConfirmed();
   res(CT.confirmedIdentity() === null && document.getElementById('confirmedBox').innerHTML === '', 'ID9: and Start over clears it');
 
+  // ---- ID15 (R1.2): an issue that ARRIVES with a # renders with exactly one --
+  // From the first device capture: STAR WARS #2 came back with issue "#2" -- as
+  // printed, exactly as the contract asks -- and the header prepended a second,
+  // rendering "STAR WARS ##2". The query was correct, so it was display only.
+  // These read the HEADER ELEMENT, not the whole draft. The issue INPUT
+  // legitimately renders value="##2", because the field keeps what was printed --
+  // a first version of this case searched the document for "##" and failed for
+  // exactly that reason. The measurement was wrong, not the fix.
+  function idHead(h) { var m = /<div class="idhead">([\s\S]*?)<\/div>/.exec(h); return m ? m[1] : '(no header)'; }
+  function cfHead(h) { var m = /<div class="cfhead">([\s\S]*?)<\/div>/.exec(h); return m ? m[1] : '(no header)'; }
+  function draftHTML() { return document.getElementById('captureResult').innerHTML; }
+  CT.captureDiscard(); CT.clearConfirmed();
+  CT.openCaptureResult('{"title":"STAR WARS","issue":"#2","publisher":"MARVEL","cover_price":"$1.00","markers":["newsstand"]}');
+  res(idHead(draftHTML()) === 'STAR WARS #2',
+      'ID15 GATE (R1.2): an issue already carrying a # renders with EXACTLY one in the draft header', idHead(draftHTML()));
+  res(CT.identityQuery(CT.captureResult().value) === 'STAR WARS #2',
+      'ID15: and the search string is untouched by the display rule -- it was already right');
+  CT.captureAccept();
+  res(cfHead(document.getElementById('confirmedBox').innerHTML) === 'Confirmed: STAR WARS #2',
+      'ID15 GATE: and so does the CONFIRMED header -- the surface the bug was reported from',
+      cfHead(document.getElementById('confirmedBox').innerHTML));
+  CT.clearConfirmed();
+  CT.openCaptureResult('{"title":"Daredevil","issue":"1","markers":[]}');
+  res(idHead(draftHTML()) === 'Daredevil #1',
+      'ID15 CONTROL: a bare issue still gets its # -- the fix adds one where it is missing, it does not stop adding');
+  CT.captureDiscard();
+  CT.openCaptureResult('{"title":"X","issue":"##2","markers":[]}');
+  res(idHead(draftHTML()) === 'X #2',
+      'ID15: two leading hashes collapse to one in the header -- the rule is exactly one, whatever arrives', idHead(draftHTML()));
+  res(draftHTML().indexOf('value="##2"') >= 0,
+      'ID15 GATE: and the FIELD still shows what the model sent -- the normalisation is display-only, never a rewrite of the reading');
+  CT.captureDiscard();
+
   // ---- ID10: every field is escaped on the way to both surfaces -------------
   CT.openCaptureResult('{"title":"<img src=x onerror=alert(1)>","issue":"\\"><b>x</b>","markers":["newsstand"]}');
   var h10 = document.getElementById('captureResult').innerHTML;

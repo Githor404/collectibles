@@ -134,6 +134,18 @@ What changed:
 
 **The device test still runs, reframed:** it is evidence about **model behaviour**, not the gate on whether to close the hole. Photograph a stickered book — if the reply leaves the sticker out, the template is working; if it does not, that is a template-hardening finding on the copy-prompt path, where words are the only mechanism there is (HT-D64).
 
+### Amendment — exactly one `#` on the header, whatever arrives (R1.2, 2026-09-12)
+
+Found on the **first device capture**: the confirmed header rendered `STAR WARS ##2`.
+
+**Cause.** The issue is stored **as printed** (Fork B1), so a cover printing `#2` yields `#2` — and both headers prepended a `#` unconditionally. The derived query was unaffected, because it never prepends.
+
+**The second capture is what sharpened it.** That reply returned a bare `151` and rendered `#151` correctly. **The model's output form varies between captures**, so this is not a parser rule — the parser must keep what was printed — but a **display** rule: `issueLabel()` collapses any run of leading hashes to one and adds one when absent. Normalise at render, never at parse.
+
+**Deliberately not changed: the derived query.** It reads the field as printed. What a search string should look like belongs to R2 — capture 2's query reads `the AMAZING SPIDER-MAN 151`, and the catalog almost certainly spells it *Amazing Spider-Man #151*; the as-printed reading and the catalog's spelling are different objects (carried forward in `GATES.md`). Normalising the query now would be guessing at a search whose behaviour is unverified.
+
+**Gated in both directions, with a control:** an arriving `#2` renders one `#`, a bare `1` still *gains* one, and `##2` collapses to one — on the draft header **and** the confirmed header, plus a defect row that reproduces the device bug by restoring the unconditional prepend.
+
 ### What R1 does not do
 
 It does not price, grade, save, or match a reading to a PriceCharting product. The product match is R2, and it is blocked on a live search probe that only the subscriber can run (D1's key handling; HT-D45's precedent that a vendor's own docs described a payload their endpoint rejects).
