@@ -1511,6 +1511,18 @@ function renderBadge() {
   el.textContent = s.message;
   el.style.color = s.ok ? 'var(--good)' : 'var(--warn)';
 }
+// D9: a credential field exists only where a call exists that uses it.
+//
+// The PRICES role keeps all of its machinery -- the provider row, pacing, the
+// `auth: 'none'` server-move proof, the credential store -- but it has NO
+// settings card, because no price lookup is built. An empty input for a
+// provider we are not using is a dead end that sends the person testing off to
+// buy a credential (reported from the device 2026-09-13: "I went looking for
+// how to get a PriceCharting token because the app asked for one").
+//
+// The exception is a token ALREADY SAVED by an earlier build. Removing the card
+// must not STRAND it somewhere it cannot be seen or deleted, so it appears here
+// with a way out -- and only when it exists.
 function renderDataStatus() {
   const el = document.getElementById('dataStatus');
   if (!el || !APP_STATE) return;
@@ -1519,10 +1531,15 @@ function renderDataStatus() {
     ['schema version', APP_STATE.version],
     ['load source',    APP_SOURCE],
     ['vision key',     credConfigured('vision') ? 'saved (not in your data)' : 'none'],
-    ['price token',    credConfigured('prices') ? 'saved (not in your data)' : 'none'],
   ];
-  el.innerHTML = rows.map(([k, v]) =>
+  let html = rows.map(([k, v]) =>
     `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join('');
+  if (credConfigured('prices')) {
+    html += `<div class="kv"><span class="k">price-guide token</span><span class="v">saved by an earlier build ` +
+      `<button type="button" class="linklike" onclick="credClear('prices')">remove it</button></span></div>` +
+      `<div class="note">No price lookup is built, so nothing uses this token. It is shown only so you can delete it.</div>`;
+  }
+  el.innerHTML = html;
 }
 function refresh() {
   renderBadge(); renderDataStatus();

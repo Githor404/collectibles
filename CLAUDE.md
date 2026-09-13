@@ -54,7 +54,7 @@ Structure and discipline are ported from HealthTracker (`../healthtracker`). The
 
 ## Credentials (D1)
 
-BYOK: the user's Grok key and PriceCharting token, each in its own `localStorage` key, **outside the state object**, never exported, never logged, egress only on explicit action. **This does not scale.** Before the token runs in any browser whose user is not its subscriber, a server must hold it and meter calls. The provider table plus the single `egress()` function make that a configuration change.
+BYOK: each credential in its own `localStorage` key, **outside the state object**, never exported, never logged, egress only on explicit action. **Only the vision key has a settings field** — D9: a credential field exists only where a call exists that uses it, so the deferred price provider keeps its machinery and offers no input. A token saved by an earlier build appears in Storage with a way to delete it, and only when it exists. **This does not scale.** Before the token runs in any browser whose user is not its subscriber, a server must hold it and meter calls. The provider table plus the single `egress()` function make that a configuration change.
 
 ## Architecture constraints
 

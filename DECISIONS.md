@@ -221,6 +221,16 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 
 **What this does not forbid:** the metering server D1 anticipates for a paid credential. That is a different server for a different reason, and D1's bright line still governs it.
 
+## D9 — A credential field exists only where a call exists that uses it (2026-09-13)
+
+**Reported from the device:** *"I went looking for how to get a PriceCharting token because the app asked for one."* The shipped Settings carried a price-guide token field for a provider **D6 had deferred and R2b had replaced** — an empty input that sent the person testing off to buy a ~$600/year subscription nothing in the app would have called.
+
+**The rule.** A settings field for a credential ships **when, and only when, a call exists that uses it**. Machinery may land first — the provider row, pacing, the `auth: 'none'` server-move proof, the credential store — and **none of that needs a surface**. An input is a request; an unbuilt thing should **say so**, not offer one (D3's seam, applied to UI).
+
+**The exception, because removal has its own failure mode:** a credential **already saved by an earlier build** must not be **stranded** where it cannot be seen or deleted. It appears in Storage, **with a way to remove it, and only when it exists** — an exit, never an entrance. Gated in both directions, plus the token itself never printing.
+
+**What was removed, and what was not.** The prices Settings card is gone; the prices **role keeps every piece of its machinery**, which the gates still exercise — pacing at 1 call/s, redaction of an echoing provider, and the `auth: 'none'` proof that the metering server of D1 is a table edit. **The capability is intact; only the invitation is gone.**
+
 ## D7 — Never map a marketplace condition to a collectors' grade (2026-09-13)
 
 **A rule, not a slice parameter.** eBay's condition field is a generic marketplace vocabulary — **Brand New / Like New / Very Good / Good / Acceptable** — that was never built for comics, and the collector community said so when eBay imposed it. **Mapping "Very Good" to VG 4.0 would be a false translation between two scales that share words and mean different things.**

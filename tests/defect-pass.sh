@@ -185,6 +185,12 @@ report "sticker line removed" "ID14" "$(run_dl)"; restore
 mutate "s/issueLabel\(f\.issue\)/(f.issue ? '#' + f.issue : '')/g" app.js
 report "double # in the header" "ID15" "$(run_dl)"; restore
 
+# ---- D9: no credential field without a call behind it ----------------------
+
+# 30. the deferred provider's settings card put back
+mutate 's{<div class="card" data-setting="vision">}{<div class="card" data-setting="prices"><details><summary>Price-guide token (PriceCharting)</summary><div id="credBox-prices"></div></details></div>\n      <div class="card" data-setting="vision">}' index.html
+report "deferred provider's field restored" "D9" "$(run_dl)"; restore
+
 # ---- the cross-reference census: renumbering is a rename (D3) --------------
 # CLAUDE.md and GATES.md are in MUTATED, so restore() covers them by copy.
 

@@ -188,6 +188,22 @@ That second row is the point of the both-directions rule: a refusal that killed 
 
 ---
 
+### D9 — the deferred provider's credential field, removed (2026-09-13)
+
+**Reported from the device:** *"I went looking for how to get a PriceCharting token because the app asked for one."* The shipped Settings still carried a price-guide token field for a provider **D6 deferred and R2b replaced** — an empty input inviting a ~$600/year purchase that nothing in the app would have called.
+
+**Removed, and the removal is what is gated.** The prices **machinery is untouched** — provider row, 1 call/s pacing, redaction, the `auth: 'none'` proof that D1's metering server is a table edit — and all of it is still exercised by the suite. Only the invitation is gone.
+
+**The failure mode of removing it, handled:** a token **already saved by an earlier build** must not be stranded where it cannot be seen or deleted. It now appears in Storage **with a remove control, and only when it exists** — an exit, never an entrance — and the line never prints the token.
+
+| case | asserts |
+|---|---|
+| **SH1 (D9)** | the shipped shell carries **exactly one** credential field, the vision key; the shell **names no deferred provider at all**; with no token saved Storage says nothing about one; a token saved by an earlier build **is shown with a way to delete it**; and that line never prints the token |
+
+**Defect pass:** restoring the deferred provider's card fails **two** D9 assertions by name, naming the offending ids (`credBox-prices,credBox-vision`) — 308/310, `GATE: FAIL`. **30 rows now, every one failing, each naming its own case.**
+
+**Count: 305 → 310** (+5), re-pinned in the same commit. Suite `SUITE: PASS (2 of 2)`.
+
 ### Device pass — the first two captures (2026-09-12)
 
 Reported from the device against the deployed build. **This is the first evidence that the contract survives a real model** — every gate above stubs the call, which is the limit those gates state about themselves.

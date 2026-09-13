@@ -950,9 +950,33 @@ window.setLS({});
         'SH1 (HT-D51): the result and the message live IN the outcome modal body');
     res(!!foot && !body.contains(foot) && D.getElementById('captureOutcome').contains(foot),
         'SH1 (HT-D51): the footer is OUTSIDE the scrolling body, inside the modal');
+    // REPOINTED (HT-D60 Clause 3), and the removal is now the property. D9: a
+    // credential field exists only where a call exists that uses it, so the
+    // shipped shell carries the VISION card and no other -- the price-guide
+    // field sent the person testing off to buy a token nothing would have used.
     var sp = D.getElementById('settingsPanel');
-    res(!!sp && sp.contains(D.getElementById('credBox-vision')) && sp.contains(D.getElementById('credBox-prices')) && !!D.getElementById('replyBox'),
-        'SH1: both credential cards live in Settings, and the reply box exists');
+    var credBoxes = Array.prototype.map.call(D.querySelectorAll('[id^="credBox-"]'), function (e) { return e.id; });
+    res(!!sp && sp.contains(D.getElementById('credBox-vision')) && !!D.getElementById('replyBox'),
+        'SH1: the vision credential card lives in Settings, and the reply box exists');
+    res(credBoxes.length === 1 && credBoxes[0] === 'credBox-vision',
+        'SH1 GATE (D9): the shipped shell carries EXACTLY ONE credential field, the vision key -- no input for a provider with no call behind it',
+        credBoxes.join(','));
+    res(D.body.innerHTML.indexOf('PriceCharting') < 0,
+        'SH1 GATE (D9): and the shell names no deferred provider at all -- nothing invites a credential that nothing would use');
+    // A token saved by an EARLIER build must not be stranded: it appears in
+    // Storage with a way out, and only when it exists.
+    W.CT.credClear('prices');
+    W.CT.refresh();
+    res(D.getElementById('dataStatus').innerHTML.indexOf('price-guide token') < 0,
+        'SH1 (D9): with no price token saved, Storage says nothing about one');
+    W.CT.credSave('prices', 'pricecharting', 'PCTOKEN-SECRET-0123456789abcdef012345678');
+    W.CT.refresh();
+    var ds = D.getElementById('dataStatus').innerHTML;
+    res(ds.indexOf('price-guide token') >= 0 && ds.indexOf("credClear('prices')") >= 0,
+        'SH1 GATE (D9): a token saved by an earlier build is SHOWN with a way to delete it -- removing the field must not strand a credential');
+    res(ds.indexOf('PCTOKEN-SECRET') < 0, 'SH1 (D1): and the stranded-token line never prints the token itself');
+    W.CT.credClear('prices');
+    W.CT.refresh();
     // REPOINTED (HT-D60 Clause 3): the shipped shell now carries R1's contract.
     res(W.CT.visionReady() === true && W.CT.IDENTITY_CONTRACT.version === 1,
         'SH1 (R1): the SHIPPED shell carries the identification contract, at version 1');
