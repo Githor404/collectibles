@@ -1231,7 +1231,7 @@ const ID_MARKERS = ['newsstand', 'direct', 'foil', 'facsimile', 'variant-cover',
 // -- a sticker on the bag, a board behind the stack -- so a model can read it off
 // the picture and hand back PRICING data through the IDENTIFICATION path. The
 // asking price is attested by the person holding the book, never perceived, and
-// the two must never be conflated in the record (brief rules 3-5).
+// the two must never be conflated in the record (brief rules 3, 4 and 7).
 //
 // The failure this closes is SILENT: a sticker price sitting in `cover_price`
 // looks exactly like a printed one, nothing downstream can tell them apart, and

@@ -220,13 +220,13 @@ Two facts the slice is built on:
 
 ### Carried forward to the pricing slice — the ASKING PRICE (received 2026-09-12; NOT pre-registered)
 
-Recorded here so the pricing slice is built on it rather than discovering it. The brief's domain rules 3–5 carry the binding form.
+Recorded here so the pricing slice is built on it rather than discovering it. The brief's domain rules 3, 4 and 7 carry the binding form.
 
 - **The asking price needs a home, beside the grade**, as the second thing only the user can supply: a sticker, a sign, a verbal quote, or a **bulk rate** ("3 for $10"). Attested, never perceived.
 - **The output is the comparison** — *"raw modelled at $X, they're asking $Y"* — not a valuation with the comparison left to the user's head.
 - **Cover price and asking price are never conflated**, in the record or on a surface: one is printed on the book and read from the photo (identification, `cover_price`); the other is the seller's number, attested (pricing).
 
-**A hazard this exposes in the contract already shipped (R1/D2), flagged rather than silently patched.** At a flea market the *asking* price is very often **visible in the photo** — a sticker on the bag, a price written on a board behind the stack. The identification template currently says `cover_price` is "the price printed on the cover", and a model reading a $5 sticker on a 1988 book whose cover says $1.00 would be **supplying pricing data through the identification path**, which is exactly the conflation rule 5 forbids. Two candidate repairs, neither taken without a ruling:
+**A hazard this exposes in the contract already shipped (R1/D2), flagged rather than silently patched.** At a flea market the *asking* price is very often **visible in the photo** — a sticker on the bag, a price written on a board behind the stack. The identification template currently says `cover_price` is "the price printed on the cover", and a model reading a $5 sticker on a 1988 book whose cover says $1.00 would be **supplying pricing data through the identification path**, which is exactly the conflation rule 7 forbids. Two candidate repairs, neither taken without a ruling:
 
 1. **A one-line template amendment plus `asking_price` on the refusal list** (a small R1.1): the template says a price on a sticker, bag, board or label is **not** the cover price and must be left out, and a model that volunteers an asking price is refused and counted, like a value or a grade. Cheap, and it closes the hole at the perception layer where it opens.
 2. **Leave R1 as it is** and handle the distinction entirely in the pricing slice's own surface. Cheaper now, but it accepts that a sticker price can enter the record labelled `cover_price`, where nothing downstream can tell it from a printed one.
@@ -418,7 +418,7 @@ The confirmed as-printed reading and its derived query (R1/D4), the query curren
 | R2a-variants | descriptors sharing a number become variant candidates; none is auto-selected |
 | R2a-candidates | same-name series are presented with year, publisher and country; the human picks; "none of these" reaches a stated unresolved path |
 | R2a-corroborate | a disagreement between GCD's `price` and the confirmed `cover_price` is **surfaced**, and **the reading is never overwritten** (D3/D4) |
-| R2a-egress | the GCD call goes through `egress()` on its own provider row with `auth: 'none'`; **no credential is attached**; and **the asking price and the grade never enter any lookup** (brief rules 3–5) |
+| R2a-egress | the GCD call goes through `egress()` on its own provider row with `auth: 'none'`; **no credential is attached**; and **the asking price and the grade never enter any lookup** (brief rules 3, 4 and 7) |
 | R2a-absence | no match states absence; no identity is fabricated, and no candidate is invented from a partial match |
 | R2a-provider | PriceCharting can still be added as a **table row** with no code change (repointed from D1's existing case, not weakened) |
 | R1-repointed | every R1/R1.1/R1.2 case still holds with resolution attached — repointed, not weakened (HT-D60 Clause 3) |
@@ -432,7 +432,7 @@ Constraints to carry in, stated as given:
 - **It is a scraper, not an API.** It reads public pages, breaks on layout changes, and sits in a grey zone against eBay's terms. Acceptable for a personal tool; **not** a dependency to build a sold product on. **P(works a year unmaintained) ≈ 0.5** — so the seam must make it replaceable **by configuration**: provider table, one egress function, exactly as vision is.
 - **Provenance rides on every number.** *"14 recent eBay solds, last 90 days"* is the label — **never "value"**. A user must be able to tell a **comp** from a **guide figure** from a **modelled figure** at a glance, because they are three different claims.
 - **Sold comps are not grade-ladder data.** They are a scatter of individual sales at whatever grades happened to sell. **Display the scatter with the grades stated, never a ladder** — inventing a ladder from sparse solds is fabrication. **Below N comps, say so; never extrapolate.**
-- **Asking price and grade stay human-supplied** (brief rules 3–5). The triage output is the comparison: *"N recent solds at $X–$Y, they're asking $Z, you'd grade it W."*
+- **Asking price and grade stay human-supplied** (brief rules 3, 4 and 7). The triage output is the comparison: *"N recent solds at $X–$Y, they're asking $Z, you'd grade it W."*
 - **Credentials:** an Apify token is pay-per-use rather than a subscription, but it is **still extractable from a browser**. D1's bright line holds unchanged — BYOK for the subscriber and testers, server-held before anyone else.
 - **Verified 2026-09-12:** Apify's API sends `access-control-allow-origin: *` and permits `Authorization`, so R2b **is** callable from the page (unlike GCD).
 
@@ -471,6 +471,41 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 
 **Not verified, and blocking the build:** the actor's **input parameter names** (the example input is a placeholder), whether **Item Specifics** are exposed at all by any of these actors, whether category can be pinned to **259104**, and what a real comics query actually returns. Those need one paid run against a token — **the subscriber's**, per D1.
 
+### Ruled 2026-09-13 — all six forks as leaned
+
+| fork | ruling |
+|---|---|
+| **A** | **one stage first**, on the $2/1,000 tier. The $0.005-per-item deepening is **deferred until stage one's output is seen** — HT-D65's discipline (measure before tuning), and it makes the first probe cost pennies |
+| **B** | **N = 5** for a range; **3–4 shown as individual sales**; below 3 **says so** |
+| **C** | **90 days**, stated on every render |
+| **D** | filtering is **ours, client-side, visible and gateable** — and **D5 binds the actor's own filters too**: passing `category=259104` must be **proven to have narrowed**, not merely to have returned 200 |
+| **E** | **a rule, not a choice — D7.** Never map an eBay condition to a comics grade |
+| **F** | **a rule, not a choice — D8.** No average, no midpoint, no "estimated value" anywhere |
+
+**A correction to my own framing, recorded rather than dropped.** I offered the actor's 574,056 runs and a run today as *"mild evidence against P≈0.5"*. **It is not.** It is evidence the actor works **now**; the estimate was about **surviving eBay's next layout change**, which those numbers say nothing about. **P≈0.5 stands unchanged**, and the replaceable-by-configuration seam is built on that basis.
+
+### The probe — what to run, and what to paste back
+
+**The token is the subscriber's (D1), so this run is yours.** It settles the three things blocking the build: the actor's **real input parameter names**, what a **comics query actually returns**, and whether **Item Specifics** are reachable at all.
+
+**Setup (no account yet):**
+1. Create a free account at **apify.com**, then open **`apify.com/caffein.dev/ebay-sold-listings`** and press **Try for free** — that opens the actor in the console with its **Input** form, which *is* the schema the payload would not give us (`exampleRunInput` is a placeholder, `{"helloWorld": 123}`).
+2. If the console asks for a payment method before running a store actor, **note that** — it changes how a tester without billing could ever use this.
+
+**The run:** query **`amazing spider-man 151`**, category/subcategory set to **Comics (259104)** *if such a field exists*, date window **90 days**, and **limit ≈ 100 results** — small on purpose, because stage one is all we are testing and the cost is per result.
+
+**Expected cost.** The actor's charge events, read from the API on 2026-09-13: **`Actor Start` $0.00005**, **`result` $0.00001**, and **`1000 items (no details)` $2.00**. How those combine is *not* clear from the payload — which is itself worth knowing — so a 100-result run should land somewhere between a fraction of a cent and about **$0.20**. **Check the run's cost readout and paste it**; that number settles the model.
+
+**Paste back four things:**
+1. **The Input JSON** the console shows for the run (its **parameter names** are what we cannot get any other way).
+2. **Two or three complete result objects**, verbatim — field names and values as returned.
+3. **The run's cost/usage summary.**
+4. **Whether anything resembling Item Specifics** (Grade, Certification, Variant Type, Signed, Reprint) appears in a result, or only in the listing page the result links to.
+
+**Do not paste the token.** Nothing about the run needs it here, and D1's hygiene applies to this transcript as much as to the app.
+
+**One design note that comes out of the probe's own shape:** when the app calls this, the token rides as an **`Authorization` header**, never as a URL parameter — Apify's CORS response permits `Authorization`, and D1 forbids a credential in a request URL after PriceCharting's `t=` lesson.
+
 ### Carried in, as ruled
 
 - **eBay's structured layer:** category **259104** (Comics & Graphic Novels, flat since 2021); **Item Specifics** as the target schema — Series Title, Issue Number, Publisher, Year, Era, **Grade + Certification + Certification Number**, Variant Type, Signed, Reprint.
@@ -478,7 +513,7 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 - **Raw and slabbed are two markets. Two groups, never blended.**
 - **Provenance rides on every number:** *"14 recent eBay solds, last 90 days"* — **never "value"**. A comp, a guide figure and a modelled figure are three different claims and must be distinguishable at a glance.
 - **Sold comps are not a ladder.** They are a scatter at whatever grades happened to sell. **Below N comps, say so; never extrapolate.**
-- **Asking price and grade stay human-supplied** (brief rules 3–5) and **never enter a lookup**.
+- **Asking price and grade stay human-supplied** (brief rules 3, 4 and 7) and **never enter a lookup**.
 - **It is a scraper**, grey-zone against eBay's terms, **P(works a year unmaintained) ≈ 0.5** — so it is replaceable **by configuration**: provider table, one `egress()`, exactly as vision is. D1's bright line holds for the Apify token: BYOK for the subscriber and testers, server-held before anyone else.
 - **D4's query rules apply to the title filter** (drop the leading article, never append the issue number, case is free, publisher ranks rather than queries) — and **D5 applies to this source**: prove the filter *narrows*, never that it merely returns 200.
 

@@ -203,6 +203,12 @@ Doc-only, general, and binding on **every future data source**.
 
 **Family.** This is D3 one layer out. There, a contract and its consumer disagreed while both passed their own assertions; here, a client and a server disagree about what a parameter *means*, and the server's success code hides it. The defence is identical: **assert the property, never the proxy for it.**
 
+### Amendment — it binds a SOURCE'S OWN filters too, not only the ones we invent (2026-09-13)
+
+D5 was written against a query parameter this app constructs. It binds equally to **a filter the source advertises**: if we pass `category=259104` to a scraper that documents category selection, **the gate proves the result set NARROWED** — a known out-of-category item present in the unfiltered call and absent from the filtered one. Not that the call returned 200.
+
+A vendor that silently ignores a documented parameter is exactly GCD's failure wearing a supplier's badge, and it is **more** likely, not less, when the parameter is one of many on a scraper whose upstream layout can change under it.
+
 ## D6 — No standing infrastructure before the table (Fork A ruled A5, 2026-09-13)
 
 **R2a is deferred; R2b is built first.** The reasoning is recorded because it will be re-litigated the next time something is easier with a server:
@@ -214,3 +220,27 @@ Doc-only, general, and binding on **every future data source**.
 **When canonical identity is actually needed, A1 is the named path** — a credential-free, read-only, caching proxy. Two things are decided **then**, not now: **logging off by design, or the promise reworded**; and whether a data dump can serve instead of a live call.
 
 **What this does not forbid:** the metering server D1 anticipates for a paid credential. That is a different server for a different reason, and D1's bright line still governs it.
+
+## D7 — Never map a marketplace condition to a collectors' grade (2026-09-13)
+
+**A rule, not a slice parameter.** eBay's condition field is a generic marketplace vocabulary — **Brand New / Like New / Very Good / Good / Acceptable** — that was never built for comics, and the collector community said so when eBay imposed it. **Mapping "Very Good" to VG 4.0 would be a false translation between two scales that share words and mean different things.**
+
+- The condition label and its numeric code are used **only to split raw from slabbed** (with Certification and Certification Number from Item Specifics when a deepening stage exists).
+- **The seller's own words are shown verbatim**, never restated in grade vocabulary.
+- **No comp is ever assigned a grade the listing did not state**, and a comp without a stated grade stays ungraded rather than being placed on the ladder.
+
+**Family: HealthTracker's ordinal contract (HT-D52).** *When a scale is defined elsewhere, you snap to its points or you do not compute on it at all.* There it forbade averaging Bristol types; here it forbids translating one scale's words into another's numbers. Same refusal, different vocabulary.
+
+**And it is the grade half of brief rule 3:** the grade is the user's to supply. A grade inferred from a marketplace dropdown would be the app guessing exactly what it promised never to guess.
+
+## D8 — A scatter is the claim; a single number derived from it is not (2026-09-13)
+
+**A rule, not a display preference.** Sold comps are individual sales at whatever grades happened to sell. **No average, no midpoint, no "estimated value" — anywhere.**
+
+- What renders is **the scatter**: each sale with its date and its stated grade, grouped raw and slabbed, **never blended** (two markets).
+- **Below N = 5 comps no range is shown at all**; 3–4 render as individual sales; below 3 the surface **says so**.
+- **No ladder is synthesised** from sparse solds, and no grade is interpolated between them.
+
+**Why it is a rule.** A single number derived from a sparse scatter *reads* as a valuation — the one claim this product exists to refuse (brief rules 4 and 7, D2's refusal of model-supplied value). The arithmetic would be easy and the sentence it produces would be false: the data cannot support it, and a user at a table cannot see that from the number alone.
+
+**The honest output stays the comparison:** *"N recent solds at $X–$Y, they're asking $Z, you'd grade it W"* — three stated quantities from three different sources, none of them collapsed into one.
