@@ -19,6 +19,25 @@ Every gate must print a `GATE: PASS` or `GATE: FAIL` line. One that prints neith
 | `GATE: PASS` but exited non-zero | FAIL — the two disagree |
 | `GATE: PASS` and exited 0 | PASS |
 
+## The real numbers — measured, and why a wrong estimate was expensive
+
+| operation | measured |
+|---|---|
+| one suite run (`run-data-layer.sh`) | **~12s** |
+| full 41-row defect pass | **~8.5 min** — ~35s fixed + **~12s per selected row** |
+| a two-row subset (`ROWS=31-32`) | **59s** |
+| `git commit` before a pass | **~10s** |
+
+**These are measurements. Do not re-derive them by feel.** On 2026-09-13 the working figure was *"~250s per row"*, inferred from elapsed times that were in fact a **fixed** cost — `run_dl` was unguarded, so every invocation ran the full suite for all 40 rows whatever `ROWS=` said (see `../GATES.md`). The estimate was wrong by **20×**, and the error was not academic:
+
+- A full pass looked like **2.7 hours**, so it was never run. Thirty rows sat unverified against code that had changed under them — **HT-D60 Clause 4 live in the repo**, which is the one thing the defect pass exists to prevent.
+- Every invocation was sized to "two rows at ~250s", putting each at ~500s against a 580s ceiling. **Two background jobs were killed at that boundary**, and one of those kills is what left stale backups on disk for a later step to trust.
+- Work was batched into long uncommitted stretches to amortise a cost that did not exist: **one commit in six hours**, so hours of work lived only in a working tree that a mutation tool was actively rewriting.
+
+**A wrong cost estimate changed the working pattern, and the working pattern produced the losses.** At the real numbers both of that day's incidents cost minutes: commit first (10s), run the pass (8.5 min), and a clobbered file is one `git checkout HEAD -- <file>` away.
+
+**So: measure a number before letting it shape how you work.** The evidence was on screen all day — 497s, 504s, 494s, 542s, 541s, for 2, 2, **3**, 2, 2 rows. A constant elapsed time with no relationship to the count is a fixed cost, not a per-unit one, and reading it as per-unit is what turned an eight-minute check into an afternoon of avoidance.
+
 ## `run-data-layer.sh` — the harness, plus the static checks that guard it
 
 In order, each failing the whole gate:

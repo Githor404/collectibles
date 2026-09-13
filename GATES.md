@@ -46,6 +46,18 @@ Run everything: `bash tests/run-all-gates.sh`. Defect pass: `bash tests/defect-p
 
 **Corrected model, measured rather than estimated:** ~35s fixed (backups, 40 `report` calls, restore) **+ ~12s per selected row**. A full 41-row pass is **~8.5 minutes**, not the 2.7 hours the wrong model implied.
 
+### The full 41-row pass, run — 2026-09-13
+
+**The first time every row has been run since R2b rewrote the code thirty of them mutate.** It had been skipped all day because the wrong cost model priced it at 2.7 hours. At the real numbers it took **585s**, in two halves — rows 1–20 in 300s, rows 21–41 in 285s — split only to stay clear of the tool's timeout boundary, since row numbering is stable across invocations by design.
+
+**Result: 41 rows, every one `GATE: FAIL` naming its own case. Zero vacuous, zero unnamed, zero `GATE: PASS`, zero restore failures.** `app.js` returned to 105499 bytes; no backup was left behind.
+
+**The specific risk was Clause 4 sitting live in the repo.** Rows 1–30 anchor on `renderConfirmed`, `credTest`, `renderCred`, the `PROVIDERS` table and the brief's rule numbering — every one of which R2b changed. **A mutation whose anchor has moved reports a vacuous `GATE: PASS`**, and three rows did exactly that earlier the same day. None of the thirty had; the worry was sound and the answer is negative.
+
+**One error found, and it was in the CHECKING rather than the pass.** The summary used `grep -cE '^[a-z].*GATE: (PASS|FAIL)'`, which silently drops the single row whose name begins with a capital — `EXIF pin removed`. So the first report listed **19 rows of 20**, and worse, the "a gate that does not gate" count used **the same anchor** and therefore could not have seen a `GATE: PASS` on that row. Re-checked with `^[A-Za-z]`: 20 of 20, row 12 named `CL5 STRUCTURAL (HT-D58)`, count genuinely zero.
+
+**That anchor dropped that row three separate times in one day.** A counting pattern that silently omits a member **is a census that cannot count** — the precise failure the gate-script census exists to prevent, committed in the tool used to check it. The rule the census already states applies to its own summaries: **a check must be able to see every member of the set it claims to cover.**
+
 > **Incident, 2026-09-13 — a restore destroyed uncommitted work for the second time, and the rule written after the first did not prevent it.**
 >
 > After the first incident this repo recorded: *restore by copy, never by `git checkout --`; a restore must return a file to what it was, not to what was last committed.* That rule was followed exactly. The work was still lost.
