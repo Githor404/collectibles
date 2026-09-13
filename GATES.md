@@ -235,7 +235,9 @@ Seed gates for whichever slice takes it: the asking price never enters the ident
 
 ---
 
-### The pre-registration, as it was written before building (kept verbatim)
+### The pre-registration, as it was written before building (kept verbatim, R1)
+<!-- R1's original pre-registration follows; R2a's begins after it. -->
+
 
 **Numbering.** The first slice in this repo: **R1**; its ruling becomes **D2**. D1 carries no R-number because the port was not a slice.
 
@@ -328,3 +330,102 @@ What the answer has to settle: the field names per match, whether issue numbers 
 ### What this pre-registration does not settle
 
 Grade and price; records and schema v2; the matcher and any corpus; the candidate off-ramp's destination (A2 / R2); and whether a wrong identification is ever recorded for calibration (HT-R30 Fork H's shape, which needs a consumer first).
+
+---
+
+## R2a — Canonical identity via the Grand Comics Database — PRE-REGISTERED, FORKS OPEN (received 2026-09-12; NOT built)
+
+**The re-scope that produced it.** PriceCharting is **withdrawn as R2's dependency**: ~$600/year for *modelled current values, no sold comps, no history* is not a commitment to make before the app has been used at a table. It remains a **named provider behind the same seam** for later. Price moves to **R2b** (eBay sold comps via Apify); identity comes first because it is free, official, and grounds D4's query rules in a real catalog instead of an assumed one. **R2a prices nothing.**
+
+### Verified against the live API, 2026-09-12 — and the verification changed the answer
+
+Anonymous, JSON, no key. **Probed, not assumed** (HT-D45's precedent: a vendor's own docs once described a payload its endpoint rejected).
+
+| probe | result |
+|---|---|
+| API root | advertises exactly two endpoints — `series`, `publisher`. **There is no issue list.** |
+| `?name=` · `?search=` · `?name__icontains=` · `?q=` | **silently ignored** — HTTP 200 with the full `count: 232776` every time |
+| `/api/series/name/<name>/?format=json` | **the only working search.** `Amazing Spider-Man` → **322** |
+| leading article | `the AMAZING SPIDER-MAN` → **146**, a *different and worse* set; top hit *"Adventures in Reading Starring the Amazing Spider-Man"* |
+| case | irrelevant — `AMAZING` / `amazing` / `Amazing` all → 322 |
+| issue number appended | `the AMAZING SPIDER-MAN 151` → **0** |
+| series record | `name, country, language, active_issues[], issue_descriptors[], color, dimensions, paper_stock, binding, publishing_format, notes, year_began, year_ended, publisher` |
+| **`issue_descriptors`** | parallel array to `active_issues`: `"1"`, `"2 [Regular Edition]"`, `"2 [British]"` … **967 entries for ASM 1963** |
+| issue record | `series_name` ("The Amazing Spider-Man (1963 series)"), `descriptor`, `number`, `volume`, `variant_name`, `title`, `publication_date`, `key_date`, **`price` ("0.12 USD")**, `page_count`, `editing`, `indicia_publisher`, `brand_emblem`, `isbn`, `barcode`, `rating` |
+| **CORS** | **ABSENT.** No `access-control-allow-origin` on a GET carrying `Origin`; preflight returns `200` with only `Allow: GET, HEAD, OPTIONS` |
+| Apify, for contrast (R2b) | **`access-control-allow-origin: *`**, methods `GET, POST`, `Authorization` permitted |
+
+**Three findings that change the slice:**
+
+1. **The browser cannot call GCD.** This is Fork A, and it arrives at D1's territory from an unexpected direction: **the free, official source needs a server to reach, while the paid scraper is directly callable.**
+2. **Resolution is a lookup, not a crawl.** `issue_descriptors` runs parallel to `active_issues`, so "#151 of the 1963 series" is **one series fetch + one issue fetch by index** — not 967 requests. Feasibility was the thing most at risk, and it holds.
+3. **D4's derivation rules are now measured.** Drop the leading article (322 vs 146, and the 146 are worse); never append the issue number (0); case is free. The as-printed reading *"the AMAZING SPIDER-MAN" + "151"* would find noise or nothing — which is exactly what D4 predicted and what R1's device capture produced.
+
+**A bonus the probe surfaced:** the issue record carries `price` (the printed cover price), `barcode` and `brand_emblem` — so the catalog can **corroborate** R1's reading rather than merely replace it (Fork F).
+
+### Survey — what this composes with
+
+The confirmed as-printed reading and its derived query (R1/D4), the query currently **read-only**; one `egress()` with a provider table carrying roles and auth styles including `none` (D1); the one-door result and the outcome modal's three exclusive states (HT-D51); and no records at all — schema v1 (D2 Fork F1).
+
+### The forks
+
+**Fork A — how the page reaches GCD. THE central one, and it may re-sequence the work.**
+
+- **A1 (recommended): a credential-free, read-only proxy we host** (a Worker/function: forward `GET /api/...` to comics.org, add CORS, cache). **It holds no secret and meters nothing** — D1's bright line is about a *paid-subscription token in a browser*, and this crosses nothing of that. But it is **infrastructure that must exist and stay up**, and it is honest to say that is new posture, not a detail.
+  - **A privacy delta that must be named:** a proxy we run **sees every lookup**. The README promises no telemetry and data staying on the device. Logging must be off by design, and the promise re-worded if it cannot be.
+- **A2: a public CORS proxy.** Rejected — a third party on the identity path, rate-limited, and it sees the same traffic with none of the control.
+- **A3: a different catalog that sends CORS.** Marvel's API needs a public+private key pair hashed per request (a credential in the browser again, Marvel-only coverage); ComicVine needs a key and restricts use. Both are more scope and less catalog.
+- **A4: ship a GCD subset locally.** Their dumps could give a series index offline — but issue resolution still needs the API, so it does not remove A1, only shrinks it.
+- **A5: defer R2a and do R2b first.** eBay needs only the derived query, and **Apify is CORS-open**, so R2b needs no new infrastructure. The cost: identity stays as-printed, and D4's rules stay ungrounded.
+  - **This is the re-sequencing question.** "Do R2a first" was ruled when GCD looked directly callable. It isn't. **A1 buys the identity half at the price of running a service; A5 buys a working price path with no new infrastructure.**
+
+**Fork B — the query derivation rules (D4 said "its own rules"; the probe now says which).**
+- **B1 (recommended):** drop leading articles; **never** append the issue number to the series query; leave case alone; keep the publisher **out** of the query string (it is not part of `name`) and use it to **rank** candidates instead.
+
+**Fork C — candidate disambiguation.** Four series are literally named "The Amazing Spider-Man" (US 1570, US 24842, PH 149585, AU 72382).
+- **C1 (recommended):** rank by country → year → publisher, show `year_began–year_ended · publisher · country` per candidate, and let the human pick — **the same identity-first confirm surface R1 already has**, not a second modal (HT-D51 permits exactly one outcome state).
+
+**Fork D — issue resolution and variants.**
+- **D1 (recommended):** match `issue_descriptors` on the bare `number`; when several descriptors share it (`"2 [Regular Edition]"`, `"2 [British]"`), present them as **variant candidates** rather than guessing. This is where R1's `markers` earn their keep — `price-variant` ↔ `[British]`.
+
+**Fork E — what a canonical identity IS, once resolved.** The GCD **issue id + series id**, kept **beside** the as-printed reading, never replacing it (D3/D4). Whether it persists is bound to F1's "nothing is saved" — still open.
+
+**Fork F — corroboration vs correction.** GCD's `price` against R1's `cover_price`; `barcode`/`brand_emblem` against the newsstand marker.
+- **F1 (recommended): surface disagreement, never auto-correct.** A catalog that silently overwrites what the human confirmed is the wrong-book failure wearing a badge of authority.
+
+**Fork G — shared surface with R2b, or separate?** *(raised as asked)*
+- **G1 (recommended): one surface.** Identity resolves, then comps attach to the resolved identity in the same view. Two confirm surfaces would mean two outcome states, which HT-D51 forbids.
+
+### Pre-registered gates
+
+| case | asserts |
+|---|---|
+| R2a-contract | the call is built as the **path form** `/api/series/name/<name>/`, never as a query parameter — with a case proving a `?name=` build returns the **unfiltered** catalog, because that trap returns HTTP 200 and looks like success |
+| R2a-query | the derived query drops leading articles and excludes the issue number; it is **visible and editable** (D4), and editing it changes what is searched — round-tripped, not merely rendered |
+| R2a-resolve | series → issue by descriptor index: **exactly one series fetch and one issue fetch**, asserted by call count, so a regression into a crawl fails |
+| R2a-variants | descriptors sharing a number become variant candidates; none is auto-selected |
+| R2a-candidates | same-name series are presented with year, publisher and country; the human picks; "none of these" reaches a stated unresolved path |
+| R2a-corroborate | a disagreement between GCD's `price` and the confirmed `cover_price` is **surfaced**, and **the reading is never overwritten** (D3/D4) |
+| R2a-egress | the GCD call goes through `egress()` on its own provider row with `auth: 'none'`; **no credential is attached**; and **the asking price and the grade never enter any lookup** (brief rules 3–5) |
+| R2a-absence | no match states absence; no identity is fabricated, and no candidate is invented from a partial match |
+| R2a-provider | PriceCharting can still be added as a **table row** with no code change (repointed from D1's existing case, not weakened) |
+| R1-repointed | every R1/R1.1/R1.2 case still holds with resolution attached — repointed, not weakened (HT-D60 Clause 3) |
+
+**Defect pass required before any of this is evidence** (HT-D60), with rows at minimum for: the query built as a parameter, the article not dropped, the issue number appended, resolution crawling instead of indexing, corroboration overwriting the reading, and a credential attached to a `none` row.
+
+### R2b — recorded now, NOT pre-registered (stopping for rulings, as instructed)
+
+Constraints to carry in, stated as given:
+
+- **It is a scraper, not an API.** It reads public pages, breaks on layout changes, and sits in a grey zone against eBay's terms. Acceptable for a personal tool; **not** a dependency to build a sold product on. **P(works a year unmaintained) ≈ 0.5** — so the seam must make it replaceable **by configuration**: provider table, one egress function, exactly as vision is.
+- **Provenance rides on every number.** *"14 recent eBay solds, last 90 days"* is the label — **never "value"**. A user must be able to tell a **comp** from a **guide figure** from a **modelled figure** at a glance, because they are three different claims.
+- **Sold comps are not grade-ladder data.** They are a scatter of individual sales at whatever grades happened to sell. **Display the scatter with the grades stated, never a ladder** — inventing a ladder from sparse solds is fabrication. **Below N comps, say so; never extrapolate.**
+- **Asking price and grade stay human-supplied** (brief rules 3–5). The triage output is the comparison: *"N recent solds at $X–$Y, they're asking $Z, you'd grade it W."*
+- **Credentials:** an Apify token is pay-per-use rather than a subscription, but it is **still extractable from a browser**. D1's bright line holds unchanged — BYOK for the subscriber and testers, server-held before anyone else.
+- **Verified 2026-09-12:** Apify's API sends `access-control-allow-origin: *` and permits `Authorization`, so R2b **is** callable from the page (unlike GCD).
+
+Open for R2b's own pre-registration: what an eBay sold-search string looks like and **how noisy the matches are** (reprints, lots, unrelated items — filtering is the real work); minimum comp count before a range is shown; the recency window; whether listing condition strings map to anything trustworthy; and Fork G's answer.
+
+### What this pre-registration does not settle
+
+Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candidates; whether a resolved identity persists (schema v2 is still unwritten); **GCD's licence and attribution requirements for displaying its data** — not yet checked, and it must be before anything ships; GCD's rate limits, which advertise no headers; and everything in R2b.

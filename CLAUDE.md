@@ -6,9 +6,11 @@ Structure and discipline are ported from HealthTracker (`../healthtracker`). The
 
 ## Status
 
-**R1 — identification — is built and gated** (D2, 2026-09-12), awaiting review. Photo → a confirmed reading → the PriceCharting search string it implies.
+**R1 — identification — is built, gated and deployed** (D2 + R1.1 + R1.2), and has passed a two-capture device test. Photo → a confirmed as-printed reading → the catalog query it implies.
 
-**R1 is a milestone, not a release: there is no price in this build.** It stops at the identity, saves nothing, and says so where the result is. The port's infrastructure and gates are D1 / `GATES.md`. R2 — resolving a reading to a PriceCharting product — is blocked on a live search probe only the subscriber can run.
+**R1 is a milestone, not a release: there is no price in this build.** It stops at the identity, saves nothing, and says so where the result is. The port's infrastructure and gates are D1 / `GATES.md`.
+
+**R2 is re-scoped into two slices** (2026-09-12): **R2a** — canonical identity via the Grand Comics Database (free, official) — is **pre-registered with its forks open** in `GATES.md`, and its central fork is that **GCD sends no CORS headers, so the page cannot call it directly**. **R2b** — price via eBay sold comps through an Apify scraper — is **recorded but not pre-registered**. PriceCharting is deferred (see Data sources).
 
 ## Domain rules (from the brief that opened this repo, 2026-09-11)
 
@@ -21,7 +23,13 @@ Structure and discipline are ported from HealthTracker (`../healthtracker`). The
 3. **Identity is confirmed, never assumed** (HT-R30's identity-first rule, for the same reason). A confidently wrong identification attached to a confident price is *the* failure mode. The evidence: PriceCharting's own photo appraiser returned the same wrong book for three different covers, with a value and no uncertainty shown.
 4. **Guide values, not comps, and the product says so where the number is.** The PriceCharting API has **no historic prices and no sold comps** — "The API and CSV only support current item values in various grades and conditions. Historic prices and historic sales are not supported." (docs, 2026-09-11).
 
-## Data source: PriceCharting Prices API (verified against the live docs 2026-09-11)
+## Data sources (re-scoped 2026-09-12)
+
+**PriceCharting is deferred, not adopted.** Its API needs a ~$600/year subscription and its data is the weaker kind — modelled current values, **no sold comps, no history**. That commitment is not made before the app has been used at a table. It stays a **named provider behind the same seam** (D1's provider table), and the ladder mapping below is kept for the day it is subscribed.
+
+**Identity comes from the Grand Comics Database** (free, official, JSON, no key) — R2a, pre-registered in `GATES.md`. **Price comes from eBay sold comps** via an Apify scraper, pay-per-lookup — R2b, not yet pre-registered. Sold comps are *actual sales*; everything below about PriceCharting describes *guide values*, and the two are different claims that must never share a label (brief rule 5's shape, applied to sources).
+
+### PriceCharting, if it is ever subscribed (verified against the live docs 2026-09-11)
 
 - Base `https://www.pricecharting.com`. Auth is the 40-character token as the **`t` query parameter**. JSON responses carry `status: success|error`; an error adds `error-message` with HTTP 4xx/5xx.
 - `/api/products?q=` returns up to 20 matches: **the candidate list**. `/api/product?id=` returns **the full grade ladder** for one book.
