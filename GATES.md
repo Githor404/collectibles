@@ -195,20 +195,28 @@ Capture 1 is the same book **PriceCharting's own photo appraiser identified as "
 
 **Defect pass:** restoring the unconditional prepend fails `ID15` **by name** — the device bug, reproduced. **27 rows now, every one failing, each naming its own case.**
 
+**The diagnosis, generalised: D3.** Fork B1 promises the fields *as printed*; the header assumed *normalised* ones. Both sides were individually correct and individually gated — **a contract and its consumer disagreeing about one field is a failure no assertion on either side alone catches.** D3 turns that into a binding rule: where a contract promises a **range** of forms, its consumer is gated **across that range**, not on a specimen. `ID15` is that shape — bare, prefixed, doubled, and the field's own value in the opposite direction.
+
 **Result: `SUITE: PASS (2 of 2)`, 305/305 assertions, pinned 299 → 305 (+6).**
 
 **A correction to my own first version of this gate.** It searched the whole draft for `##` and failed — because the issue **input** legitimately renders `value="##2"`, the field keeping what was printed. The assertion was measuring the document when the claim was about the header. It now reads the header element, and the field's raw value is asserted **in the opposite direction** in the same case. *The gate was wrong, not the fix* — HT-D60 Clause 4 one level out: an assertion that can fail for a reason unrelated to the property it names.
 
 **An unexplained flake, recorded rather than smoothed over.** One run produced **no SUMMARY at all** — "the suite did not finish" — with no failing assertion and no uncaught-exception line. The same suite then ran clean **nine times** (five at the 60 s virtual-time budget, three at 180 s, and the suite run above). I raised the budget on the hypothesis that the grown suite was exhausting it; **the evidence refuted that and the change was reverted**. What is established: the runner treated it as a **loud FAIL**, never a silent pass — the property HT-D56 exists to protect. What is **not** established is the cause. Recorded so that a second occurrence is a second data point rather than a surprise.
 
-### Carried forward to R2 — as-printed reading vs catalog spelling (received 2026-09-12; NOT pre-registered)
+### Carried forward to R2 — the reading and the query: **RULED IN ADVANCE (D4, 2026-09-12)**
 
-Capture 2's derived query reads **`the AMAZING SPIDER-MAN 151`**. That is faithful to the cover; PriceCharting almost certainly catalogs the book as *Amazing Spider-Man #151*, without the leading "the". **The as-printed reading and the catalog's spelling are different objects, and something has to normalise between them.** Expect that fork in R2's pre-registration.
+Not a fork R2 will discover — one it starts from. **D4 rules the shape:**
 
-Two consequences already visible, recorded so the fork is built on them:
+- the **as-printed reading is evidence** of what the cover says and what the human confirmed, and is **never normalised**;
+- the **catalog query is derived from it**, a separate object with its own rules — drop leading articles, normalise the issue marker, decide what to do with the publisher (that last one open);
+- and the query is **visible and editable**, because a normalisation that silently mangles a search is worse than one the user can see and fix. R1 renders it read-only; making it editable is R2's work.
 
-- **The query inherits the model's variance in the `#`.** Capture 1 produced `STAR WARS #2` (issue `#2`); capture 2 produced `the AMAZING SPIDER-MAN 151` (issue `151`). **R1.2 normalises the DISPLAY only, deliberately** — what the query should look like is R2's to rule, and normalising it now would be guessing at a search whose behaviour is still unverified.
-- **Whatever normalises must not overwrite the reading.** The as-printed fields are what the human confirmed; a catalog form is a **derived** query, not a correction of the cover (the same separation D2 draws between `ai` originals and accepted values).
+**The evidence that produced the ruling:** capture 2's query reads **`the AMAZING SPIDER-MAN 151`** — faithful to the cover, and almost certainly not how PriceCharting catalogs the book (*Amazing Spider-Man #151*).
+
+Two facts the slice is built on:
+
+- **The query inherits the model's variance in the `#`.** Capture 1 produced `STAR WARS #2` (issue `#2`); capture 2 produced `the AMAZING SPIDER-MAN 151` (issue `151`). **R1.2 normalises the DISPLAY only** and leaves the query alone — correct under D4, since the query's rules belong where they can be checked against a real search.
+- **What R2 must still settle:** the rules themselves (which articles, what happens to `#`, publisher in or out), whether a query survives into any record, and the probe that grounds all of it — still outstanding, still the subscriber's to run.
 
 ### Carried forward to the pricing slice — the ASKING PRICE (received 2026-09-12; NOT pre-registered)
 

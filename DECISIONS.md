@@ -77,6 +77,38 @@ Accepted consequences:
 - **The copy-prompt card** (HT-D11 / HT-D63). With no vision contract ruled there is no prompt to copy. The **paste box is ported**, because the fallback needs somewhere to put the raw reply. Whether collectibles has a no-key vision floor at all is a question for the identification slice.
 - **HT-D7 migration machinery.** There is nothing to migrate at schema v1. The forward-version guard is ported.
 
+## D3 — A contract and its consumer can disagree about one field, and neither side's assertions catch it (governance, 2026-09-12)
+
+Doc-only. The instance is R1.2; **the rule is general and binds future slices.**
+
+### What happened
+
+D2 Fork B1 promises the fields **as printed** — a cover printing `#2` yields `#2`. The header that renders them assumed the **normalised** form and prepended a `#` unconditionally. Both sides were individually correct, and both were gated: the parser's cases assert the field keeps what was printed, the header's cases assert a header renders. **The bug lived in the space between them**, where no assertion on either side was looking.
+
+### Why the gates could not see it
+
+An assertion on the producer states what the field holds. An assertion on the consumer states that the consumer renders something. **Neither states what the consumer must do with the RANGE OF FORMS the contract permits.** "As printed" permits `2`, `#2`, `1/2`, `Annual 1`, absent — and a consumer exercised with one specimen has been tested at one point of that range.
+
+### The rule
+
+**Where a contract promises a range of forms, its consumer is gated ACROSS that range, not on a specimen** — the permitted forms in one case, each with its asserted output, and in both directions: that the consumer normalises what needs normalising **and** still does the work it did before (the control). R1.2's case is the shape: `#2` → one, bare `1` → gains one, `##2` → collapses, and the field itself still shows what arrived.
+
+### And why it surfaced on a device rather than in a gate
+
+**The model's output form varies between captures.** The first returned `#2`; the second returned a bare `151`. A stub returns whatever the fixture's author imagined; a model returns what it read. **A fixture is a specimen of a contract, never the contract** — which is the standing reason a device pass is evidence the gates cannot substitute for, and why the unmeasured items in `GATES.md` are listed rather than assumed.
+
+## D4 — The reading and the query are two objects; the query is computed, visible and editable (R2, ruled in advance, 2026-09-12)
+
+Ruled **before** R2 is pre-registered, so the slice is built on it rather than discovering it.
+
+- **The as-printed reading is EVIDENCE** of what the cover says, and it is what the human confirms. **It is never normalised** — not for a search, not for tidiness, not to match a catalog.
+- **The catalog query is DERIVED from it**, and is a different object with its own rules: drop leading articles, normalise the issue marker, and decide what to do with the publisher (open — R2's to settle).
+- **The query is VISIBLE AND EDITABLE.** A normalisation that silently mangles a search is worse than one the user can see and fix. R1 renders it read-only; making it editable is R2's.
+- **The evidence:** capture 2's query reads `the AMAZING SPIDER-MAN 151` — faithful to the cover, and almost certainly not how PriceCharting catalogs the book.
+- **Consequence for R1, already correct:** R1.2 normalises the **display** only and leaves the query untouched. That stands under this ruling — the query's rules belong where they can be checked against a real search.
+
+**What this does not settle:** the rules themselves (which articles, what happens to `#`, whether the publisher enters the query), and whether a query survives into any record. Those are R2's forks; this ruling fixes their **shape** — two objects, one derived from the other, the derivation inspectable.
+
 ## D2 — Identification: the model reads the cover, the human confirms it (R1, 2026-09-12)
 
 Forks **A1, B1, C1, D1, E1, F1, G1** ruled as recommended. Two of them carry a note that belongs in the record rather than in a commit message.

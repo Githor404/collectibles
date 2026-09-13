@@ -59,6 +59,7 @@ Static, no build step, vanilla HTML/CSS/JS in a handful of files, no dependencie
 - **HealthTracker is read-only from here.** Copy out, never write in. Flag defects found in ported code for the other repo; do not fix them there.
 - Small single-purpose commits. Data-loss implications are stated and ruled before touching storage, export or restore.
 - Pre-registered, re-runnable gate evidence, and **HT-D60 binds** (adopted in D1): a new or changed gate is not evidence until it has been run against the defect it closes and seen to fail, **and its fixture must be capable of exhibiting that failure** (Clause 4).
+- **Gate a consumer across the RANGE its contract permits (D3), never on one specimen.** Where a field is promised *as printed*, the case carries the forms that promise allows — bare, prefixed, doubled, absent — each with its asserted output, and a control in the other direction. A contract and its consumer can disagree about one field while both sides pass their own assertions; that is what D3 exists to stop.
 - Run gates through `bash tests/run-all-gates.sh` (presence + verdict, or fail). The assertion count is pinned and the gate-script manifest is a census; both are re-pinned deliberately, in the same commit as the change.
 - Gate artifacts (browser profiles, defect-pass backups) live under `tests/.tmp/`, never `%TEMP%`.
 - Ask before adding scope; name conflicts between patterns rather than silently resolving them.
