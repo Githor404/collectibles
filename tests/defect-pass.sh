@@ -426,7 +426,17 @@ report "query editable in name only" "no longer read-only" "$(run_dl)"; restore
 # --- 37. the grade rides along in the request body ---------------------------
 # Brief rules 3 and 4. The surface would look identical; only the body changes.
 mutate 's/    includeCompletedListings: true,/    includeCompletedListings: true,\n    grade: "9.4",/' app.js
-report "grade enters the lookup" "carrying the grade or the asking price is REFUSED" "$(run_dl)"; restore
+# REPOINTED 2026-09-14 (HT-D60 Clause 3 -- repointed, not weakened). The old
+# expected string was "carrying the grade or the asking price is REFUSED", which
+# matches a PASSING assertion: there are TWO under the CQ4 prefix, and that one
+# tests the REFUSAL MECHANISM against a synthetic body, so it still passes when
+# the REAL body is polluted. The mechanism was never the thing that broke.
+#
+# Found by report()'s WEAK-MATCH label on its first full pass, and settled by a
+# probe rather than a source reading: the planted grade makes TWO assertions fail
+# -- this one and AK11 -- so the suite was never blind to the defect. The ROW was
+# reporting the wrong line, which is a defect in the evidence, not in the gate.
+report "grade enters the lookup" "a real body carries no grade and no asking price" "$(run_dl)"; restore
 
 # --- 38. the spending token loses its warning --------------------------------
 # The defect found while building: gated on a role NAME, the one credential that

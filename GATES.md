@@ -1220,7 +1220,16 @@ The first full pass after `WEAK-MATCH:` shipped returned **ten** labelled rows. 
 
 A second strict arm now matches script-reported failures. **Controlled in five cases before commit:** a `res()` FAIL line, a script `FAIL -` line and a `NOT MEASURABLE` line all return **unlabelled**; a PASS-only match **still says `WEAK-MATCH:`**; no match still warns.
 
-**Row 47 (`grade enters the lookup`) is the one real finding and is NOT fixed here.** Its expected string matches only a *passing* assertion, so the evidence that row has reported for weeks is not evidence of the thing it names. Repointing it (HT-D60 Clause 3 — repointed, not weakened) needs a run showing which assertion actually catches the planted defect. **Named and open.**
+**Row 37 (`grade enters the lookup`) is the one real finding and is NOT fixed here.** *(Recorded as "row 47" when first written and corrected on measurement — it is the 37th `report` call, at `defect-pass.sh:429`. Two commit messages carry the wrong number and are left as history rather than rewritten; this file is the one someone navigates by.)* Its expected string matches only a *passing* assertion, so the evidence that row has reported for weeks is not evidence of the thing it names. **A probe settled it, and disproved the worse hypothesis.** The suite's own static checks abort on a mutated shell whose `APP_VERSION` has not moved — which is why a first attempt by hand produced **no SUMMARY at all** and measured nothing, and very nearly got reported as "the suite passed with the grade in the body." (The stand-down exists for exactly this, and it is PID-keyed so it cannot be switched on by hand; the gate refusing a hand-run is the gate working.) Driving the harness directly instead gave `SUMMARY 429/431 — 2 FAILED`:
+
+- `CQ4: a real body carries no grade and no asking price`
+- `AK11 GATE (brief rules 3,5): neither the ask nor the grade reaches a request body`
+
+**So the suite was never blind to this defect.** Two assertions catch it; the row named a third. There are **two** assertions under the `CQ4` prefix, and the row's expected string matched the **GATE** one — which tests the *refusal mechanism* against a synthetic body, and therefore still passes when the real body is polluted. The mechanism was fine; the real body was what changed. The earlier guess that CQ4 "might genuinely be unable to catch it" was wrong, which is why it went to a probe instead of into this file.
+
+**The defect was in the EVIDENCE, not in the gate** — and that is the precise value of the `WEAK-MATCH` label: a row that had been reporting a passing assertion as its proof for weeks, while the thing it guarded was in fact guarded.
+
+Repointed to `a real body carries no grade and no asking price`, the assertion that actually fires (HT-D60 Clause 3 — repointed, not weakened). **Re-run pending.**
 
 ### Assertion delta: 416 → 431 (+15), re-pinned in this commit
 
@@ -1243,3 +1252,12 @@ Run on a tree committed first at `2f62240`.
 **All three came back UNLABELLED**, which was the second thing being watched: they match `res()` `FAIL` lines, so the second strict arm added to `report()` in the same commit had to leave them alone. Sharpening the label did not blunt it.
 
 Tree clean afterwards; all four mutated files restored identical to their pre-run copies.
+
+### Deployed and verified (2f62240, v0.2.0)
+
+| file | before | after |
+|---|---|---|
+| `index.html` | `c7965be5c83d2e6e` | `b4485f2b07af8b28` |
+| `app.js` | `ea70d2d2d1aaabde` | `0bb0109f83992d76` |
+
+Verified on the **first** poll (~15s), against the procedure and URL recorded earlier in this file rather than re-derived from the remote. The build line served to a device now reads `collectibles v0.2.0`, and anyone arriving from 0.1.0 sees the update notice once — the first time that path has run against a real previous version rather than a synthetic one.
