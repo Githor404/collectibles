@@ -58,6 +58,24 @@ Run everything: `bash tests/run-all-gates.sh`. Defect pass: `bash tests/defect-p
 
 **That anchor dropped that row three separate times in one day.** A counting pattern that silently omits a member **is a census that cannot count** — the precise failure the gate-script census exists to prevent, committed in the tool used to check it. The rule the census already states applies to its own summaries: **a check must be able to see every member of the set it claims to cover.**
 
+### Distrust the grep before distrusting the record — 2026-09-14
+
+**The reflex, named because it recurred.** Reading D1's deferral of the service worker, I searched `INHERITED-DECISIONS.md` for its cited `HT-D45 Fork G`, found seven "Fork G" hits — substitution-by-acknowledgment, lane hues, a `bm`-local band — and none of them a service-worker bypass. **I concluded the citation was imprecise.** It was exact: the clause sits at line 1237, inside HealthTracker's own **HT-D45** (*BYOK vision calls*), and my search had surfaced every *other* Fork G in a long file. The record was right; the search was too coarse to find what it pointed at.
+
+**And then this paragraph broke the census — twice.** The sentence above first named that entry with the `HT-` prefix dropped, so the census read it as a claim about *this* repo and failed by name. The rewrite that explained the mistake then **quoted the unprefixed form in order to describe it**, and failed identically. The entry recording a mis-read citation contained a mis-written one, and its own correction contained another.
+
+**Third and fourth instances of one hazard**: this census's very first run caught *"an unprefixed decision number, from writing the pair as `HT-D55` followed by a second number that never got its prefix"*. **A decision number written without the `HT-` prefix always means this repo**, and the census catches it every time — which is the argument for having the census rather than for being more careful.
+
+#### A limit of the census, recorded because this paragraph is what found it
+
+**It cannot distinguish a citation from a quotation of one.** The matcher takes any decision number at a word boundary, and a backtick is a boundary — so prose that *quotes* an unprefixed identifier in order to discuss it is indistinguishable from prose that *cites* it. Any document writing about citation errors will trip this.
+
+**The remedy is to restructure, not to escape.** Naming the form descriptively — *"with the prefix dropped"* — says the same thing and leaves nothing for the matcher to misread. An escape sequence would be a trick the next reader has to decode, and this census is deliberately blind to intent: **that blindness is what makes it reliable, and this limit is its price.** It sits alongside the limit already recorded above — the census catches an *unresolvable* citation, never one that resolves to the wrong thing.
+
+**Why this is the more expensive habit of the two.** A wrong count corrects itself the moment something is measured. **A wrong conclusion about the record is acted on** — it invites "repointing" a citation that was already correct, editing a decision entry to match a misreading, or writing an amendment to fix nothing. The cost is not the lost minute; it is the damage a confident correction does to a record whose only value is that it is trustworthy.
+
+**The rule, and it is the same one this file keeps arriving at from other directions:** when a search contradicts the record, **the search is the hypothesis**. Narrow it, anchor it, verify it resolves to a line number and a heading — *then* doubt the record. Verified citation beats inferred error, exactly as measured cost beat estimated cost and a read mutation beat a mutation assumed to apply.
+
 > **Incident, 2026-09-13 — a restore destroyed uncommitted work for the second time, and the rule written after the first did not prevent it.**
 >
 > After the first incident this repo recorded: *restore by copy, never by `git checkout --`; a restore must return a file to what it was, not to what was last committed.* That rule was followed exactly. The work was still lost.
@@ -967,6 +985,16 @@ The layout gate caught it because it drives the real page with no fixture to hel
 Fixed at the seam rather than in the gate or the fixture, so the divergence is removed at its source; `akSeed()`'s hand-written `renderAsk()` was deleted with it. **Row 53 re-plants the real bug** and fails the layout gate by name. The lesson is in `tests/README.md`: a seam mirrors its path exactly, and a fixture that supplies what a seam omits is concealing a defect in one of the two.
 
 **And a fourth failure, in the mutations rather than the gates: `$` interpolation in the replacement half, four times.** `$37.50` became `.50` (capture group 37), `${c.below}` emptied silently, `"$"` substituted perl's list separator. **The replacement half of `s///` is a perl double-quoted string and bash single-quoting does not protect it** — an earlier note in `tests/README.md` claimed it did, which was wrong and is corrected there. One row reported the right verdict with a corrupted mutation, because the assertion that fired did not care about the part that broke, so the dry-run now **reads the mutated text** rather than only checking that the file changed.
+
+### DEVICE PASS — R3 end to end on a real book, 2026-09-14
+
+**Amazing Spider-Man #151.** Grok identified it, the reading was confirmed, Apify returned **98 sold** sorted by price. **Ask entered at $10 → "8 sold below · 76 sold above"**, marker placed, three nearest either side with prices and verbatim titles. **No caret loss.** Read in about a second, and the subscriber would have bought the book.
+
+**The range is the strongest evidence the refusals have produced: $2.00 to $2,300**, the top being a CGC 9.8 white-pages copy. A beaten reading copy and a slab in the same list, a **1000× spread**, and nothing but the seller's own title separating them. **D7 and D8 were argued from a vocabulary mismatch and a principle; this is the demonstration.** An average across that describes no book anyone can buy, and the scatter is the only honest rendering of it.
+
+**D11's truncation line was NOT observed.** The three nearest below happened to be distinct prices, so the tie-cluster branch never fired. **Untested in the wild, not broken** — the gate passes against a fixture built to force the cluster, and Clause 1's distinction holds: *seen to fail* is not *seen to occur*. It remains the one R3 behaviour with no real-world sighting.
+
+**Open from this pass:** 8 + 76 = 84 against 98 returned. The rendered count is the **kept** count, so the likeliest reading is that `compsFilter` dropped 14 lots or reprints — which would mean the footer's *"N hidden — the title said so"* disclosure fired **on live data at scale for the first time**, something the eight-row probe could not exercise since it contained no lots at all. Whether that disclosure and the middle term (`N at your price`) both rendered is unconfirmed and worth the next glance.
 
 ### What this pre-registration does not settle
 
