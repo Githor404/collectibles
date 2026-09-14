@@ -598,7 +598,20 @@ report "version stand-down forged" "no live defect pass holds that PID" "$(run_d
 # --- 55. a shipped version with no changelog line ----------------------------
 # HT-D6's first arm. Force-and-notify makes the bump the user-facing event, so a
 # version with no VERSION_LOG entry ships an update that announces nothing.
-mutate "s/const APP_VERSION = '0\.1\.0';/const APP_VERSION = '0.9.9';/" app.js
+# VERSION-AGNOSTIC since 2026-09-14, and the reason is this row's own failure.
+# It pinned the LITERAL '0.1.0', and the v0.2.0 bump silently invalidated it: the
+# mutation stopped applying, the suite ran clean, and the row reported GATE: PASS
+# -- a defect row that had quietly stopped testing anything.
+#
+# Two mechanisms caught it, which is the machinery working: mutate()'s own
+# "MUTATION DID NOT APPLY (the text moved)" and report()'s "NOTHING NAMED MATCHED
+# -- SUSPECT THE FIXTURE". But both fire only on the first run AFTER the bump,
+# and by then the bump was committed, pushed and deployed.
+#
+# THE GENERAL FORM: a row that pins a value the product legitimately CHANGES rots
+# on a schedule. Match the SHAPE, not the value. 9.9.9 is in no VERSION_LOG entry,
+# which is what makes the first arm fire.
+mutate "s/const APP_VERSION = '[0-9]+\.[0-9]+\.[0-9]+';/const APP_VERSION = '9.9.9';/" app.js
 report "version with no changelog line" "has no VERSION_LOG changelog entry" "$(run_cv)"; restore
 
 # --- 56. a changelog entry with no release date ------------------------------

@@ -1229,7 +1229,21 @@ A second strict arm now matches script-reported failures. **Controlled in five c
 
 **The defect was in the EVIDENCE, not in the gate** — and that is the precise value of the `WEAK-MATCH` label: a row that had been reporting a passing assertion as its proof for weeks, while the thing it guarded was in fact guarded.
 
-Repointed to `a real body carries no grade and no asking price`, the assertion that actually fires (HT-D60 Clause 3 — repointed, not weakened). **Re-run pending.**
+Repointed to `a real body carries no grade and no asking price`, the assertion that actually fires (HT-D60 Clause 3 — repointed, not weakened). **Re-run: `GATE: FAIL`, naming that assertion, and UNLABELLED** — so the strict arm matched it on a genuine `FAIL` line, rather than one loose match being swapped for another inside the commit that fixes loose matching.
+
+### The second strict arm, verified against real output
+
+The five-case control that justified it used **synthetic output written for the purpose** — good evidence about the function, none about the rows. Rows 54 and 56 are the real thing: both report through `run_cv` as `check-version: FAIL - …`, both read `WEAK-MATCH:` before the fix, and both now come back **unlabelled**. The arm is verified against the rows it was built for.
+
+### And that run found ROW 55 HAD ROTTED — broken by this repo's own version bump
+
+Row 55 pinned the literal `const APP_VERSION = '0.1.0';`. The want-list slice bumped it to `0.2.0`, so **the mutation stopped applying, the suite ran clean, and the row reported `GATE: PASS`** — a defect row that had quietly stopped testing anything, in a commit that was already pushed and deployed.
+
+**Two mechanisms caught it, independently:** `mutate()`'s own `!! MUTATION DID NOT APPLY (the text moved)` and `report()`'s `(NOTHING NAMED MATCHED -- SUSPECT THE FIXTURE)`. Both fired. That is the machinery working exactly as designed — and it still only speaks on the **first run after the bump**, which is an argument for running the pass after a bump, not for trusting that a green row is a live one.
+
+**The general form, recorded as a rule:** *a defect row that pins a value the product legitimately changes rots on a schedule.* Match the **shape**, not the value. Row 55 now mutates `const APP_VERSION = '[0-9]+\.[0-9]+\.[0-9]+';`, so no future bump can silence it.
+
+**Open, and the reason this matters beyond one row: the full 58-row pass has not run since `2f62240`.** That slice changed `app.js`, `index.html` and `APP_VERSION`; row 55 is one casualty and there may be others. Running it is the next step, and it is the same failure `CLAUDE.md` already records — a full pass left unrun leaves rows unverified against changed code, and they fail silent rather than loud.
 
 ### Assertion delta: 416 → 431 (+15), re-pinned in this commit
 
