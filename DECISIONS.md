@@ -73,7 +73,16 @@ Accepted consequences:
 ### Deliberately not ported
 
 - **Anything domain-specific:** the micros corpus design, nutrient masks, regimen, the rhythm ring, the meal draft and its sliders, the prompt template.
-- **The service worker and HT-D6's update machinery** (`SHELL_HASH`, precache and version-drift gates, changelog notice). These were not on the port list. They arrive together, as one slice, if installability is wanted. **When they do, HT-D45 Fork G's explicit SW bypass for cross-origin and non-GET requests arrives with them.** A cache-first worker that could see a request URL carrying the token would contradict this entry.
+- **The service worker and HT-D6's update machinery** (`SHELL_HASH`, precache and version-drift gates, changelog notice). These were not on the port list. ~~They arrive together, as one slice, if installability is wanted.~~ **When they do, HT-D45 Fork G's explicit SW bypass for cross-origin and non-GET requests arrives with them.** A cache-first worker that could see a request URL carrying the token would contradict this entry.
+
+  **AMENDED 2026-09-14 — the premise is answered, and the bundle is split.** *"If installability is wanted"* was written as a condition and then never asked. **Asked and answered: not yet.** Offline at a flea market is a genuine feature and it is the reason the worker exists — but it is not what is costing anything today. What is costing is that **nothing inside the app can say which build is running**, which made every device pass guesswork.
+
+  So the slice splits, and **the order is the point, not the sequencing** (D14):
+
+  - **NOW — legibility.** `APP_VERSION`, `VERSION_LOG`, the post-update notice, a visible build line, and `check-version.sh`'s two-armed drift gate. **All of it is page-side**; not one line of HealthTracker's version machinery lives in `sw.js`. No manifest, no icons, no precache list, no new gate script.
+  - **LATER — the worker**, as its own slice, when offline is wanted for its own sake. It brings `manifest.json`, an icon set, a precache list and three gates (`check-sw-hash`, `check-precache`, and CDP work for offline/update), none of which collectibles has today.
+
+  **The precondition stands unchanged and is now verified portable**: HealthTracker's fetch handler opens `if (req.method !== 'GET') return;` *before* the URL is parsed, then restricts to same-origin. Collectibles now has **three** egress roles, two of them token-bearing cross-origin POSTs — so they are excluded twice over. D1's clause was written before the second and third roles existed and still binds them.
 - **The copy-prompt card** (HT-D11 / HT-D63). With no vision contract ruled there is no prompt to copy. The **paste box is ported**, because the fallback needs somewhere to put the raw reply. Whether collectibles has a no-key vision floor at all is a question for the identification slice.
 - **HT-D7 migration machinery.** There is nothing to migrate at schema v1. The forward-version guard is ported.
 
@@ -263,6 +272,46 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 **The exception, because removal has its own failure mode:** a credential **already saved by an earlier build** must not be **stranded** where it cannot be seen or deleted. It appears in Storage, **with a way to remove it, and only when it exists** — an exit, never an entrance. Gated in both directions, plus the token itself never printing.
 
 **What was removed, and what was not.** The prices Settings card is gone; the prices **role keeps every piece of its machinery**, which the gates still exercise — pacing at 1 call/s, redaction of an echoing provider, and the `auth: 'none'` proof that the metering server of D1 is a table edit. **The capability is intact; only the invitation is gone.**
+
+## D15 — The want-list is a capture-time FILTER, and it errs toward firing (2026-09-14)
+
+**Scope correction, ruled.** The want-list is **in**, and the reason it is in is what it does: **not a list to browse, but a filter that fires on capture.** Photograph a box at a flea market and the app says which of these you were already looking for. Browsing a list you wrote is something a notes app does; recognising an entry in a box you are standing in front of is not.
+
+**It is the single-player residue of the sighting-network idea, and it is the half that works** — no counterparty, no enforcement, no adverse selection. One person, one box, one list they wrote themselves. Everything that made the networked version hard is absent because the second party is absent.
+
+### The match is GENEROUS, not exact — and the asymmetry is the reason
+
+**A miss means walking past the book you wanted. A false hit costs a two-second look.** Those are not comparable costs, so the filter is not tuned for balance: **it errs toward firing.** Match on title and issue, surface it as a **flag**, and let the person confirm. **Never silent** — a filter that quietly decides you were not interested has spent the expensive error to save the cheap one.
+
+**This does NOT contradict D8, D10 or D13, and the distinction is the whole reason it is safe.** Those entries refuse to *assert* more than the data supports — no average, no group without a field, no ratio dressed as a score. **A flag asserts nothing.** It is a question — *"is this one of yours?"* — put to the person holding the book, and answered by them. **Precision is owed to claims; generosity is owed to questions.** The same brief that forbids the app guessing a grade (rule 2) requires it to surface a candidate rather than suppress one.
+
+### v1 holds EXACT ISSUES ONLY
+
+*"Amazing Spider-Man #129."* Title and issue, both named.
+
+**The looser kinds of wanting are real and are deliberately NOT half-built**: *"any pre-1975 Marvel key"*, *"the rest of the Byrne FF run"*. These are genuine — arguably the more common way collectors want things — and **none of them is matchable at this tier**. A key-issue list is market memory, which D2/C1 already dropped for exactly this reason; a run is a range plus an inventory of what is already held, and holdings are out (below). **Recorded as a named later question, not attempted**: *how does the app represent wanting something it cannot enumerate?*
+
+### Still out, with the reason rather than just the exclusion
+
+**Collection management** — what is owned, purchase prices, portfolio value. Out, and **not merely as scope**: owned + paid + current-worth **is** a valuation surface, and D8 exists to refuse exactly that. A want-list says *"I am looking for this"*; a holdings list with prices says *"this is what mine are worth"*, which is the claim this product was built not to make.
+
+**Marketplace, sharing, accounts** — out. D1's bright line stands: no counterparty, no server holding anyone's data.
+
+## D14 — The gate that catches a failure class ships BEFORE the mechanism that produces it (2026-09-14)
+
+**Ruled on the service-worker split, and it is the reason for the split rather than a description of it.**
+
+**What happened in HealthTracker, from its own record.** The worker shipped first, with a manual `VERSION` integer that had to be bumped by hand on every shell change. It was **missed on every slice after Phase 0**. The deployed worker therefore never installed an update and served a **frozen first-deploy shell** — and the "update ready" hint had nothing to fire on, so the failure was silent in both directions. The content-derived `SHELL_HASH` and its gate were built **afterwards, in response**.
+
+**So the order is inverted here.** `check-version.sh` and the version machinery ship **now**, while there is no worker at all; the worker follows as its own slice. Three things follow from that, and only the first is obvious:
+
+1. **The gate guards every deploy in the interval.** From today until the worker exists, a shell change without a version bump fails — so the class is closed before the mechanism that makes it dangerous arrives.
+2. **The gate accrues a track record before it is load-bearing.** By the time a cache can serve a stale shell, the drift check will have run against dozens of real commits. A gate first exercised on the day it becomes critical is a gate nobody has watched fail.
+3. **A gate written ALONGSIDE its mechanism encodes the author's model of how that mechanism fails — and HT-D6 is the proof that model was wrong.** The manual integer *seemed* sufficient to the person who wrote it. Written first, against a failure class rather than against an implementation, the gate cannot be shaped by assumptions about a mechanism that does not exist yet.
+
+**The general form.** A detector built *after* the thing it detects is built in response to damage already done; the first instance is always the one that escapes. Built *before*, the first instance is the one it catches. **Where the failure class is known in advance — and a stale shell is very well known — the detector does not wait for the mechanism.**
+
+**Not a claim that every gate precedes every feature.** It applies where the failure class is *already documented* and the mechanism is *optional or deferrable*. Both hold here: HT-D6 records the trap in detail, and installability was deferred by the amendment above.
 
 ## D11 — A cap that truncates a tie group must say what it truncated (2026-09-14)
 
