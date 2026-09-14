@@ -1226,6 +1226,20 @@ A second strict arm now matches script-reported failures. **Controlled in five c
 
 13 W assertions + the 2 SH1 shipped-shell checks. `APP_VERSION` moved to **0.2.0** with a dated `VERSION_LOG` entry — the shell changed, and `check-version.sh` demanding that bump is D14's machinery working rather than misfiring.
 
-### NOT YET DEMONSTRATED (HT-D60 Clause 1)
+### DEMONSTRATED — rows 59, 60 and 61, each seen to fail (HT-D60 Clause 1)
 
-Rows 59, 60 and 61 are written and **have not been run**. Row 59 is the **weighted** one: D15's asymmetry makes the silent miss the expensive error, so *a want that should fire and does not* outranks the false-positive case — it is the error the feature exists to prevent. Row 61 re-plants D16's shape in the newest code, where a flag that is right when first painted and stale thereafter is the worst version, because it is right often enough to be believed. A dry-run confirmed all three apply and that **row 61 spares `wantsSave`'s own `renderWantFlag()` call**. Until this section says otherwise, the W gates are **designed, not demonstrated**.
+Run on a tree committed first at `2f62240`.
+
+| row | planted defect | verdict | first named failure |
+|---|---|---|---|
+| 59 | match on the **raw typed line** instead of the normalised title | `GATE: FAIL` | `W4 GATE (D15): a reading matches a want TYPED DIFFERENTLY …` |
+| 60 | the **issue test dropped** from `wantMatch` | `GATE: FAIL` | `W5 GATE (D15 amended): a DIFFERENT ISSUE IS A DIFFERENT BOOK …` |
+| 61 | `renderWantFlag();` removed from `identitySetField` | `GATE: FAIL` | `W9 GATE (D15/D16): correcting the issue REMOVES the flag …` |
+
+**Row 59 is the weighted one**, by D15's own asymmetry: a want that should fire and does not is the error the feature exists to prevent — the walked-past book. It removes generosity about *format*, which is the only generosity D15 grants, and nothing errors; the flag simply never appears. A false positive costs a two-second look; this costs the book.
+
+**Row 61 is D16's shape in the newest code**, and the worst version of it: with that one call removed the flag is **correct when first painted and stale for every correction after**, which is right often enough to be believed. The dry-run confirmed it spares `wantsSave`'s own `renderWantFlag()` call — the check that mattered, since `renderWantFlag` has two call sites and only one is the seam.
+
+**All three came back UNLABELLED**, which was the second thing being watched: they match `res()` `FAIL` lines, so the second strict arm added to `report()` in the same commit had to leave them alone. Sharpening the label did not blunt it.
+
+Tree clean afterwards; all four mutated files restored identical to their pre-run copies.
