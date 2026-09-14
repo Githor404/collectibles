@@ -1630,6 +1630,140 @@ window.setLS({});
       'CQ5 GATE (D3): the contract is what ARRIVED -- no grade, no certification, and no category either, ' +
       'though the vendor\'s own schema documentation claims the output carries one');
 
+  // ---- R5: the row contract is DERIVED, so it cannot drift ------------------
+  // COMP_KEYS declared listingType and conditionId for the whole of R2b and R3
+  // while parseComps dropped both, and nothing caught it: CQ5 above only checks
+  // what is ABSENT from COMP_KEYS. Two hand-kept lists, free to disagree (D3).
+  res(CT.COMP_FIELDS.every(function (f) { return CT.COMP_KEYS.indexOf(f.from) >= 0; }),
+      'CQ11 GATE (D3/R5): every field the parser CONSUMES is declared in COMP_KEYS -- used-but-undeclared is impossible by construction, not by a third list kept in step',
+      CT.COMP_FIELDS.filter(function (f) { return CT.COMP_KEYS.indexOf(f.from) < 0; }).map(function (f) { return f.from; }).join(','));
+  var r11 = CT.parseComps(JSON.stringify([{ itemId:'x', title:'t', condition:'Pre-Owned', conditionId:'3000',
+    endedAt:'2026-08-01T09:00:00Z', soldPrice:12, soldCurrency:'USD', listingType:'Auction', isBestOfferAccepted:true }])).rows[0];
+  res(JSON.stringify(Object.keys(r11).sort()) === JSON.stringify(CT.COMP_FIELDS.map(function (f) { return f.to; }).sort()),
+      'CQ11 GATE (R5): a parsed row carries EXACTLY the declared fields -- the two that were silently dropped are listingType and conditionId, and this is what would have said so',
+      Object.keys(r11).sort().join(','));
+  res(r11.listingType === 'Auction' && r11.conditionId === '3000' && r11.bestOffer === true,
+      'CQ11 (R5): listingType and conditionId now SURVIVE the parse, and isBestOfferAccepted still lands as bestOffer');
+
+  // THREE STATES. Absent is older data (every existing fixture); unrecognised is
+  // a contract surprise. Identical on the surface, distinct in the data.
+  res(CT.compTypeOf({ listingType: 'Auction' }).kind === 'auction' &&
+      CT.compTypeOf({ listingType: 'FixedPrice' }).kind === 'bin',
+      'CQ12 (R5): documented listing types map to their kind, case- and punctuation-insensitively');
+  var t12a = CT.compTypeOf({});
+  var t12u = CT.compTypeOf({ listingType: 'SomethingNew' });
+  res(t12a.kind === 'unstated' && t12a.stated === false && t12a.known === false,
+      'CQ12 GATE (R5): an ABSENT listing type is unstated -- every fixture predating R5 is in this state, and it is not an error');
+  res(t12u.kind === 'unstated' && t12u.stated === true && t12u.known === false &&
+      t12u.label.indexOf('SomethingNew') >= 0,
+      'CQ12 GATE (D5): an UNRECOGNISED value renders VISIBLY and NAMES ITSELF -- absorbing it into a default is a discriminator that silently stops discriminating, which looks exactly like one that works',
+      t12u.label);
+  res(t12a.kind === t12u.kind && (t12a.stated === t12u.stated) === false,
+      'CQ12 GATE (R5): the two are the SAME on the surface and DIFFERENT in the data -- the reader is equally in the dark either way, but a gate can still tell a stale fixture from a live contract surprise');
+
+  // ==========================================================================
+  // PL -- R5: the distribution, drawn. The emitters are PURE, so the markup is
+  // gated here without a surface; the layout gate proves it is VISIBLE.
+  // ==========================================================================
+  var PLROWS = [
+    { itemId:'p1', title:'Hulk 271 GD',        endedAt:'2026-08-01T09:00:00Z', soldPrice:9,   soldCurrency:'USD', listingType:'Auction',    isBestOfferAccepted:false },
+    { itemId:'p2', title:'Hulk 271 VG a',      endedAt:'2026-08-02T09:00:00Z', soldPrice:25,  soldCurrency:'USD', listingType:'FixedPrice', isBestOfferAccepted:true  },
+    { itemId:'p3', title:'Hulk 271 VG b',      endedAt:'2026-08-03T09:00:00Z', soldPrice:25,  soldCurrency:'USD', listingType:'FixedPrice', isBestOfferAccepted:false },
+    { itemId:'p4', title:'Hulk 271 VG c',      endedAt:'2026-08-04T09:00:00Z', soldPrice:25,  soldCurrency:'USD', listingType:'Auction',    isBestOfferAccepted:false },
+    { itemId:'p5', title:'Hulk 271 VG d',      endedAt:'2026-08-05T09:00:00Z', soldPrice:25,  soldCurrency:'USD', isBestOfferAccepted:false },
+    { itemId:'p6', title:'Hulk 271 CGC 9.8',   endedAt:'2026-08-06T09:00:00Z', soldPrice:145, soldCurrency:'USD', listingType:'Wat',        isBestOfferAccepted:false }
+  ];
+  var plRows = CT.parseComps(JSON.stringify(PLROWS)).rows.slice()
+                 .sort(function (a, b) { return a.soldPrice - b.soldPrice; });
+  var plSc = CT.compsScale(plRows.map(function (r) { return r.soldPrice; }));
+
+  res(CT.PLOT_MAX_STACK >= 4,
+      'PL1: the stack depth is computed from the plot geometry, not guessed -- re-pin deliberately if the geometry moves',
+      'PLOT_MAX_STACK=' + CT.PLOT_MAX_STACK);
+
+  // THE RULING, gated as a PROPERTY rather than an implementation detail: log is
+  // right because grade bands MULTIPLY, so equal RATIOS must map to equal
+  // distances. Asserting "it calls Math.log" would gate the code; this gates the
+  // claim.
+  // IN-DOMAIN values, and the first version was not. It used $1, $10, $100
+  // against a domain of $9-$145, so x() CLAMPED $1 to the left edge and the
+  // property could not hold -- the fixture could not exhibit the thing it
+  // tested, which is HT-D60 Clause 4 inside the assertion meant to enforce this
+  // slice's central ruling. 9 -> 27 -> 81 all sit inside the span, each step x3.
+  var d1 = plSc.x(81) - plSc.x(27), d2 = plSc.x(27) - plSc.x(9);
+  res(Math.abs(d1 - d2) < 0.001,
+      'PL2 GATE (ruled 2026-09-14): equal RATIOS map to equal distances -- $9->$29 is the same step as $90->$290, because grade bands multiply. That is why the scale is log, and it is a claim about the data rather than a convenience',
+      'x(81)-x(27)=' + d1.toFixed(3) + ' x(27)-x(9)=' + d2.toFixed(3));
+  // The CLAMP is deliberate: a price outside the domain lands ON an edge rather
+  // than off the strip. It was untested until a bad assertion collided with it,
+  // so it is pinned now that it is known about.
+  res(plSc.x(1) === plSc.x(plSc.lo) && plSc.x(100000) === plSc.x(plSc.hi),
+      'PL2 GATE: and a price OUTSIDE the domain clamps to an edge rather than drawing off the strip -- the ask can exceed every sale, and a mark nobody can see is worse than one at the boundary',
+      'x(1)=' + plSc.x(1).toFixed(2) + ' x(lo)=' + plSc.x(plSc.lo).toFixed(2) +
+      ' x(1e5)=' + plSc.x(100000).toFixed(2) + ' x(hi)=' + plSc.x(plSc.hi).toFixed(2));
+  var plOne = CT.compsScale([42]);
+  res(!!plOne && isFinite(plOne.x(42)),
+      'PL3 GATE: a single distinct price yields a FINITE position -- hi===lo would divide by zero and put every mark at NaN',
+      plOne ? String(plOne.x(42)) : 'null');
+  var plTicks = CT.compsTicks(plSc);
+  res(plTicks.length >= 2 && plTicks.every(function (v) { return v > 0; }),
+      'PL4: the axis always carries at least two labelled ticks -- a narrow span containing no power of ten falls back to its endpoints, because an axis with no labels cannot be read',
+      plTicks.join(','));
+
+  var plMk = CT.compsMarks(plRows, plSc);
+  res(plMk.marks.length + plMk.hidden.length === plRows.length,
+      'PL5 GATE: ONE MARK, ONE SALE -- marks plus hidden equals the row count exactly. No bin invents a count, and nothing is dropped silently',
+      plMk.marks.length + '+' + plMk.hidden.length + '=' + plRows.length);
+  var at25 = plMk.marks.filter(function (m) { return m.r.soldPrice === 25; });
+  var ys25 = at25.map(function (m) { return m.y; });
+  res(at25.length === 4 && ys25.length === ys25.filter(function (y, i) { return ys25.indexOf(y) === i; }).length,
+      'PL6 GATE: ties STACK -- four sales at $25 occupy four DISTINCT positions. Opacity would make two sales look like one darker sale, which invents a reading, and one-mark-one-sale is what the whole plot rests on',
+      'y=' + ys25.join(','));
+  res(at25.every(function (m) { return Math.abs(m.x - at25[0].x) < 0.001; }),
+      'PL6: and they share one column, so the stack reads as a single price');
+
+  var plHTML = CT.compsPlotHTML(plRows);
+  var dataP = (plHTML.match(/data-p="[0-9.]+"/g) || []).map(function (s) { return Number(s.replace(/[^0-9.]/g, '')); });
+  res(dataP.length === plMk.marks.length && dataP.slice().sort(function (a,b){return a-b;}).join(',') ===
+      plMk.marks.map(function (m) { return m.r.soldPrice; }).sort(function (a,b){return a-b;}).join(','),
+      'PL7 GATE (CQ7 extended): EVERY mark carries its price in data-p -- akPrices() reads .cmpprice spans, which marks do not have, so without this the stray-price sweep would keep passing while silently ceasing to cover the surface where prices are drawn',
+      dataP.join(','));
+  res(plHTML.indexOf('<circle') >= 0 && plHTML.indexOf('<rect') >= 0 && plHTML.indexOf('<path') >= 0,
+      'PL8: three shapes are emitted -- auction, Buy It Now, and type-not-stated');
+  var boG = /<g class="pm pm-bin pm-bo"[^>]*>[\s\S]*?<\/g>/.exec(plHTML);
+  res(!!boG && boG[0].indexOf('<rect') >= 0 && boG[0].indexOf('pmring') >= 0,
+      'PL9 GATE: shape and ring are INDEPENDENT channels -- a Buy It Now that was best-offer-accepted carries BOTH, because the two fields are orthogonal and one channel would lose or double-count it');
+
+  // D8, and a planted control: a scan that has never been shown to fire proves
+  // nothing. The forbidden shapes are curve commands, polylines and any asserted
+  // band -- the plot draws sales, ticks and the user's ask, and nothing else.
+  var CURVE = /<(polyline|polygon)\b|[CQSTA]\s*-?[0-9]/;
+  res(!CURVE.test(plHTML),
+      'PL10 GATE (D8): NO fitted curve, smoothed density, polyline or asserted band anywhere in the plot -- n=98 is enough to SEE modes and not enough to characterise them, and mode-fitting on a small sample finds structure in noise');
+  res(CURVE.test('<path d="M 0 0 C 10 20 30 40 50 60"/>'),
+      'PL10 GATE: and the detector FIRES on a planted curve -- a clean scan is evidence only once something proves the scan can fail');
+
+  res(plHTML.indexOf('ratio, not difference') >= 0 && plHTML.indexOf('grade bands multiply') >= 0,
+      'PL11 GATE (ruled): the log scale is STATED on the surface -- it is a claim about how to read the data, not a convenience, so it is not left silent');
+  res(!/[0-9]e[+-]?[0-9]/i.test(plHTML) && plHTML.indexOf('$') >= 0,
+      'PL11 GATE (ruled): ticks are DOLLARS, never exponents');
+  res(plHTML.indexOf('id="compsPick"') >= 0,
+      'PL12: the plot carries its own detail target, repainted in place -- no modal, so plot and detail stay on one screen');
+  res(CT.compsPlotHTML([]) === '',
+      'PL12: and with no sales it emits nothing at all rather than an empty axis');
+
+  // The census that makes the ruled enum survey executable. Ruled: take it from
+  // the next real lookup, not a paid probe -- which requires the RAW values to
+  // reach a surface, since compTypeOf renders "FixedPrice" as "Buy It Now".
+  var cen13 = CT.compsTypeCensus(plRows);
+  res(cen13['Auction'] === 2 && cen13['FixedPrice'] === 2 && cen13['Wat'] === 1 && cen13['(not stated)'] === 1,
+      'PL13 GATE: the census reports the provider\'s OWN strings verbatim, including one nobody has mapped -- reporting the app\'s label instead would make the survey impossible, which is D4\'s two objects and D10\'s verbatim title, applied to an enum',
+      JSON.stringify(cen13));
+  var cenTotal = Object.keys(cen13).reduce(function (a, k) { return a + cen13[k]; }, 0);
+  res(cenTotal === plRows.length,
+      'PL13 GATE: and every row is counted exactly once -- a census that quietly skips the values it does not recognise is the thing it exists to prevent',
+      cenTotal + '/' + plRows.length);
+
   // ---- CQ6: the client-side filter, and what it hides it SHOWS --------------
   var f6 = CT.compsFilter(p5.rows);
   res(f6.kept.length === 6 && f6.dropped.length === 2,
@@ -1811,6 +1945,38 @@ window.setLS({});
       'AK5 GATE (Fork E): the ask renders INTO the scatter at its position -- after every sale below it, before the first one above',
       mkPos.join(','));
 
+  // REPOINTED FOR R5 (HT-D60 Clause 3 -- repointed, not weakened). The assertion
+  // above reads DOM ORDER of .cmpprice spans. R5 folds that list into a
+  // <details>, and a <details> keeps its content in innerHTML -- so on its own
+  // it would keep passing against a surface nobody can see. That is HT-D63's
+  // presence-not-content failure wearing a new costume, one slice after D16.
+  //
+  // The honest translation is GEOMETRIC: in the picture, the ask rule sits
+  // strictly between the highest sale below it and the lowest above it. Markup
+  // order is not the property anyone cares about, and gating mark emission order
+  // would gate Object.keys iteration, which is not a guarantee.
+  var akAll = akRows.map(function (r) { return r.soldPrice; });
+  var akSc5 = CT.compsScale(akAll.concat([30]));
+  var akBelowMax = Math.max.apply(null, akAll.filter(function (p) { return p < 30; }));
+  var akAboveMin = Math.min.apply(null, akAll.filter(function (p) { return p > 30; }));
+  res(akSc5.x(akBelowMax) < akSc5.x(30) && akSc5.x(30) < akSc5.x(akAboveMin),
+      'AK5 GATE (Fork E, repointed for R5): the ask renders INTO the scatter AT ITS POSITION -- strictly between the highest sale below it and the lowest above, as a fact about the PICTURE rather than about markup order',
+      'x(' + akBelowMax + ')=' + akSc5.x(akBelowMax).toFixed(1) + ' x(30)=' + akSc5.x(30).toFixed(1) +
+      ' x(' + akAboveMin + ')=' + akSc5.x(akAboveMin).toFixed(1));
+  res(document.getElementById('compsBox').innerHTML.indexOf('askrule') >= 0,
+      'AK5 GATE (R5): and the rule is DRAWN in the plot, not merely computable -- the geometry above is only a claim about the surface if the surface carries it');
+
+  // HT-D53's SAFETY CONTROL, and it is the half a presence check cannot see:
+  // the kept statements must be present AND NOT INSIDE A FOLD.
+  var r5box = document.getElementById('compsBox').innerHTML;
+  var r5folded = (r5box.match(/<details class="cited">[\s\S]*?<\/details>/g) || []).join('');
+  res(r5box.indexOf('cannot tell a raw copy') >= 0 && r5folded.indexOf('cannot tell a raw copy') < 0,
+      'R5 GATE (HT-D53): the raw-vs-slab statement is on the surface and NOT inside a fold -- anything that changes what a number MEANS stays visible');
+  res(r5box.indexOf('sold · last 90 days') >= 0 && r5folded.indexOf('sold · last 90 days') < 0,
+      'R5 GATE (HT-D53): and so do the count and the window -- CQ7 gates that they are PRESENT, this gates that folding did not swallow them');
+  res(r5folded.indexOf('no grade and no certification field') >= 0 && r5folded.indexOf('cmplist') >= 0,
+      'R5 GATE (HT-D53): while the PROVENANCE -- why it cannot tell, and all the sales -- IS folded. The cut goes where the sentence changes job, and the wall of text was the problem rather than the words');
+
   // CQ7 EXTENDED, and swept across BOTH containers: the scatter and the
   // nearest-comps lists both render prices, and CQ7 only ever read the first.
   var src = akRows.map(function (r) { return r.soldPrice; });
@@ -1863,11 +2029,38 @@ window.setLS({});
   // .cmpprice values, state.ask and state.terms -- and a divided per-book figure
   // rendered in the MARKER'S TITLE is none of the three, so the assertion could
   // not catch the defect it is named for. "Nowhere" has to mean nowhere.
+  // REPOINTED AGAIN FOR R5 (HT-D60 Clause 3), and STRENGTHENED rather than
+  // loosened. The check was `akBoth().indexOf('$8') < 0` -- a SUBSTRING search,
+  // which cannot tell the forbidden quotient "$8" from any price that merely
+  // starts with an 8. R5's folded provenance carries D7's measured evidence,
+  // "sold for $9, $29.99 and $89", and "$89".indexOf("$8") matches. The gate
+  // fired on a legitimate price inside explanatory prose.
+  //
+  // That is AK7's failure in a different vocabulary: AK7 banned the word
+  // "average" and fired on the surface's own REFUSAL to average. A detector that
+  // cannot tell a claim from something that merely contains its characters is
+  // not measuring the claim.
+  //
+  // Extracting money tokens and comparing NUMERICALLY still catches "$8.00" --
+  // the quotient written differently, which the substring search also caught --
+  // while no longer colliding with $89 or $80. The `terms` check moves with it:
+  // a seller quoting "5 for $80" would have tripped the old one too.
+  var money9 = function (h) {
+    return (String(h).match(/\$[0-9][0-9,]*(?:\.[0-9]+)?/g) || [])
+      .map(function (s) { return Number(s.replace(/[^0-9.]/g, '')); });
+  };
   var st9 = CT.askState();
   res(akPrices(akBoth()).indexOf(8) < 0 && st9.ask !== 8 &&
-      String(st9.terms).indexOf('$8') < 0 && akBoth().indexOf('$8') < 0,
+      money9(st9.terms).indexOf(8) < 0 && money9(akBoth()).indexOf(8) < 0,
       'AK9 GATE (D12): $40 / 5 = $8 appears NOWHERE -- not as a price, not in state, not anywhere in the rendered surface. The app never divides a seller\'s quote',
-      JSON.stringify(st9));
+      'state=' + JSON.stringify(st9) + ' money=' + money9(akBoth()).join(','));
+  // THE PLANTED CONTROL. AK9 was a tautology when first written and had to be
+  // widened once already; a detector nobody has seen fire is the thing this gate
+  // keeps becoming. This shows it finds the quotient in both forms AND does not
+  // confuse the price that broke it.
+  res(money9('sold for $8 and $89 and $8.00 and $80').join(',') === '8,89,8,80',
+      'AK9 GATE: and the detector FIRES on $8 and on $8.00 while reading $89 and $80 as themselves -- a clean scan is evidence only once something proves the scan can fail, and only once it proves the scan is not firing on the wrong thing',
+      money9('sold for $8 and $89 and $8.00 and $80').join(','));
 
   // Fork F: a scatter in two currencies is incomparable; say so, do not place.
   var mixed = akRows.slice(0, 3).map(function (r) { return JSON.parse(JSON.stringify(r)); });

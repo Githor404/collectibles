@@ -1620,8 +1620,12 @@ function renderConfirmed() {
     `<div class="cfq"><input id="confirmedQuery" type="text" value="${esc(compsQuery())}" ` +
     `oninput="compsSetQuery(this.value)" aria-label="Search eBay sold listings for">` +
     `<button class="btn" onclick="copyQuery(this)">Copy</button></div>` +
-    `<div class="note">From the cover as printed, minus the leading article and the #. ` +
-    `eBay is a full-text search, so the issue number belongs in it — edit this if it is wrong.</div>` +
+    // FOLDED (R5/HT-D53): how the query was DERIVED explains the box above it;
+    // it does not change what the query means, and it competed with the data for
+    // the same screen. The box itself stays editable and visible.
+    citeBlock('How this search was built',
+      `<span class="fine">From the cover as printed, minus the leading article and the #. ` +
+      `eBay is a full-text search, so the issue number belongs in it — edit the box above if it is wrong.</span>`) +
     (credConfigured('comps')
       ? `<button class="btn primary" onclick="compsLookup()">Look up sold comps</button> ` +
         `<button class="btn" onclick="clearConfirmed()">Start over</button></div>`
@@ -1731,6 +1735,65 @@ function compsBound(body) {
 // advertised, and the two disagreed here on the very first run.
 const COMP_KEYS = ['itemId', 'title', 'condition', 'conditionId', 'endedAt',
                    'soldPrice', 'soldCurrency', 'listingType', 'isBestOfferAccepted'];
+// R5: ONE SOURCE OF TRUTH FOR WHAT A COMP IS.
+//
+// COMP_KEYS above declares what ARRIVES. This declares what we KEEP, and the row
+// builder is driven BY it -- so a field cannot be consumed without being declared
+// and cannot be declared-and-consumed while silently absent from a row.
+//
+// THE DEFECT THIS CLOSES: COMP_KEYS listed `listingType` and `conditionId` and
+// parseComps dropped both, for the whole of R2b and R3. Nothing broke, because
+// nothing read them -- and no assertion pinned the two together (CQ5 only checks
+// what is ABSENT from COMP_KEYS). A declared contract and its consumer drifting
+// while both pass their own assertions is D3, exactly. A comparison gate would
+// have been a THIRD list to keep in step; deriving the rows removes the question.
+//
+// `keyword` is declared and deliberately NOT kept: it is our own query echoed
+// back, not a fact about the sale. Declared-but-unused is fine; the reverse is
+// what the derivation makes impossible.
+const COMP_FIELDS = [
+  { from: 'itemId',              to: 'itemId',       cast: 'str'  },
+  { from: 'title',               to: 'title',        cast: 'str'  },
+  { from: 'condition',           to: 'condition',    cast: 'str'  },
+  { from: 'conditionId',         to: 'conditionId',  cast: 'str'  },
+  { from: 'endedAt',             to: 'endedAt',      cast: 'str'  },
+  { from: 'soldPrice',           to: 'soldPrice',    cast: 'num'  },
+  { from: 'soldCurrency',        to: 'soldCurrency', cast: 'cur'  },
+  { from: 'listingType',         to: 'listingType',  cast: 'str'  },
+  { from: 'isBestOfferAccepted', to: 'bestOffer',    cast: 'bool' },
+];
+
+// listingType's VALUES ARE UNMEASURED. R2b's probe recorded that the field
+// exists and never what range it takes, so this table is written from eBay's
+// documented vocabulary and CANNOT yet be gated as exhaustive (D3: gate across
+// the range a contract permits -- and that range is currently unknown).
+//
+// Therefore any value not in it renders VISIBLY as unstated, never absorbed into
+// a default: a discriminator that silently stops discriminating looks exactly
+// like one that works, which is D5's shape. The census comes free from the next
+// real lookup rather than from a paid probe.
+//
+// THREE STATES, not two. `absent` (older data, and every existing fixture) is a
+// different fact from `unrecognised` (a contract surprise). They look identical
+// on the surface -- the reader's situation is the same, "not known" -- and stay
+// distinct in the data, so a gate can tell a stale fixture from a live surprise.
+const COMP_TYPES = {
+  auction:        { kind: 'auction', label: 'auction' },
+  auctionwithbin: { kind: 'auction', label: 'auction, with Buy It Now' },
+  fixedprice:     { kind: 'bin',     label: 'Buy It Now' },
+  buyitnow:       { kind: 'bin',     label: 'Buy It Now' },
+  storeinventory: { kind: 'bin',     label: 'Buy It Now, shop listing' },
+};
+function compTypeOf(r) {
+  const given = (r && r.listingType != null) ? String(r.listingType) : '';
+  const key = given.toLowerCase().replace(/[^a-z]/g, '');
+  if (!key) return { kind: 'unstated', stated: false, known: false, label: 'listing type not stated' };
+  const hit = COMP_TYPES[key];
+  if (!hit) return { kind: 'unstated', stated: true, known: false,
+                     label: 'listing type “' + given + '” not recognised' };
+  return { kind: hit.kind, stated: true, known: true, label: hit.label };
+}
+
 function parseComps(raw) {
   let arr;
   try { arr = JSON.parse(String(raw == null ? '' : raw)); }
@@ -1742,15 +1805,15 @@ function parseComps(raw) {
     if (!o || typeof o !== 'object') continue;
     const price = Number(o.soldPrice);
     if (!(price > 0)) continue;                  // a comp with no price is not a comp
-    rows.push({
-      itemId: String(o.itemId == null ? '' : o.itemId),
-      title: String(o.title == null ? '' : o.title),
-      condition: String(o.condition == null ? '' : o.condition),
-      endedAt: String(o.endedAt == null ? '' : o.endedAt),
-      soldPrice: price,
-      soldCurrency: String(o.soldCurrency || 'USD'),
-      bestOffer: !!o.isBestOfferAccepted,
+    const row = {};
+    COMP_FIELDS.forEach(function (f) {
+      const v = o[f.from];
+      if (f.cast === 'num') row[f.to] = price;
+      else if (f.cast === 'bool') row[f.to] = !!v;
+      else if (f.cast === 'cur') row[f.to] = String(v || 'USD');
+      else row[f.to] = String(v == null ? '' : v);
     });
+    rows.push(row);
   }
   return { ok: true, rows: rows };
 }
@@ -1912,12 +1975,27 @@ function renderComps() {
       (n ? sorted.map(compsRowHTML).join('') : '') +
       compsFootHTML() + `</div>`);
 
+  // R5, and HT-D53's cut: the WHAT stays on the surface, the WHY folds. Anything
+  // that changes what a number MEANS is not foldable -- the count and the window
+  // ride in `head` (CQ7 gates both), and the raw/slab statement is here.
   return void (el.innerHTML = `<div class="comps">${head}` +
-    // D10, stated WHERE THE NUMBERS ARE and not in a footnote.
+    // D10, stated WHERE THE NUMBERS ARE and not in a footnote. This sentence
+    // changes what every price means, so it cannot be one tap away.
     `<div class="note warnline">These are mixed: this lookup cannot tell a raw copy from a graded slab. ` +
-    `eBay's search results carry no grade and no certification field, so the seller's own words below are the only grade there is. ` +
     `Read them — a slabbed 9.8 and a beaten reading copy are both in this list.</div>` +
-    `<div class="cmplist">${compsListHTML(sorted)}</div>` +
+    compsPlotHTML(sorted) +
+    // FOLDED: the provenance half -- WHY it cannot tell. It explains the
+    // sentence above rather than changing what a number means, which is exactly
+    // where HT-D53 puts the cut.
+    citeBlock('Why it cannot tell them apart',
+      `<span class="fine">eBay's search results carry no grade and no certification field, so the seller's own words are the only grade there is. ` +
+      `Three books at an identical “Pre-Owned / 3000” sold for $9, $29.99 and $89 — a 10× spread at one condition code, measured rather than argued (D7).</span>`) +
+    // FOLDED: the full list. It is the provenance of every mark -- and every
+    // mark's title is one tap away on the plot, while the nearest comps stay
+    // visible beside the ask. The wall of text was the problem; the words were
+    // never the problem, so they stay reachable rather than being removed (D10).
+    citeBlock(`All ${n} sales, with the seller's own words`,
+      `<div class="cmplist">${compsListHTML(sorted)}</div>`) +
     compsFootHTML() + `</div>`);
 }
 // FOUND BY THE LAYOUT GATE, and it was a product defect rather than a test gap:
@@ -1960,18 +2038,231 @@ function compsRowHTML(r) {
     `<span class="cmptitle">${esc(r.title)}</span>` +
     `</div>`;
 }
+// ---- R5: THE DISTRIBUTION, DRAWN -------------------------------------------
+// 98 sales spanning $2 to $2,300 is not one population. Raw, mid-grade and
+// slabbed are superimposed, and the search tier gives no field that separates
+// them -- measured, not argued (D7: three books at an identical Pre-Owned/3000
+// sold for $9, $29.99 and $89). But they separate BY MODE, and the gaps between
+// clusters are the grade boundaries the data refuses to state. The eye reads
+// that instantly; no summary statistic conveys it. This is D8's "a scatter is
+// the claim" RENDERED rather than written.
+//
+// WHAT IS REFUSED, and for D8's reason: no fitted model, no kernel density, no
+// smoothing, no trendline, no asserted cluster count, and no bins that invent
+// counts. n=98 is enough to SEE modes and not enough to CHARACTERISE them;
+// mode-fitting on a small sample finds structure in noise. The app draws the
+// dots, the human finds the modes.
+//
+// ONE MARK, ONE SALE. That is the property the whole plot rests on, which is why
+// ties STACK rather than blending: opacity would make two sales at $9 look like
+// one darker sale, and that invents a reading.
+//
+// GRADE NEVER REACHES HERE. askSetGrade deliberately has no path to the scatter
+// ("the surest way to guarantee that is to give it no path at all"); the plot
+// adds no second route.
+const PLOT_W = 320, PLOT_H = 124;
+const PLOT_BASE = 92;   // the baseline marks sit on
+const PLOT_TOP = 16;    // the highest a stack may reach
+const PLOT_STEP = 8;    // one stack level
+const PLOT_COL = 4;     // viewBox units that count as "the same column"
+const PLOT_MAX_STACK = Math.floor((PLOT_BASE - PLOT_TOP) / PLOT_STEP);
+
+// LOG, AND IT IS A CLAIM RATHER THAN A CONVENIENCE (ruled 2026-09-14). Grade
+// bands are MULTIPLICATIVE: $9 -> $29 is the same kind of step as $90 -> $290.
+// Linear over $2-$2,300 would put the entire raw market in the first 2% of the
+// axis and let one CGC 9.8 define the scale -- the modes would vanish, which is
+// the slice defeated. Because it is a claim, it is STATED on the surface, and
+// the ticks are dollars, never exponents.
+//
+// The ASK joins the domain when one is set, so the rule can never fall off the
+// edge -- the axis spans what is shown, which is the honest reading of it.
+function compsScale(prices) {
+  const ps = (prices || []).filter(function (p) { return p > 0; });
+  if (!ps.length) return null;
+  let lo = Math.min.apply(null, ps), hi = Math.max.apply(null, ps);
+  if (!(hi > lo)) { lo = lo / 2; hi = hi * 2; }   // one distinct price: give it room
+  const l0 = Math.log(lo), l1 = Math.log(hi);
+  return { lo: lo, hi: hi, x: function (p) {
+    const t = (Math.log(Math.max(Number(p) || 0, 1e-9)) - l0) / (l1 - l0);
+    return 10 + Math.max(0, Math.min(1, t)) * (PLOT_W - 20);
+  } };
+}
+// Powers of ten inside the span. A NARROW span can contain none, and an axis
+// with no labels is not readable -- so it falls back to the endpoints rather
+// than shipping a bare strip with nothing to read it against.
+function compsTicks(sc) {
+  if (!sc) return [];
+  const out = [];
+  const e0 = Math.floor(Math.log(sc.lo) / Math.LN10), e1 = Math.ceil(Math.log(sc.hi) / Math.LN10);
+  for (let e = e0; e <= e1; e++) {
+    const v = Math.pow(10, e);
+    if (v >= sc.lo && v <= sc.hi) out.push(v);
+  }
+  return out.length >= 2 ? out : [sc.lo, sc.hi];
+}
+// Ties STACK. Where a stack fills, the overflow is DISCLOSED rather than
+// silently clipped -- D11's rule reused, not a second one invented.
+function compsMarks(sorted, sc) {
+  const buckets = {};
+  (sorted || []).forEach(function (r, i) {
+    const x = sc.x(r.soldPrice);
+    const k = String(Math.round(x / PLOT_COL));
+    (buckets[k] = buckets[k] || []).push({ i: i, r: r, x: x });
+  });
+  const marks = [], hidden = [];
+  Object.keys(buckets).forEach(function (k) {
+    buckets[k].forEach(function (m, lvl) {
+      if (lvl < PLOT_MAX_STACK) {
+        marks.push({ i: m.i, r: m.r, x: m.x, y: PLOT_BASE - lvl * PLOT_STEP, t: compTypeOf(m.r) });
+      } else { hidden.push(m); }
+    });
+  });
+  return { marks: marks, hidden: hidden };
+}
+// SHAPE = listing type, RING = best offer accepted. The two fields are
+// ORTHOGONAL -- a Buy It Now can be best-offer-accepted -- so three exclusive
+// marks would either lose that or double-count it. Encoding them on separate
+// channels is the only rendering that does neither, and it makes best-offer
+// density readable for free rather than as a parked feature.
+//
+// data-p carries the price because a gate must be able to ENUMERATE what the
+// plot renders. CQ7's sweep reads prices out of `.cmpprice` spans, which marks
+// do not have -- without this the sweep would keep passing while silently
+// ceasing to cover the surface where prices are actually drawn.
+function compsMarkSVG(m) {
+  const x = m.x.toFixed(2), y = m.y;
+  const shape = m.t.kind === 'auction'
+    ? `<circle cx="${x}" cy="${y}" r="3"/>`
+    : (m.t.kind === 'bin'
+      ? `<rect x="${(m.x - 2.6).toFixed(2)}" y="${y - 2.6}" width="5.2" height="5.2"/>`
+      : `<path d="M ${x} ${y - 3.4} L ${(m.x + 3.4).toFixed(2)} ${y} L ${x} ${y + 3.4} L ${(m.x - 3.4).toFixed(2)} ${y} Z"/>`);
+  const ring = m.r.bestOffer ? `<circle class="pmring" cx="${x}" cy="${y}" r="5.6"/>` : '';
+  const lab = compsMoney(m.r.soldPrice, m.r.soldCurrency) + ' · ' + m.t.label +
+              (m.r.bestOffer ? ' · best offer accepted' : '');
+  return `<g class="pm pm-${esc(m.t.kind)}${m.r.bestOffer ? ' pm-bo' : ''}" data-p="${esc(String(m.r.soldPrice))}" ` +
+    `tabindex="0" role="button" onclick="compsPick(${m.i})"><title>${esc(lab)}</title>${shape}${ring}</g>`;
+}
+function compsPlotHTML(sorted) {
+  const rows = sorted || [];
+  if (!rows.length) return '';
+  const c = askComparison();
+  const askIn = !!(c && !c.mixed && ASK !== null);
+  const sc = compsScale(rows.map(function (r) { return r.soldPrice; }).concat(askIn ? [ASK] : []));
+  if (!sc) return '';
+  const mk = compsMarks(rows, sc);
+  const cur = rows[0] ? rows[0].soldCurrency : 'USD';
+  const ticks = compsTicks(sc).map(function (v) {
+    const tx = sc.x(v).toFixed(2);
+    return `<line class="pt" x1="${tx}" y1="${PLOT_BASE + 4}" x2="${tx}" y2="${PLOT_BASE + 9}"/>` +
+      `<text class="ptl" x="${tx}" y="${PLOT_BASE + 20}" text-anchor="middle">${esc(compsMoney(v, cur))}</text>`;
+  }).join('');
+  // The ask is the ONE line here that is not a sale, so it is drawn differently
+  // and named -- it cannot be read as a comp (AK6's property, in the plot).
+  const ax = askIn ? sc.x(ASK).toFixed(2) : null;
+  const askRule = askIn
+    ? `<line class="askrule" x1="${ax}" y1="${PLOT_TOP - 6}" x2="${ax}" y2="${PLOT_BASE + 4}"/>` +
+      `<text class="askrulel" x="${ax}" y="${PLOT_TOP - 9}" text-anchor="middle">YOUR ASK</text>`
+    : '';
+  const cut = mk.hidden.length
+    ? `<div class="note">${mk.hidden.length} sale${mk.hidden.length === 1 ? '' : 's'} not drawn — ` +
+      `the column is full where sales pile up at one price. They are in the list below, and in the counts (D11).</div>`
+    : '';
+  return `<div class="cmpplot">` +
+    `<svg class="plotsvg" viewBox="0 0 ${PLOT_W} ${PLOT_H}" preserveAspectRatio="xMidYMid meet" ` +
+    `role="img" aria-label="Every sale, one mark each, spaced by price on a ratio scale">` +
+    `<line class="paxis" x1="10" y1="${PLOT_BASE + 4}" x2="${PLOT_W - 10}" y2="${PLOT_BASE + 4}"/>` +
+    ticks + askRule + mk.marks.map(compsMarkSVG).join('') + `</svg>` +
+    `<div class="plotkey">` +
+    `<span class="pk pk-auction"></span>auction` +
+    `<span class="pk pk-bin"></span>Buy It Now` +
+    `<span class="pk pk-unstated"></span>type not stated` +
+    `<span class="pk pk-bo"></span>best offer accepted` +
+    `</div>` +
+    `<div class="note plotnote">Spaced by <b>ratio, not difference</b> — $9 to $29 is the same step as $90 to $290, ` +
+    `because grade bands multiply. Ticks are dollars. One mark is one sale; tap a mark for the seller's own words.</div>` +
+    cut + `<div id="compsPick"></div></div>`;
+}
+
+// THE TAP. Repaints in place, like renderConfirmQuery -- no modal, so the plot
+// and the detail stay on one screen. The index is into the SORTED rows, which
+// renderComps recomputes identically on every paint.
+// BY OBJECT IDENTITY, not by index, and that is what removes the bookkeeping.
+// An index is only meaningful against one row set, so it would have to be
+// cleared wherever a new one arrives -- compsLookup's success branch, its
+// fail(), compsClear and __setComps, which is four places to keep in step and a
+// fifth to forget later. That is the drift that left listingType declared in
+// COMP_KEYS and dropped by parseComps.
+//
+// Keying on COMPS.at was the other candidate and is worse: it is nowMs()'s ISO
+// string, and the harness fixes the clock, so two row sets in one tick collide.
+//
+// A reference answers it structurally. A new lookup builds new row objects, so a
+// stale pick is simply not found; a re-sort cannot invalidate it; and re-seeding
+// the same fixture rows resolves to the same sale, which is correct rather than
+// stale. A tap from the previous book can never resolve to a sale on this one --
+// brief rule 8's confidently-wrong pairing, in miniature.
+let PICKED = null;
+function compsPickClear() { PICKED = null; }
+function compsPick(i) {
+  const rows = (COMPS && COMPS.phase === 'done') ? COMPS.rows : [];
+  const sorted = rows.slice().sort(function (a, b) { return a.soldPrice - b.soldPrice; });
+  PICKED = (typeof i === 'number' && i >= 0 && sorted[i]) ? sorted[i] : null;
+  renderCompsPick();
+  return { ok: true, picked: !!PICKED };
+}
+function compsPickRow() {
+  if (!COMPS || COMPS.phase !== 'done' || !PICKED) return null;
+  return COMPS.rows.indexOf(PICKED) >= 0 ? PICKED : null;
+}
+// D10: the seller's title VERBATIM. It is the only grade signal this tier has,
+// so a tap gives the words themselves, never a parse of them.
+function renderCompsPick() {
+  const el = document.getElementById('compsPick');
+  if (!el) return;
+  const r = compsPickRow();
+  if (!r) { el.innerHTML = ''; return; }
+  const t = compTypeOf(r);
+  el.innerHTML = `<div class="cmprow cmppick">` +
+    `<span class="cmpprice">${esc(compsMoney(r.soldPrice, r.soldCurrency))}</span>` +
+    `<span class="cmpmeta">${esc(compsDate(r.endedAt))} · ${esc(t.label)}` +
+    `${r.bestOffer ? ' · best offer accepted' : ''}</span>` +
+    `<span class="cmptitle">${esc(r.title)}</span></div>`;
+}
+
+// THE CENSUS THE RULING NEEDS. listingType's values are unmeasured, and it was
+// ruled that the census comes free from the next real lookup rather than a paid
+// probe. That only works if the RAW values reach a surface: compTypeOf maps
+// "FixedPrice" to "Buy It Now", so a reader looking at a real lookup could not
+// report back what the provider actually sent.
+//
+// Raw strings, verbatim, with counts. An unrecognised value is legible here as
+// itself rather than as the word the app chose for it -- which is the same
+// reason D10 keeps the seller's title verbatim and D4 keeps `raw` beside the
+// normalised form. Provenance, so it rides with the provenance line.
+function compsTypeCensus(rows) {
+  const by = {};
+  (rows || []).forEach(function (r) {
+    const k = (r && r.listingType) ? String(r.listingType) : '(not stated)';
+    by[k] = (by[k] || 0) + 1;
+  });
+  return by;
+}
 function compsFootHTML() {
   const d = COMPS.dropped || [];
   const byWhy = {};
   d.forEach(function (x) { byWhy[x.why] = (byWhy[x.why] || 0) + 1; });
   const bits = Object.keys(byWhy).map(function (k) { return byWhy[k] + ' ' + k + (byWhy[k] === 1 ? '' : 's'); });
+  const cen = compsTypeCensus(COMPS.rows);
+  const cenBits = Object.keys(cen).sort().map(function (k) { return k + ' ' + cen[k]; });
   return (bits.length
       ? `<div class="note">${esc(bits.join(', '))} hidden — the title said so. ` +
         `<button type="button" class="linklike" onclick="compsShowDropped(this)">show what was hidden</button>` +
         `<span class="cmpdrop" hidden>${d.map(function (x) { return `<div class="cmprow"><span class="cmptitle">${esc(x.title)}</span><span class="cmpmeta">${esc(x.why)}</span></div>`; }).join('')}</span></div>`
       : '') +
     `<div class="note">eBay sold listings via Apify · searched “${esc(COMPS.query)}” · ` +
-    `about ${esc(compsMoney(COMPS.bound.usd))} for this lookup. No average, no estimate — these are the sales.</div>`;
+    `about ${esc(compsMoney(COMPS.bound.usd))} for this lookup. No average, no estimate — these are the sales.` +
+    (cenBits.length ? `<br><span class="fine">Listing types as the provider sent them: ${esc(cenBits.join(', '))}.</span>` : '') +
+    `</div>`;
 }
 function compsShowDropped(btn) {
   const box = btn && btn.parentElement ? btn.parentElement.querySelector('.cmpdrop') : null;
@@ -2152,7 +2443,7 @@ function renderAskLive() {
 // WHY A NOTICE WORKS WITH NO WORKER: there is no app-controlled cache, so a load
 // fetches current bytes and the notice fires on it. The worker is what would
 // CREATE the stale-shell problem it then solves.
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.3.0';
 const VERSION_KEY = 'collectibles-version';   // PFX1: every storage key is prefixed
 
 // One line per release, newest LAST. The newest entry's `v` must equal
@@ -2169,6 +2460,7 @@ const VERSION_KEY = 'collectibles-version';   // PFX1: every storage key is pref
 const VERSION_LOG = [
   { v: '0.1.0', d: '2026-09-14', note: 'Version numbers. The app now says which build it is running, and tells you what changed when a new one arrives. Identification, sold comps and the asking-price comparison all shipped before this, unversioned; nothing about them changes here.' },
   { v: '0.2.0', d: '2026-09-14', note: 'A want list. Type the books you are hunting into Settings, one per line, and the draft tells you when the book in your hand is one of them. Matching forgives spelling and format — "The Amazing Spider-Man #129" and "Amazing Spider-Man 129" are the same want — but the issue must match, because a different issue is a different book. It is a prompt to look, never a claim, and nothing is recorded before you confirm the reading. This is also the first thing the app saves to your device besides your keys, so the storage line in Settings now matters to more than a capture.' },
+  { v: '0.3.0', d: '2026-09-14', note: 'Sold comps are now drawn, not just listed. Every sale is one mark, spaced by price — and spaced by RATIO rather than difference, because grade bands multiply: $9 to $29 is the same step as $90 to $290. Clusters with gaps between them are different markets, and the gaps are the grade boundaries this data refuses to state; your eye finds them, the app does not guess at them. Mark shapes show how each sale closed — auction, Buy It Now, or a type the provider did not state — and a ring means a best offer was accepted. Tap any mark for the seller\'s own words. Nothing is fitted, smoothed or averaged: 98 sales are enough to SEE the shape and not enough to characterise it. The full list and the explanations now fold away, so the numbers stop competing with the prose for the same screen.' },
 ];
 
 // Numeric per segment, so 0.2.0 < 0.10.0 -- a string compare gets that backwards
@@ -2421,9 +2713,15 @@ window.CT = {
   identityAccept, renderIdentityHTML, confirmedIdentity, clearConfirmed, renderConfirmed, copyQuery,
   // R2b / D10 -- sold comps: one scatter, no groups, no range
   COMPS_WINDOW_DAYS, COMPS_COUNT, COMPS_MIN_SHOWN, COMPS_EXCLUDE, COMPS_NEVER_SENT, COMP_KEYS,
+  // R5 -- the row contract is DERIVED from this, so used-but-undeclared cannot occur
+  COMP_FIELDS, COMP_TYPES, compTypeOf,
   compsDefaultQuery, compsQuery, compsSetQuery, compsResetQuery, compsBody, compsBound,
   parseComps, compsFilter, compsBodyIsClean, compsLookup, compsClear, renderComps, compsPing,
   compsRowHTML, compsShowDropped, compsMoney, compsDate, compsListHTML, __setComps,
+  // R5 -- the distribution, drawn. Pure emitters, so the markup is gateable
+  // without a surface; the tap repaints in place.
+  PLOT_W, PLOT_H, PLOT_MAX_STACK, compsScale, compsTicks, compsMarks, compsMarkSVG,
+  compsPlotHTML, compsPick, compsPickClear, compsPickRow, renderCompsPick, compsTypeCensus,
   compsState: () => COMPS,
   // R3 / D11-D13 -- the triage surface: an ask against a scatter
   GRADES, ASK_NEAREST, askSetPrice, askSetTerms, askSetGrade, askClear, askState,

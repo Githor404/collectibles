@@ -707,6 +707,50 @@ report "issue ignored -- every ASM in the box flags" "W5 GATE" "$(run_dl)"; rest
 mutate 's/  renderWantFlag\(\);\n  return \{ ok: true, query: identityQuery\(v\) \};/  return { ok: true, query: identityQuery(v) };/' app.js
 report "flag never re-evaluates on correction" "W9 GATE" "$(run_dl)"; restore
 
+# --- 62. a sale that is drawn NOWHERE -------------------------------------------
+# R5 rests on one property: ONE MARK, ONE SALE. This drops the first mark of every
+# column into neither `marks` nor `hidden`, so the plot quietly shows fewer sales
+# than it was given -- no error, no gap, just a distribution that is not the data.
+# It is the D8 failure in a new medium: a picture that asserts more agreement than
+# the sales support.
+mutate 's/buckets\[k\]\.forEach\(function \(m, lvl\) \{/buckets[k].forEach(function (m, lvl) { if (lvl === 0) return;/' app.js
+report "a sale drawn nowhere" "PL5 GATE" "$(run_dl)"; restore
+
+# --- 63. a fitted line through the scatter ---------------------------------------
+# D8, refused for the reason n=98 is enough to SEE modes and not to CHARACTERISE
+# them. A polyline is the cheapest way to imply a trend that was never computed,
+# and a reader cannot tell a drawn line from a fitted one.
+mutate 's/<line class="paxis"/<polyline class="paxis"/' app.js
+report "a fitted line through the scatter" "PL10 GATE" "$(run_dl)"; restore
+
+# --- 64. the fold stops folding --------------------------------------------------
+# HT-D53's cut only works if the fold actually folds. This moves citeBlock's body
+# OUTSIDE its <details>, so the provenance and the full list spill back onto the
+# surface -- the wall of text R5 exists to remove, restored silently while every
+# string the gates look for is still present.
+mutate 's/<div class="citebody">\$\{innerHTML\}<\/div><\/details>/<\/details>\${innerHTML}/' app.js
+report "the fold stops folding" "R5 GATE" "$(run_dl)"; restore
+
+# --- 65. an unknown listing type silently absorbed -------------------------------
+# D5's shape. listingType's enum is UNMEASURED, so the one thing the surface must
+# do with a value nobody mapped is SAY SO. Absorbed into a default it becomes a
+# mark that looks exactly like a known one, and the census that was ruled to come
+# free from the next device pass would report a type the provider never sent.
+mutate "s/if \(!hit\) return \{ kind: 'unstated', stated: true, known: false,/if (!hit) return { kind: 'bin', stated: true, known: true,/" app.js
+report "an unknown listing type absorbed" "CQ12 GATE" "$(run_dl)"; restore
+
+# --- 66. a field consumed but never declared -------------------------------------
+# The D3 divergence R5 closed: COMP_KEYS declared listingType and conditionId while
+# parseComps dropped both, for two whole slices, with nothing pinning them. The row
+# builder now DERIVES from COMP_FIELDS, so the failure mode inverts -- the danger is
+# consuming a field the contract never promised.
+#
+# NOTE: deleting a COMP_FIELDS entry does NOT fail, and that is the derivation
+# working: both sides of the "exactly the declared fields" assertion come from the
+# same list, so they move together. Only an undeclared `from` is a real defect.
+mutate "s/from: 'conditionId'/from: 'conditionCode'/" app.js
+report "a field consumed but never declared" "CQ11 GATE" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
   printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"

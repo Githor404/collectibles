@@ -177,8 +177,19 @@ $install = @'
       { itemId:'a4', title:'Hulk #271 GD 1 CF staple detached', condition:'Pre-Owned',
         endedAt:'2026-08-11T09:00:00Z', soldPrice:9, soldCurrency:'USD', bestOffer:false }
     ], [], 'Incredible Hulk 271');
+    // R5: THE LIST IS NOW FOLDED, and this measurement had to move with it.
+    // getBoundingClientRect() on content inside a CLOSED <details> returns all
+    // zeros -- and hit() reports two zero-size rectangles as NOT intersecting,
+    // so every disjointness check below would have passed VACUOUSLY. Not a
+    // failure: a false green, which is worse.
+    //
+    // Opened rather than un-folded, because the property is about what the
+    // reader sees WHEN THEY OPEN IT. A fold does not make a layout defect
+    // acceptable; it just postpones it.
+    Array.prototype.forEach.call(document.querySelectorAll('#compsBox details.cited'),
+      function (d) { d.open = true; });
     var row = document.querySelector('#compsBox .cmplist .cmprow');
-    if (!row) return { found:false, why:'no .cmplist .cmprow rendered' };
+    if (!row) return { found:false, why:'no .cmplist .cmprow rendered (fold opened first)' };
     var p = row.querySelector('.cmpprice'), m = row.querySelector('.cmpmeta'), t = row.querySelector('.cmptitle');
     if (!p || !m || !t) return { found:false, why:'a field is not its own element: price=' + !!p + ' date=' + !!m + ' title=' + !!t };
     var R = function(e){ var b=e.getBoundingClientRect();
@@ -198,6 +209,67 @@ $install = @'
       titleBelowDate:  T.top >= M.bottom - 1,
       pageOverflowX: document.documentElement.scrollWidth > window.innerWidth + 1,
       rowText: (row.textContent || '').slice(0, 90)
+    };
+  };
+  // R5: THE PLOT, MEASURED POPULATED. Presence is not the property -- an SVG
+  // whose marks all sit at one x, or whose marks have no size, satisfies every
+  // naive check. The want-list shipped exactly that failure one slice ago: a
+  // layout gate passed while the element it measured rendered nothing, because a
+  // fresh profile had no wants and the flag returned ''.
+  //
+  // The seed carries listingType, which the older fixtures do not. Without it
+  // every mark takes the `unstated` path and the shape encoding goes unmeasured
+  // at the ONE place that can actually see shapes.
+  __g.plot = function(){
+    CT.byokCancel(); CT.byokBusyClear(); CT.captureDiscard(); CT.clearConfirmed();
+    CT.__setComps([
+      { itemId:'b1', title:'Hulk 271 GD', endedAt:'2026-08-01T09:00:00Z', soldPrice:9,
+        soldCurrency:'USD', listingType:'Auction', bestOffer:false },
+      { itemId:'b2', title:'Hulk 271 VG', endedAt:'2026-08-02T09:00:00Z', soldPrice:25,
+        soldCurrency:'USD', listingType:'FixedPrice', bestOffer:true },
+      { itemId:'b3', title:'Hulk 271 FN', endedAt:'2026-08-03T09:00:00Z', soldPrice:40,
+        soldCurrency:'USD', listingType:'Auction', bestOffer:false },
+      { itemId:'b4', title:'Hulk 271 CGC 9.8', endedAt:'2026-08-04T09:00:00Z', soldPrice:145,
+        soldCurrency:'USD', listingType:'FixedPrice', bestOffer:false }
+    ], [], 'Incredible Hulk 271');
+    CT.askSetPrice('30');
+    var svg = document.querySelector('#compsBox .plotsvg');
+    if (!svg) return { found:false, why:'no .plotsvg rendered' };
+    var marks = Array.prototype.slice.call(svg.querySelectorAll('g.pm'));
+    var rule  = svg.querySelector('.askrule');
+    if (!marks.length || !rule) return { found:false, why:'marks=' + marks.length + ' askrule=' + !!rule };
+    var R = function(e){ var b=e.getBoundingClientRect();
+      return { left:Math.round(b.left), right:Math.round(b.right), w:Math.round(b.width), h:Math.round(b.height),
+               cx:(b.left + b.right) / 2 }; };
+    var S = R(svg), RU = R(rule);
+    var MS = marks.map(R);
+    var xs = MS.map(function(m){ return m.cx; });
+    var below = [], above = [];
+    marks.forEach(function (g, i) {
+      var p = Number(g.getAttribute('data-p'));
+      if (p < 30) below.push(MS[i].cx); else if (p > 30) above.push(MS[i].cx);
+    });
+    return {
+      found:true,
+      plotW:S.w, plotH:S.h,
+      markCount: marks.length,
+      // Every mark has real extent -- a zero-size mark is invisible and would
+      // still satisfy a count.
+      allMarksDrawn: MS.every(function(m){ return m.w > 0 && m.h > 0; }),
+      // The marks SPREAD. If the scale collapsed, every mark would share one x
+      // and the plot would be a single stripe that still counted correctly.
+      xSpread: Math.round(Math.max.apply(null, xs) - Math.min.apply(null, xs)),
+      // The ask rule between its neighbours, MEASURED ON SCREEN rather than
+      // recomputed from compsScale -- the data-layer gate already asserts the
+      // arithmetic; this asserts the picture.
+      ruleRightOfBelow: below.length ? RU.cx > Math.max.apply(null, below) : true,
+      ruleLeftOfAbove:  above.length ? RU.cx < Math.min.apply(null, above) : true,
+      shapes: {
+        circles: svg.querySelectorAll('g.pm-auction circle').length,
+        rects:   svg.querySelectorAll('g.pm-bin rect').length,
+        rings:   svg.querySelectorAll('g.pm circle.pmring').length
+      },
+      pageOverflowX: document.documentElement.scrollWidth > window.innerWidth + 1
     };
   };
   // R3: the comparison. The marker is the ONE number here that is not a sale,
@@ -296,6 +368,9 @@ function Measure-Comps {
 }
 function Measure-Ask {
   return (Eval '(function(){ return JSON.stringify(__g.ask()); })()' | ConvertFrom-Json)
+}
+function Measure-Plot {
+  return (Eval '(function(){ return JSON.stringify(__g.plot()); })()' | ConvertFrom-Json)
 }
 
 $browser = Find-Browser
@@ -397,11 +472,23 @@ try {
     # R2b: the comps row is THREE FIELDS, and "separated" is a geometric claim.
     # Runs last in each viewport because it dismisses the outcome modal.
     $C = Measure-Comps
-    $cOk = $C.found -and $C.priceDateDisjoint -and $C.priceTitleDisjoint -and $C.dateTitleDisjoint -and
+    # NON-DEGENERATE RECTANGLES, and this closes a hole that has been here since
+    # the comps case was written. hit() reports two ZERO-SIZE rects as not
+    # intersecting: P.right(0) <= M.left(0) is true, so "disjoint" is true, and
+    # titleBelowPrice becomes 0 >= -1, also true. EVERY comps fact passes
+    # vacuously on collapsed rectangles.
+    #
+    # R5 made that reachable for the first time by folding the list into a
+    # <details>, where getBoundingClientRect() returns all zeros. The fold is
+    # opened before measuring -- but a gate that would have read a false green
+    # either way is not measuring anything, so the sizes are now part of the
+    # verdict rather than something to squint at in a log line.
+    $cDrawn = $C.price.w -gt 0 -and $C.price.h -gt 0 -and $C.title.w -gt 0 -and $C.title.h -gt 0
+    $cOk = $C.found -and $cDrawn -and $C.priceDateDisjoint -and $C.priceTitleDisjoint -and $C.dateTitleDisjoint -and
            $C.titleBelowPrice -and $C.titleBelowDate -and (-not $C.pageOverflowX)
     if ($C.found) {
-      Write-Host ("  {0,-17} comps   : disjoint p/d={1} p/t={2} d/t={3} titleBelow={4} noOverflowX={5} -> {6}" -f `
-        $name, $C.priceDateDisjoint, $C.priceTitleDisjoint, $C.dateTitleDisjoint,
+      Write-Host ("  {0,-17} comps   : drawn={1} ({2}x{3}px) disjoint p/d={4} p/t={5} d/t={6} titleBelow={7} noOverflowX={8} -> {9}" -f `
+        $name, $cDrawn, $C.price.w, $C.price.h, $C.priceDateDisjoint, $C.priceTitleDisjoint, $C.dateTitleDisjoint,
         ($C.titleBelowPrice -and $C.titleBelowDate), (-not $C.pageOverflowX), $cOk)
     } else {
       Write-Host ("  {0,-17} comps   : NOT MEASURABLE -- {1} -> False" -f $name, $C.why)
@@ -420,7 +507,23 @@ try {
       Write-Host ("  {0,-17} ask     : NOT MEASURABLE -- {1} -> False" -f $name, $A.why)
     }
 
-    if (-not ($sOk -and $fOk -and $pOk -and $cOk -and $aOk)) { $allOk = $false }
+    # R5: the distribution, measured POPULATED. Named $plOk and deliberately not
+    # $pOk -- that is the PENDING verdict above, and shadowing it would drop the
+    # pending case out of the fold while everything still read green. That is the
+    # coverage-shrinks-silently failure this slice already had to fix in AK6.
+    $P = Measure-Plot
+    $plOk = $P.found -and $P.allMarksDrawn -and $P.markCount -eq 4 -and $P.xSpread -gt 40 -and
+            $P.ruleRightOfBelow -and $P.ruleLeftOfAbove -and (-not $P.pageOverflowX) -and
+            $P.shapes.circles -eq 2 -and $P.shapes.rects -eq 2 -and $P.shapes.rings -eq 1
+    if ($P.found) {
+      Write-Host ("  {0,-17} plot    : marks={1} drawn={2} spread={3}px rule>below={4} rule<above={5} shapes={6}c/{7}r/{8}ring noOverflowX={9} -> {10}" -f `
+        $name, $P.markCount, $P.allMarksDrawn, $P.xSpread, $P.ruleRightOfBelow, $P.ruleLeftOfAbove,
+        $P.shapes.circles, $P.shapes.rects, $P.shapes.rings, (-not $P.pageOverflowX), $plOk)
+    } else {
+      Write-Host ("  {0,-17} plot    : NOT MEASURABLE -- {1} -> False" -f $name, $P.why)
+    }
+
+    if (-not ($sOk -and $fOk -and $pOk -and $cOk -and $aOk -and $plOk)) { $allOk = $false }
   }
 
   # The identity draft is a fixed set of fields, so the scroll case is made by a
@@ -438,11 +541,20 @@ try {
   # which is a coincidence and not the reason: the reason is that 360x520 is the
   # narrowest viewport this gate drives.)
   $CL = Measure-Comps
-  $clOk = $CL.found -and $CL.priceDateDisjoint -and $CL.priceTitleDisjoint -and $CL.dateTitleDisjoint -and
+  # THE SECOND CALL SITE, and it was found only because the first one started
+  # printing its measured rectangle while this one did not. Both need the guard:
+  # hit() reports two ZERO-SIZE rects as not intersecting, so a collapsed row
+  # passes every disjointness check rather than failing them.
+  #
+  # Fixing one of two sites and calling the hole closed would have been the
+  # coverage-shrinks-silently failure this slice already had to fix twice -- in
+  # AK6's sweep, and in report()'s weak arm.
+  $clDrawn = $CL.price.w -gt 0 -and $CL.price.h -gt 0 -and $CL.title.w -gt 0 -and $CL.title.h -gt 0
+  $clOk = $CL.found -and $clDrawn -and $CL.priceDateDisjoint -and $CL.priceTitleDisjoint -and $CL.dateTitleDisjoint -and
           $CL.titleBelowPrice -and $CL.titleBelowDate -and (-not $CL.pageOverflowX)
   if ($CL.found) {
-    Write-Host ("  {0,-17} comps   : disjoint p/d={1} p/t={2} d/t={3} titleBelow={4} noOverflowX={5} -> {6}" -f `
-      'phone 360x520', $CL.priceDateDisjoint, $CL.priceTitleDisjoint, $CL.dateTitleDisjoint,
+    Write-Host ("  {0,-17} comps   : drawn={1} ({2}x{3}px) disjoint p/d={4} p/t={5} d/t={6} titleBelow={7} noOverflowX={8} -> {9}" -f `
+      'phone 360x520', $clDrawn, $CL.price.w, $CL.price.h, $CL.priceDateDisjoint, $CL.priceTitleDisjoint, $CL.dateTitleDisjoint,
       ($CL.titleBelowPrice -and $CL.titleBelowDate), (-not $CL.pageOverflowX), $clOk)
   } else {
     Write-Host ("  {0,-17} comps   : NOT MEASURABLE -- {1} -> False" -f 'phone 360x520', $CL.why)

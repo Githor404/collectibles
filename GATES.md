@@ -1331,6 +1331,47 @@ Three reasons, the third being the one I'd argue hardest:
 - **Layout gate extended to the plot at 360px**, and it must measure the plot *populated*, not empty — the want-list flag passed a layout gate while rendering nothing, and that is one slice old.
 - **CQ7 holds**: every price on the surface is a sale or the labelled ask.
 
+## R5 — The distribution surface — **BUILT AND GATED**, v0.3.0 (2026-09-14)
+
+All forks ruled as leaned. Assertions **431 → 463 (+32)**, re-pinned in this commit; the layout gate now measures the plot **populated** at every width.
+
+### The rulings, and where each is enforced
+
+| ruling | enforced by |
+|---|---|
+| log scale, because **grade bands multiply** | `PL2` — gated as a *property* (equal ratios → equal distances), not as "it calls Math.log" |
+| and it is a **claim**, so it is stated on the surface | `PL11`, plus "ticks are dollars, never exponents" |
+| **one mark, one sale** | `PL5` (marks + hidden = rows), `PL7` (`data-p` enumerable), layout `markCount` + `allMarksDrawn` |
+| ties **stack**, never blend | `PL6` — four sales at $25 occupy four *distinct* positions |
+| overflow **disclosed**, D11 reused | `compsPlotHTML`'s cut line; `PL5` accounts for `hidden` |
+| **shape = type, ring = best offer** (orthogonal) | `PL9`, and layout `shapes=2c/2r/1ring` at three widths |
+| an **unrecognised** value renders visibly | `CQ12` — and *absent* is distinguished from *unrecognised* in the data while identical on the surface |
+| **no** fitted curve, smoothing or asserted band | `PL10`, with a **planted control** proving the detector fires |
+| fold the **why**, keep the **what** | three `R5 GATE (HT-D53)` assertions — present **and not inside a fold** |
+| tap → the seller's words, in place | `PL12`, `renderCompsPick` |
+
+### Findings the build produced
+
+**1. The `COMP_KEYS` / `parseComps` divergence is closed structurally, not by a gate.** Rows are now *derived* from `COMP_FIELDS`, so used-but-undeclared is impossible by construction. Worth recording: the defect row that deletes a field **does not fail**, and that is the derivation working — both sides of the "exactly the declared fields" assertion come from one list, so they move together. Only an *undeclared* `from` is a real defect, which is what row 66 plants.
+
+**2. The ruled enum census needed a surface to be executable.** `listingType`'s values are unmeasured, and it was ruled the census comes free from the next real lookup. But `compTypeOf` renders `FixedPrice` as "Buy It Now" — so a reader could not report back what the provider actually sent. `compsTypeCensus` now prints the provider's **own strings verbatim** with counts, for the same reason D10 keeps the seller's title and D4 keeps `raw` beside the normalised form.
+
+**3. Three gates were repointed (HT-D60 Clause 3), and one was a near-miss.** `AK5`'s property was *DOM order* of `.cmpprice` spans — and `<details>` keeps its content in `innerHTML`, so folding the list would have left it **passing against a surface nobody can see**. Repointed to geometry. `AK6`'s sweep reads `.cmpprice`, which marks do not have, so its coverage would have **silently shrunk** to exclude the surface where prices are now drawn. `AK9` fired on the *new folded prose*: its detector was `indexOf('$8')`, which cannot tell the forbidden quotient from `$89` — D7's measured evidence. Repointed to numeric money-token extraction, **with a planted control** proving it finds `$8` and `$8.00` while reading `$89` and `$80` as themselves. That is AK7's old failure in a new vocabulary.
+
+**4. The layout gate could pass vacuously — in two places.** `hit()` reports two **zero-size** rectangles as not intersecting, and `titleBelowPrice` becomes `0 >= -1`; so every comps fact passes on collapsed rects. Folding the list into a `<details>` made that reachable for the first time. Both call sites now require non-degenerate rectangles and **print the measured size** — and the second site was found *only* because the first started printing its dimensions while the second did not.
+
+**5. `PL2` was written against a fixture that could not exhibit it.** The first version tested equal-ratio spacing using $1/$10/$100 against a domain of $9–$145, where `x()` legitimately **clamps** — HT-D60 Clause 4, inside the assertion enforcing this slice's central ruling. Fixed to in-domain ratios (9→27→81), and the clamp is now **gated on purpose**, having been discovered only by colliding with it.
+
+### NOT YET DEMONSTRATED (HT-D60 Clause 1)
+
+Rows **62–66** are written and **have not been run**: a sale drawn nowhere (`PL5`), a fitted line (`PL10`), the fold ceasing to fold (`R5 GATE`), an unknown listing type absorbed (`CQ12`), and a field consumed but never declared (`CQ11`). A dry-run on copies confirms all five apply — including row 64, which matches `${innerHTML}` inside a template literal, the exact place perl's `$` interpolation has bitten this repo four times. Until this section says otherwise, the R5 gates are **designed, not demonstrated**.
+
+### What this does not cover (Clause 2)
+
+- **`listingType`'s enum is still unmeasured**, so "the encoding is exact" is gated only for the documented values. The census makes the survey free on the next real lookup; it does not perform it.
+- **The plot is gated at four viewports against four seeded rows.** The device pass ran 98. Stacking, column collisions and the D11 overflow line are exercised by fixtures, not yet by a real distribution.
+- **No gate reads the picture as a human does.** Every assertion here is geometric or structural; that the modes are *legible* is a claim only a device pass can settle.
+
 ### Assertion delta: 416 → 431 (+15), re-pinned in this commit
 
 13 W assertions + the 2 SH1 shipped-shell checks. `APP_VERSION` moved to **0.2.0** with a dated `VERSION_LOG` entry — the shell changed, and `check-version.sh` demanding that bump is D14's machinery working rather than misfiring.

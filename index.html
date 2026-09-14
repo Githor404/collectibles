@@ -116,6 +116,31 @@
   .cmpmeta{justify-self:end;align-self:center;color:var(--muted);font-size:11.5px;text-align:right}
   .cmptitle{grid-column:1 / -1;font-size:12.5px;line-height:1.45;word-break:break-word}
   .cmpdrop{display:block;margin-top:6px;opacity:.72}
+  /* R5: the distribution. One mark is one sale -- shapes carry the listing type
+     and a ring carries best-offer-accepted, because those two fields are
+     orthogonal and a single channel would lose or double-count one of them.
+     Nothing here is a fitted curve, a density or a band: every element on the
+     plot is a sale, a tick, or the user's own ask. */
+  .cmpplot{margin-top:10px}
+  .plotsvg{display:block;width:100%;height:auto;overflow:visible}
+  .paxis,.pt{stroke:var(--line);stroke-width:1}
+  .ptl{fill:var(--muted);font-size:9px;font-variant-numeric:tabular-nums}
+  .pm{cursor:pointer}
+  .pm circle,.pm rect,.pm path{fill:var(--txt);opacity:.66}
+  .pm:hover circle,.pm:hover rect,.pm:hover path,.pm:focus circle,.pm:focus rect,.pm:focus path{opacity:1}
+  .pmring{fill:none;stroke:var(--txt);stroke-width:1;opacity:.55}
+  /* The ask is the one line here that is NOT a sale, so it is drawn unlike
+     everything else and named on the plot (AK6's property, in the plot). */
+  .askrule{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:3 2}
+  .askrulel{fill:var(--accent);font-size:9px;font-weight:800;letter-spacing:.04em}
+  .plotkey{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:8px;
+    font-size:11px;color:var(--muted)}
+  .pk{width:9px;height:9px;display:inline-block;background:var(--txt);opacity:.66;margin-right:2px}
+  .pk-auction{border-radius:50%}
+  .pk-unstated{transform:rotate(45deg)}
+  .pk-bo{background:none;border:1px solid var(--txt);border-radius:50%;opacity:.55}
+  .plotnote{margin-top:8px}
+  .cmppick{border-top:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
   /* R3: the ask, and the comparison it makes. The marker is the one number here
      that is not a sale, so it is visually unmistakable -- accent-bordered, with
      its own label. A reader must never mistake it for a comp. */
