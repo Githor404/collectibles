@@ -171,6 +171,18 @@ report() { # name, expected-case-pattern, output
   if [ "$ROW" -lt "$ROW_LO" ] || [ "$ROW" -gt "$ROW_HI" ]; then return 0; fi
   verdict=$(printf '%s\n' "$out" | grep -oE 'GATE: (PASS|FAIL)' | tail -1)
   named=$(printf '%s\n' "$out" | grep -E "^FAIL +.*(${pat})" | head -1 | sed -E 's/^FAIL +//' | cut -c1-80)
+  # SECOND STRICT ARM: a failure reported by a SCRIPT rather than by res(). The
+  # censuses, check-egress, check-version and the layout gate print their own
+  # "<name>: FAIL - ..." or "NOT MEASURABLE" lines, which structurally cannot
+  # carry res()'s "FAIL  " prefix. In the first full pass after the WEAK-MATCH
+  # label shipped, NINE of its ten hits were exactly this -- strong evidence
+  # wearing a weak label. That is the want-list's own noise argument pointed at
+  # the harness: a label that cries wolf on good evidence gets ignored, and then
+  # the one hit that MATTERED (row 47, matching on a PASS line) reads like the
+  # other nine. Narrowing the weak arm is what keeps the label worth reading.
+  [ -n "$named" ] || named=$(printf '%s\n' "$out" \
+    | grep -E "(FAIL -|FAIL:|NOT MEASURABLE).*(${pat})|(${pat}).*(FAIL -|FAIL:|NOT MEASURABLE)" \
+    | head -1 | cut -c1-80)
   # THE WEAK ARM, and it now says so. When no FAILING line carries the pattern
   # this greps the WHOLE output -- PASS lines, assertion labels, comments. A row
   # whose pattern matched only a PASSING line would otherwise print a plausible
@@ -608,6 +620,34 @@ report "shell element the census constructs is missing" ":: versionNotice" "$(ru
 # fact that separates "never painted" from "painted something wrong".
 mutate 's/  renderConfirmed\(\);\n  return \{ ok: true, query: q \};/  return { ok: true, query: q };/' app.js
 report "identity accepted but never painted" "shellLen=0" "$(run_dl)"; restore
+
+# --- 59. THE SILENT MISS -- a want that should fire, and does not -------------
+# D15's asymmetry makes this the WEIGHTED row of the three: a miss means walking
+# past the book you wanted, which is the error the whole feature exists to
+# prevent. A false positive costs a two-second look; this costs the book.
+#
+# The mutation matches on the RAW typed line instead of the normalised title, so
+# "The Amazing Spider-Man #129" stops matching a reading of "Amazing Spider-Man"
+# -- generosity about FORMAT removed, which is the one kind of generosity D15
+# actually grants. Nothing errors; the flag simply never appears.
+mutate 's/w\.title === t\) return w;/w.raw === f.title) return w;/' app.js
+report "a want that should fire, does not" "W4 GATE" "$(run_dl)"; restore
+
+# --- 60. THE NOISE CASE -- the issue test dropped -----------------------------
+# The other direction, and the reason issue-must-match was ruled: without it,
+# every Amazing Spider-Man in the box flags. That is not generosity, it is noise
+# -- and noise is not a cheap error repeated, it is the EXPENSIVE one, because a
+# flag that gets ignored turns every later false hit into a miss.
+mutate 's/w\.matchable && w\.issue === i && w\.title === t/w.matchable \&\& w.title === t/' app.js
+report "issue ignored -- every ASM in the box flags" "W5 GATE" "$(run_dl)"; restore
+
+# --- 61. THE SEAM -- the flag paints once, then lies --------------------------
+# D16's shape again, in the newest code. identitySetField deliberately does not
+# rebuild the draft (retyping must not cost the caret), so removing this one call
+# leaves a flag that is CORRECT when first painted and stale for every correction
+# after it -- the worst version, because it is right often enough to be believed.
+mutate 's/  renderWantFlag\(\);\n  return \{ ok: true, query: identityQuery\(v\) \};/  return { ok: true, query: identityQuery(v) };/' app.js
+report "flag never re-evaluates on correction" "W9 GATE" "$(run_dl)"; restore
 
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do

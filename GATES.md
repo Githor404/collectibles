@@ -1182,4 +1182,50 @@ So **a row whose pattern matches only a passing line prints a plausible-looking 
 
 - **The census is presence-only.** It cannot distinguish a painted element from an unpainted one — `#askBox` was present throughout the slice in which nothing painted it. That is what the content assertions are for, and they cover **3 of 10**.
 - **It censuses what the HARNESS constructs.** The shell declares 30 ids; 6 are outside the census entirely because no harness block builds them.
-- **`MK_IDS.length === 24` is a pin, not a property.** Adding a `mk()` call requires a deliberate re-pin, in the same commit.
+- **`MK_IDS.length` is a pin, not a property.** Adding a `mk()` call requires a deliberate re-pin, in the same commit. It was 24 when D16 was ruled and is **26** since the want-list enrolled `wantsBox` and `wantsReport` — the pin moving is the census working, not noise.
+
+## The want-list — a capture-time filter — BUILT, v0.2.0 (D15 amended, 2026-09-14)
+
+**Option A as ruled: `settings.wants`, no schema bump.** `normalizeState` preserves `settings` wholesale, so wants survive a boot untouched and the slice took on **none** of the wipe risk a `SCHEMA_VERSION` bump carries. Schema v2 stays named and parked with the migration branch as its own subject.
+
+**This is the first thing the app persists beyond credentials.** Everything before it was memory-only (R1, R2b, R3) or a credential held outside the state object (D1). So `wantsSave` carries `Store.saveState`'s boolean **to the surface** rather than assuming it: a want that was not saved must not claim it was, and on the memory tier the card says so.
+
+### The rulings, and where each is enforced
+
+| ruling | enforced by |
+|---|---|
+| generosity is about FORMAT — case, a leading article, punctuation, `#`, leading zeros | W1, W2, W4 |
+| **a different issue is a different book** | W5, and defect row 60 |
+| `raw` and the normalised form are two objects (D4's shape) | W3, W7 |
+| a line with no issue is kept, counted, **and said** | W6, both halves |
+| the flag fires on the DRAFT and writes nothing | W8 |
+| it re-evaluates on correction, **in both directions** | W9, and defect row 61 |
+| wants survive a boot | W10 |
+| the storage outcome is reported, not assumed | W11 |
+| the shipped shell carries the surfaces, and the CSS | SH1 pair (D16) |
+
+**Draft-only, and deliberately so.** The flag does not appear on the confirmed header. D15 ruled that it fires on the draft and re-evaluates as the reading is corrected; extending it past confirm was not ruled, and a flag on a settled identity reads closer to a claim than to a question. Recorded as an omission, not an oversight.
+
+### The layout gate passed this slice while measuring nothing
+
+**Caught before it shipped, and it is D16's failure mode inside D16's own slice.** The gate runs a fresh browser profile with empty `localStorage`, so `wantsList()` returned `[]`, `wantFlagHTML` returned `''`, and `#wantFlag` rendered **empty, contributing no height**. `LAYOUT GATE: PASS` therefore proved the draft still fits **without** the thing the slice had just added to it — a green result about a surface that was not there.
+
+Fixed by seeding a want in `__g.key()`, measuring `wantFlag: __g.rect('#captureResult .wantflag')`, and **folding it into `$sOk`** — a measurement that does not reach the verdict is decoration. The seed is deliberately the format-generous form, `amazing spider-man 300` against `ID_SAMPLE`'s *"The Amazing Spider-Man" / "300"*, so the **shipped page** exercises the generosity rule rather than an exact-match shortcut. Now reads `wantFlag=True` at 360×690, 390×745 and 1200×900.
+
+**Not covered:** the 360×520 scrolled case measures through a different path and does not fold the flag in.
+
+### `report()` gained a second strict arm
+
+The first full pass after `WEAK-MATCH:` shipped returned **ten** labelled rows. **Nine were false alarms** — failures reported by a *script* rather than by `res()` (`egress: FAIL -`, `check-version: FAIL -`, `GATE-SCRIPT CENSUS: FAIL -`, the layout gate's `NOT MEASURABLE`), which structurally cannot carry `res()`'s `FAIL␣␣` prefix. That is the want-list's own noise argument aimed at the harness: **a label that cries wolf on good evidence gets ignored**, and then the one hit that mattered reads like the other nine.
+
+A second strict arm now matches script-reported failures. **Controlled in five cases before commit:** a `res()` FAIL line, a script `FAIL -` line and a `NOT MEASURABLE` line all return **unlabelled**; a PASS-only match **still says `WEAK-MATCH:`**; no match still warns.
+
+**Row 47 (`grade enters the lookup`) is the one real finding and is NOT fixed here.** Its expected string matches only a *passing* assertion, so the evidence that row has reported for weeks is not evidence of the thing it names. Repointing it (HT-D60 Clause 3 — repointed, not weakened) needs a run showing which assertion actually catches the planted defect. **Named and open.**
+
+### Assertion delta: 416 → 431 (+15), re-pinned in this commit
+
+13 W assertions + the 2 SH1 shipped-shell checks. `APP_VERSION` moved to **0.2.0** with a dated `VERSION_LOG` entry — the shell changed, and `check-version.sh` demanding that bump is D14's machinery working rather than misfiring.
+
+### NOT YET DEMONSTRATED (HT-D60 Clause 1)
+
+Rows 59, 60 and 61 are written and **have not been run**. Row 59 is the **weighted** one: D15's asymmetry makes the silent miss the expensive error, so *a want that should fire and does not* outranks the false-positive case — it is the error the feature exists to prevent. Row 61 re-plants D16's shape in the newest code, where a flag that is right when first painted and stale thereafter is the worst version, because it is right often enough to be believed. A dry-run confirmed all three apply and that **row 61 spares `wantsSave`'s own `renderWantFlag()` call**. Until this section says otherwise, the W gates are **designed, not demonstrated**.

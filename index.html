@@ -153,6 +153,13 @@
   .cfq input{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
   .cfq .btn{flex:0 0 auto}
   .confirmed .btn{margin-top:10px}
+  /* D15: the want-list flag. A PROMPT TO LOOK, never a claim -- so it is marked
+     out the way the ask marker is, because both are things that are not facts
+     the app is asserting. Emitting a class is not shipping a layout (the comps
+     row shipped with class names and no stylesheet once already). */
+  .wantflag{margin-top:10px;padding:8px 10px;border:1px solid var(--accent);border-radius:10px;
+    background:color-mix(in srgb,var(--accent) 8%,transparent);font-size:12.5px;line-height:1.45}
+  .wantwarn{color:var(--warn)}
   /* D14: version legibility. The notice is the ONLY surface here that appears
      unbidden, so it is accent-bordered and sits ABOVE the card it interrupts --
      it must read as the app speaking, never as a result. renderVersionNotice
@@ -240,6 +247,15 @@
         <button class="btn" onclick="copyPrompt(this)">⇪ Copy prompt</button>
         <textarea data-prompt-box readonly aria-label="Identification prompt"></textarea>
         <div class="note">With a key saved, Capture sends this for you. Without one, copy it to your own AI assistant with a photo and paste the reply into Reply. It asks only for what a cover shows — never what a book is worth, its grade, or whether it is a key issue.</div>
+      </div>
+      <!-- D15: a filter that fires on capture, NOT a list to browse. It lives in
+           Settings because it is INPUT, not a destination -- you write it once
+           and meet it again in the draft, with the book in your hand. -->
+      <div class="card" data-setting="wants">
+        <h2>Want list</h2>
+        <textarea id="wantsBox" placeholder="One per line — e.g. Amazing Spider-Man #129" oninput="wantsSave(this.value)" aria-label="Want list"></textarea>
+        <div id="wantsReport"></div>
+        <div class="note">Photograph a box and the draft says which of these you were already looking for. Matching forgives spelling and format — “The Amazing Spider-Man #129” and “Amazing Spider-Man 129” are the same want — but the issue must match, because a different issue is a different book. This version matches exact issues only.</div>
       </div>
       <div class="card" data-setting="storage">
         <h2>Storage</h2>

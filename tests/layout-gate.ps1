@@ -120,6 +120,13 @@ $install = @'
       msgText: (document.getElementById('outcomeMsg').textContent || ''),
       lead:   __g.rect('#captureResult .idq'),
       firstField: __g.rect('#captureResult .idrow input'),
+      // D15/D16: the want flag is INSIDE the draft, so it adds height to the
+      // surface whose whole threshold is "question and BOTH actions in view,
+      // unscrolled". Measured here because the first run of this gate after the
+      // want-list shipped passed while the flag rendered EMPTY -- a fresh profile
+      // has no wants, so wantFlagHTML returned '' and the gate proved the draft
+      // fits WITHOUT the thing that was just added to it.
+      wantFlag: __g.rect('#captureResult .wantflag'),
       primary:__g.rect('#outcomeFoot .btn:nth-of-type(1)'),
       second: __g.rect('#outcomeFoot .btn:nth-of-type(2)'),
       nActions: document.querySelectorAll('#outcomeFoot .btn').length,
@@ -134,7 +141,12 @@ $install = @'
   };
   // The SHIPPED contract, not a stand-in: this gate measures what ships (R1).
   __g.key = function(){ CT.setVisionContract(CT.IDENTITY_CONTRACT); CT.clearConfirmed();
-    CT.credClear('vision'); CT.credSave('vision','grok','xai-GATEKEY-0123456789012345',20); };
+    CT.credClear('vision'); CT.credSave('vision','grok','xai-GATEKEY-0123456789012345',20);
+    // Seeded so the measured draft actually CARRIES the flag. Typed in the
+    // format-generous form on purpose: ID_SAMPLE is "The Amazing Spider-Man" /
+    // "300", so this lower-case, article-less, #-less line makes the SHIPPED
+    // page exercise the generosity rule rather than an exact-match shortcut.
+    CT.wantsSave('amazing spider-man 300'); };
   __g.file = function(){
     var c=document.createElement('canvas'); c.width=1400; c.height=1050;
     var x=c.getContext('2d'); var g=x.createLinearGradient(0,0,1400,1050);
@@ -354,14 +366,18 @@ try {
     Go $w $h $mob
 
     $S = Measure-Success
+    # wantFlag is FOLDED IN, not merely printed: a measurement that does not
+    # reach the verdict is decoration, and the flag rendering empty is exactly
+    # how this gate passed the slice that added it.
     $sOk = $S.state -eq 'success' -and $S.shown -and $S.lead.inView -and
            $S.primary.inView -and $S.second.inView -and
            $S.primary.h -ge $MIN_ACTION_H -and $S.second.h -ge $MIN_ACTION_H -and
            $S.footHTML -like '*captureAccept()*' -and $S.footHTML -like '*captureDiscard()*' -and
            $S.footHTML -like '*Confirm*' -and $S.nActions -eq 2 -and
+           $S.wantFlag.found -and $S.wantFlag.inView -and
            $S.captureSurfaceClean -and (-not $S.pageOverflowX) -and $S.pageScrollY -eq 0
-    Write-Host ("  {0,-17} success : question={1} confirm={2}({3}px) discard={4} field={5} oneState={6} -> {7}" -f `
-      $name, $S.lead.inView, $S.primary.inView, $S.primary.h, $S.second.inView, $S.firstField.found, $S.captureSurfaceClean, $sOk)
+    Write-Host ("  {0,-17} success : question={1} confirm={2}({3}px) discard={4} field={5} oneState={6} wantFlag={7} -> {8}" -f `
+      $name, $S.lead.inView, $S.primary.inView, $S.primary.h, $S.second.inView, $S.firstField.found, $S.captureSurfaceClean, $S.wantFlag.inView, $sOk)
 
     $F = Measure-Fail
     $fOk = $F.state -eq 'error' -and $F.shown -and $F.primary.inView -and $F.second.inView -and

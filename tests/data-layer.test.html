@@ -71,8 +71,11 @@ window.setLS({});
       var e = document.createElement(tag); e.id = id; if (cls) e.className = cls;
       (parent || document.body).appendChild(e); return e;
     };
-    ['storeBadge','dataStatus','captureBox','credBox-vision','credBox-prices','credBox-comps','confirmedBox','askBox','compsBox','versionNotice','buildLine','replyReport','toast','prerestoreWrap'].forEach(function (id) { mk('div', id); });
-    mk('textarea', 'replyBox'); mk('textarea', 'prerestoreBox');
+    ['storeBadge','dataStatus','captureBox','credBox-vision','credBox-prices','credBox-comps','confirmedBox','askBox','compsBox','versionNotice','buildLine','replyReport','toast','prerestoreWrap','wantsReport'].forEach(function (id) { mk('div', id); });
+    // A TEXTAREA, not a div: renderWantsCard sets .value, and a div would accept
+    // that property silently while meaning nothing -- a fixture that agrees with
+    // the code instead of resembling the shell (D16).
+    mk('textarea', 'replyBox'); mk('textarea', 'prerestoreBox'); mk('textarea', 'wantsBox');
     mk('div', 'outcomeScrim', 'scrim oscrim');
     var w = mk('div', 'captureOutcome', 'omodal');
     mk('b', 'outcomeTitle', '', w);
@@ -1047,7 +1050,7 @@ window.setLS({});
         SHELL_ABSENT.join(','));
     // A CONTROL ON THE CENSUS ITSELF. An empty MK_IDS would let it pass
     // vacuously -- the empty-grep error rebuilt as a gate. Re-pin deliberately.
-    res(MK_IDS.length === 24,
+    res(MK_IDS.length === 26,
         'SH1 GATE (D16): the census actually ENUMERATED the constructed ids -- a clean scan is evidence only once something proves the scan was capable of failing',
         String(MK_IDS.length));
     // ---- D16: CONTENT, not presence, on the live refresh() path -------------
@@ -1064,6 +1067,16 @@ window.setLS({});
     res(!!cbx && String(cbx.innerHTML).trim().length > 0,
         'SH1 GATE (D16): the shipped capture box HOLDS markup after boot -- every branch of renderCaptureBtn paints something, so empty means the paint never happened rather than that a branch was quiet',
         cbx && String(cbx.innerHTML).length);
+    // D15's surfaces, under D16's rule: every W assertion runs against the
+    // harness's own mk('textarea','wantsBox'), so nothing there says the SHIPPED
+    // shell has one. The tag matters -- renderWantsCard sets .value, and a div
+    // would accept that property silently while meaning nothing.
+    var wb = D.getElementById('wantsBox'), wr = D.getElementById('wantsReport');
+    res(!!wb && wb.tagName === 'TEXTAREA' && !!wr,
+        'SH1 GATE (D15/D16): the shipped shell carries #wantsBox as a TEXTAREA and #wantsReport beside it -- the want list is INPUT, not a destination',
+        wb && wb.tagName);
+    res(cssAll.indexOf('.wantflag') >= 0,
+        'SH1 GATE (D15/D16): and CSS for the want flag -- it is a prompt to look and must be unmistakable, and emitting a class is not shipping a layout');
     // A token saved by an EARLIER build must not be stranded: it appears in
     // Storage with a way out, and only when it exists.
     W.CT.credClear('prices');
@@ -1969,6 +1982,86 @@ window.setLS({});
 
   res(String(CT.VERSION_KEY).indexOf('collectibles-') === 0,
       'VN8 GATE (D1): the version key is prefixed -- a shared GitHub Pages origin shares storage with HealthTracker');
+
+  // ==========================================================================
+  // W -- D15: the want-list, a capture-time filter
+  // ==========================================================================
+  res(CT.wantNormTitle('The Amazing Spider-Man') === CT.wantNormTitle('amazing spider-man') &&
+      CT.wantNormTitle('The Amazing Spider-Man') === 'amazing spider man',
+      'W1 GATE (D15): generosity is about FORMAT -- case, a leading "The" and punctuation normalise away, so one want typed two ways is one want',
+      CT.wantNormTitle('The Amazing Spider-Man'));
+  res(CT.wantNormIssue('#007') === '7' && CT.wantNormIssue('129') === '129' && CT.wantNormIssue('#2a') === '2a',
+      'W2 GATE (D15): the # and leading zeros are format too -- "#007" and "7" are one issue',
+      CT.wantNormIssue('#007') + '/' + CT.wantNormIssue('#2a'));
+  var w3 = CT.parseWantLine('  The Amazing Spider-Man #129  ');
+  res(w3.raw === 'The Amazing Spider-Man #129' && w3.title === 'amazing spider man' && w3.issue === '129',
+      'W3 GATE (D4 shape): the RAW line is kept BESIDE the normalised form -- the normalised form is the app working object, the raw line belongs to the person who typed it',
+      JSON.stringify(w3));
+
+  setLS({});
+  CT.boot();
+  CT.wantsSave('The Amazing Spider-Man #129\nFantastic Four 51');
+  res(!!CT.wantMatch({ title: 'Amazing Spider-Man', issue: '129' }) &&
+      !!CT.wantMatch({ title: 'the amazing spider-man', issue: '#129' }) &&
+      !!CT.wantMatch({ title: 'Fantastic Four', issue: '051' }),
+      'W4 GATE (D15): a reading matches a want TYPED DIFFERENTLY -- "Amazing Spider-Man 129" hits "The Amazing Spider-Man #129", and "051" hits "51"');
+  // THE RULING, and the reason for it. Firing on title alone would flag every
+  // ASM in the box. D15 says err toward firing because a miss is the expensive
+  // error -- but false hits do not stay independent: they compound into a flag
+  // that gets ignored, and an ignored flag turns every later false hit into a
+  // MISS. The cheap error, repeated, becomes the expensive one.
+  res(CT.wantMatch({ title: 'Amazing Spider-Man', issue: '130' }) === null &&
+      CT.wantMatch({ title: 'Amazing Spider-Man', issue: '' }) === null &&
+      CT.wantMatch({ title: 'Some Other Book', issue: '129' }) === null,
+      'W5 GATE (D15 amended): a DIFFERENT ISSUE IS A DIFFERENT BOOK -- title-only would flag every ASM in the box, and a flag you learn to ignore is worse than no flag');
+
+  var w6 = CT.wantsSave('Amazing Spider-Man #129\nsome book whose number I forget');
+  res(w6.saved === 2 && w6.unmatchable === 1 &&
+      CT.wantsList()[1].raw === 'some book whose number I forget' && CT.wantsList()[1].matchable === false,
+      'W6 GATE (D15): a line with NO issue is KEPT and COUNTED as unmatchable -- never silently dropped, because the list is the persons own text',
+      JSON.stringify(w6));
+  CT.renderWantsCard();
+  res(document.getElementById('wantsReport').innerHTML.indexOf('NEVER match') >= 0,
+      'W6 GATE (D15): and the card SAYS SO -- a filter that quietly ignores part of your list has spent the expensive error to save the cheap one',
+      document.getElementById('wantsReport').textContent);
+
+  CT.wantsSave('The Amazing Spider-Man #300');
+  var w7 = CT.wantFlagHTML({ fields: { title: 'Amazing Spider-Man', issue: '300' } });
+  res(w7.indexOf('The Amazing Spider-Man #300') >= 0 && w7.indexOf('wantflag') >= 0,
+      'W7 GATE (D4 shape): the flag shows the persons OWN line back, never the apps normalisation of it', w7);
+
+  var wPrevContract = CT.setVisionContract(CT.IDENTITY_CONTRACT);
+  CT.captureDiscard();
+  var w8before = JSON.stringify(CT.wantsList());
+  CT.openCaptureResult(CT.ID_SAMPLE);
+  res(document.getElementById('wantFlag').innerHTML.indexOf('wantflag') >= 0 &&
+      CT.confirmedIdentity() === null && JSON.stringify(CT.wantsList()) === w8before,
+      'W8 GATE (D15): the flag fires on the DRAFT and writes NOTHING -- no record before confirm, and the list is untouched by having matched');
+
+  // THE SEAM (D16). identitySetField deliberately does NOT rebuild the draft --
+  // retyping must not cost the caret -- so a flag painted only by
+  // renderIdentityHTML would show a stale answer to a question already changed.
+  // BOTH DIRECTIONS, because a one-way check passes against an element that
+  // never changes at all, which is exactly what __setComps did.
+  CT.identitySetField('issue', '301');
+  res(document.getElementById('wantFlag').innerHTML.indexOf('wantflag') < 0,
+      'W9 GATE (D15/D16): correcting the issue REMOVES the flag -- it re-evaluates as the reading is corrected, in place, without rebuilding the inputs');
+  CT.identitySetField('issue', '300');
+  res(document.getElementById('wantFlag').innerHTML.indexOf('wantflag') >= 0,
+      'W9 GATE (D16): and correcting it BACK restores it -- the other direction, so this cannot pass against a flag that simply never changes');
+
+  CT.wantsSave('Fantastic Four #51');
+  CT.boot();
+  res(CT.wantsList().length === 1 && CT.wantsList()[0].raw === 'Fantastic Four #51',
+      'W10 GATE (Option A): wants survive a BOOT -- normalizeState preserves settings wholesale, which is why this needed NO schema bump and took on none of the wipe risk a bump carries',
+      JSON.stringify(CT.wantsList()));
+  var w11 = CT.wantsSave('Daredevil #168');
+  res(w11.ok === (CT.Store.status().ok === true),
+      'W11 (D1): wantsSave REPORTS the storage outcome rather than assuming it -- a want that was not saved must not claim it was',
+      JSON.stringify(w11));
+  CT.wantsSave('');
+  CT.captureDiscard();
+  CT.setVisionContract(wPrevContract);
 
   // ---- ID15 (R1.2): an issue that ARRIVES with a # renders with exactly one --
   // From the first device capture: STAR WARS #2 came back with issue "#2" -- as

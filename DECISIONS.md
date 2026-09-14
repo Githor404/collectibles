@@ -308,6 +308,18 @@ A harness that constructs its own DOM proves the **function under test**. It pro
 
 **This does NOT contradict D8, D10 or D13, and the distinction is the whole reason it is safe.** Those entries refuse to *assert* more than the data supports — no average, no group without a field, no ratio dressed as a score. **A flag asserts nothing.** It is a question — *"is this one of yours?"* — put to the person holding the book, and answered by them. **Precision is owed to claims; generosity is owed to questions.** The same brief that forbids the app guessing a grade (rule 2) requires it to surface a candidate rather than suppress one.
 
+### AMENDED 2026-09-14 — generosity is about FORMAT, and the asymmetry has a BOUND
+
+Ruled when the want-list was built, and the second point is a correction to the entry above rather than an addition to it.
+
+**1. Generosity is about FORMAT, not about widening what counts as a want.** *"The Amazing Spider-Man #129"* and *"Amazing Spider-Man 129"* are **one want typed twice** — case, a leading article, punctuation, the `#` and leading zeros are all format, and the match forgives every one of them. **A different issue is a different book.** The match is exact after normalisation, not a prefix: once case, a leading "the" and punctuation are stripped, *"The Amazing Spider-Man"* and *"Amazing Spider-Man"* are already identical, so a prefix rule would buy nothing except firing *"Amazing Spider-Man"* on *"Amazing Spider-Man Annual"*.
+
+**2. And that is the BOUND on this entry's own asymmetry.** The rule above says err toward firing because the errors are not comparable: a miss costs a walked-past book, a false hit costs a two-second look. **That holds per event and stops holding in aggregate.** False hits do not stay independent — they compound into a flag that gets **ignored**, and an ignored flag turns every later false hit into a **MISS**. The cheap error, repeated, becomes the expensive one. *"A flag I learn to ignore is worse than no flag."* This is not an exception to the asymmetry; **it is the limit condition the asymmetry needs in order to stay true**, and firing on title alone would breach it immediately by flagging every Amazing Spider-Man in the box.
+
+**3. `raw` and the normalised form are TWO OBJECTS, in D4's shape.** The normalised title and issue are the **app's working object**; `raw` is **the line the person typed**, and it is what every surface shows back — the card, and the flag itself. The app never shows its own normalisation in place of someone's own words. A line with no issue number is **kept and counted as unmatchable**, never silently dropped, and the card says how many: a filter that quietly ignores part of your list has spent the expensive error to save the cheap one.
+
+**4. Storage: `settings.wants`, and NO schema bump (Option A, ruled 2026-09-14).** `normalizeState` preserves `settings` wholesale, so wants survive a boot untouched. The alternative — a top-level key and `SCHEMA_VERSION = 2` — would have required a migration branch `boot()` does not have: a v1 state read by a v2 app falls through to `emptyState()` and is **overwritten at boot, silently, with no undo slot**. The want-list needed none of that, so it took on none of that risk; schema v2 is named and parked with the migration as its own subject. **This is also the first thing the app persists beyond credentials**, so `wantsSave` carries `Store.saveState`'s boolean to the surface rather than assuming success — a want that was not saved must not claim it was.
+
 ### v1 holds EXACT ISSUES ONLY
 
 *"Amazing Spider-Man #129."* Title and issue, both named.

@@ -167,6 +167,16 @@ The fixture must be able to exhibit the failure (Clause 4). A gate that cannot f
 
 Re-pin `EXPECTED_ASSERTIONS` and the census manifest **deliberately, in the same commit** that changes them, and state the delta.
 
+### An observation mechanism that cannot observe
+
+Twice in one session a long background job was started as `bash tests/... | tail -80`. **`tail` buffers its entire input until the source exits**, so the task's output file stayed empty for the whole run — the "check interim output" path existed and could never show a single row. The first time that cost only visibility. The second time it meant a twelve-minute pass was indistinguishable from a hang, and the only honest answer to *"where has it got to?"* was **"I built it so that I cannot tell."**
+
+Use `tee`, or no filter at all, for anything whose progress you may want to watch; keep `tail` for output you will read only once it is complete.
+
+**And size a wrapper from the sum of its parts.** A 600s invocation wrapping `timeout 250` (the suite) plus `timeout 400` (the layout gate) has a **650s worst case**, so the wrapper can expire before its own contents are allowed to. It did.
+
+Both are this repo's own rule pointed back at its tooling: **a monitor that cannot fail to look busy is not a monitor** — the same shape as a gate that cannot fail, as `DEFECT_PASS` before it was keyed to a live PID, and as `report()`'s weak arm before it was labelled.
+
 ## Environment
 
 - **Scope.** Browser profiles and defect-pass backups live under `tests/.tmp/` (gitignored), never `%TEMP%`. This repo's sessions stay inside their own directory.

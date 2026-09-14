@@ -1372,6 +1372,9 @@ function identitySetField(key, raw) {
   const s = String(raw == null ? '' : raw).trim();
   if (s) v.fields[key] = s; else delete v.fields[key];   // clearing restores ABSENT, never ''
   renderConfirmQuery();
+  // D15: the flag RE-EVALUATES as the reading is corrected. In place, beside the
+  // query line, for the same reason the query line is repainted this way.
+  renderWantFlag();
   return { ok: true, query: identityQuery(v) };
 }
 function identityToggleMarker(m) {
@@ -1401,6 +1404,131 @@ function issueLabel(issue) {
   const s = String(issue == null ? '' : issue).trim();
   return s ? s.replace(/^#*/, '#') : '';
 }
+// ---- D15: the WANT-LIST, a capture-time filter ------------------------------
+// NOT a list to browse: a filter that fires on the DRAFT, while the book is in
+// your hand. Browsing a list you wrote is what a notes app does; recognising an
+// entry in a box you are standing in front of is not.
+//
+// D15's asymmetry says err toward firing -- a miss means walking past the book
+// you wanted, a false hit costs a two-second look. THE BOUND, ruled 2026-09-14:
+// false hits do not stay independent. They compound into a flag that gets
+// ignored, and an ignored flag turns every later false hit into a MISS. The
+// cheap error, repeated, becomes the expensive one. "A flag I learn to ignore is
+// worse than no flag" is the limit condition the rule needs to stay true.
+//
+// SO GENEROSITY IS ABOUT FORMAT, NOT ABOUT WIDENING WHAT COUNTS AS A WANT.
+// "The Amazing Spider-Man #129" and "Amazing Spider-Man 129" are one want typed
+// twice. A DIFFERENT ISSUE IS A DIFFERENT BOOK: firing on title alone would flag
+// every ASM in the box, which is not generosity, it is noise.
+//
+// TWO OBJECTS, in D4's shape. `raw` is the line the person typed and is what
+// every surface shows back; title/issue are the app's working object. The app
+// never shows its own normalisation in place of someone's own words.
+//
+// THE FLAG ASSERTS NOTHING. It is a question put to the person holding the book
+// -- which is why it is safe where D8/D10/D13 refuse to claim: precision is owed
+// to claims, generosity is owed to questions.
+const WANT_MAX = 500;
+
+function wantNormTitle(s) {
+  return String(s == null ? '' : s)
+    .toLowerCase()
+    .replace(/^\s*the\s+/, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+// "007" -> "7", "#2a" -> "2a". Leading zeros and the # are FORMAT.
+function wantNormIssue(s) {
+  const t = String(s == null ? '' : s).trim().replace(/^#+/, '').trim().toLowerCase();
+  const m = /^0*(\d+)\s*([a-z]*)$/.exec(t);
+  return m ? m[1] + m[2] : t;
+}
+// A line with no issue is KEPT (it is the person's own text) but marked
+// unmatchable, and the card says how many -- never silently dropped.
+function parseWantLine(line) {
+  const raw = String(line == null ? '' : line).trim();
+  if (!raw) return null;
+  const m = /^(.*?)\s*#?\s*([0-9]+[A-Za-z]?)$/.exec(raw);
+  const title = m ? wantNormTitle(m[1]) : '';
+  if (!m || !title) return { raw, title: '', issue: '', matchable: false };
+  return { raw, title, issue: wantNormIssue(m[2]), matchable: true };
+}
+function parseWants(text) {
+  const lines = String(text == null ? '' : text).split(/\r?\n/);
+  const out = [];
+  for (let i = 0; i < lines.length && out.length < WANT_MAX; i++) {
+    const w = parseWantLine(lines[i]);
+    if (w) out.push(w);
+  }
+  return out;
+}
+function wantsList() {
+  const s = APP_STATE && APP_STATE.settings;
+  return (s && Array.isArray(s.wants)) ? s.wants : [];
+}
+// THE FIRST THING THIS APP EVER PERSISTS. Everything before it was memory-only
+// or a credential outside the state object (D1). Store.saveState returns FALSE
+// on the memory tier, and that answer is carried to the surface rather than
+// swallowed: a want that was not saved must not claim it was.
+function wantsSave(text) {
+  if (!APP_STATE) return { ok: false, saved: 0, unmatchable: 0 };
+  if (!APP_STATE.settings || typeof APP_STATE.settings !== 'object') APP_STATE.settings = {};
+  const list = parseWants(text);
+  APP_STATE.settings.wants = list;
+  const ok = Store.saveState(APP_STATE);
+  renderWantsCard(); renderBadge(); renderWantFlag();
+  return { ok, saved: list.length, unmatchable: list.filter(function (w) { return !w.matchable; }).length };
+}
+// EXACT after normalisation, not a prefix. Once case, a leading "the" and
+// punctuation are gone, "The Amazing Spider-Man" and "Amazing Spider-Man" are
+// already identical -- so a prefix rule would buy nothing except firing
+// "Amazing Spider-Man" on "Amazing Spider-Man Annual", which is the noise the
+// issue-must-match ruling exists to refuse.
+function wantMatch(fields) {
+  const f = fields || {};
+  const t = wantNormTitle(f.title), i = wantNormIssue(f.issue);
+  if (!t || !i) return null;
+  const list = wantsList();
+  for (let n = 0; n < list.length; n++) {
+    const w = list[n];
+    if (w && w.matchable && w.issue === i && w.title === t) return w;
+  }
+  return null;
+}
+// A PROMPT, never a claim -- and it shows the person THEIR line, not ours.
+// Nothing here is written to any record: the flag is computed from the draft
+// and the list, every time it paints (D15: nothing before confirm).
+function wantFlagHTML(v) {
+  const w = v ? wantMatch(v.fields) : null;
+  if (!w) return '';
+  return `<div class="wantflag" role="status">On your want list — take a look: <b>${esc(w.raw)}</b></div>`;
+}
+// IN PLACE, like renderConfirmQuery. identitySetField deliberately does NOT
+// rebuild the draft -- retyping a title must not cost the caret (AK12) -- so a
+// flag rendered only by renderIdentityHTML would paint once and then show a
+// stale answer to a question the user had already changed.
+function renderWantFlag() {
+  const el = document.getElementById('wantFlag');
+  if (el) el.innerHTML = wantFlagHTML(identityValue());
+}
+function renderWantsCard() {
+  const box = document.getElementById('wantsBox');
+  const rep = document.getElementById('wantsReport');
+  const list = wantsList();
+  // Never overwrite the box the finger is in.
+  if (box && document.activeElement !== box) box.value = list.map(function (w) { return w.raw; }).join('\n');
+  if (!rep) return;
+  const bad = list.filter(function (w) { return !w.matchable; }).length;
+  const st = Store.status();
+  const parts = [list.length + (list.length === 1 ? ' want saved' : ' wants saved')];
+  if (bad > 0) {
+    parts.push(bad + (bad === 1 ? ' line has' : ' lines have') +
+      ' no issue number and will NEVER match — v1 matches exact issues only');
+  }
+  if (!st.ok) parts.push('NOT saved to this device — ' + st.message);
+  rep.innerHTML = `<div class="note${(bad || !st.ok) ? ' wantwarn' : ''}">${esc(parts.join(' · '))}</div>`;
+}
+
 function renderIdentityHTML(v) {
   const f = v.fields;
   const head = [f.title || 'Title not legible', issueLabel(f.issue)].filter(Boolean).join(' ');
@@ -1430,6 +1558,9 @@ function renderIdentityHTML(v) {
   return `<div class="iddraft">` +
     `<div class="idq">Is this the book?</div>` +
     `<div class="idhead">${esc(head)}</div>` +
+    // D15: its own element, so corrections repaint the CONTENTS without
+    // rebuilding the inputs above and below it.
+    `<div id="wantFlag">${wantFlagHTML(v)}</div>` +
     (sub ? `<div class="idsub">${esc(sub)}</div>` : '') +
     refusedHTML +
     `<div class="idfields">${rows}</div>` +
@@ -2021,7 +2152,7 @@ function renderAskLive() {
 // WHY A NOTICE WORKS WITH NO WORKER: there is no app-controlled cache, so a load
 // fetches current bytes and the notice fires on it. The worker is what would
 // CREATE the stale-shell problem it then solves.
-const APP_VERSION = '0.1.0';
+const APP_VERSION = '0.2.0';
 const VERSION_KEY = 'collectibles-version';   // PFX1: every storage key is prefixed
 
 // One line per release, newest LAST. The newest entry's `v` must equal
@@ -2037,6 +2168,7 @@ const VERSION_KEY = 'collectibles-version';   // PFX1: every storage key is pref
 // The record says they shipped unversioned and stops.
 const VERSION_LOG = [
   { v: '0.1.0', d: '2026-09-14', note: 'Version numbers. The app now says which build it is running, and tells you what changed when a new one arrives. Identification, sold comps and the asking-price comparison all shipped before this, unversioned; nothing about them changes here.' },
+  { v: '0.2.0', d: '2026-09-14', note: 'A want list. Type the books you are hunting into Settings, one per line, and the draft tells you when the book in your hand is one of them. Matching forgives spelling and format — "The Amazing Spider-Man #129" and "Amazing Spider-Man 129" are the same want — but the issue must match, because a different issue is a different book. It is a prompt to look, never a claim, and nothing is recorded before you confirm the reading. This is also the first thing the app saves to your device besides your keys, so the storage line in Settings now matters to more than a capture.' },
 ];
 
 // Numeric per segment, so 0.2.0 < 0.10.0 -- a string compare gets that backwards
@@ -2231,6 +2363,7 @@ function refresh() {
   renderComps();
   renderAsk();
   renderBuildLine();
+  renderWantsCard();
   renderCaptureBtn(); renderCaptureOutcome();
 }
 function openSettings() {
@@ -2281,6 +2414,9 @@ window.CT = {
   renderCaptureBtn, openSettings, closeSettings,
   // R1 / D2 -- the identification contract, the confirm surface and the floor
   IDENTITY_CONTRACT, ID_TEMPLATE_VERSION, ID_PROMPT, ID_SAMPLE, ID_FIELDS, ID_FIELD_KEYS, ID_MARKERS,
+  // D15 -- the want-list: a capture-time filter, and the app's FIRST persistence
+  WANT_MAX, wantNormTitle, wantNormIssue, parseWantLine, parseWants, wantsList,
+  wantsSave, wantMatch, wantFlagHTML, renderWantFlag, renderWantsCard,
   ID_REFUSED_KEYS, parseIdentity, identityQuery, identitySetField, identityToggleMarker,
   identityAccept, renderIdentityHTML, confirmedIdentity, clearConfirmed, renderConfirmed, copyQuery,
   // R2b / D10 -- sold comps: one scatter, no groups, no range
