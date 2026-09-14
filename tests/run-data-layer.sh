@@ -113,7 +113,7 @@ echo "-----------------------------------------"
 #
 # Re-pin deliberately, in the same commit that adds or removes cases, and state
 # the delta in GATES.md.
-EXPECTED_ASSERTIONS=350
+EXPECTED_ASSERTIONS=351
 TOTAL=$(printf '%s\n' "$OUT" | grep -oE 'SUMMARY [0-9]+/[0-9]+' | head -1 | sed -E 's#.*/##')
 AUTHORED=$(grep -cE '(^|[^A-Za-z_.])res\(' "$HTML")
 echo "assertions: executed ${TOTAL:-0} · pinned $EXPECTED_ASSERTIONS · authored-lines(static lower bound) $AUTHORED"

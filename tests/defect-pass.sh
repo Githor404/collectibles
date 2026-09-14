@@ -398,6 +398,23 @@ report "silent exclusions" "COUNTED ON THE SURFACE" "$(run_dl)"; restore
 mutate 's/    includeCompletedListings: true,/    includeCompletedListings: true,\n    aspectFilter: { Publisher: "Marvel Comics" },/' app.js
 report "publisher aspect biases the sample" "sends NO aspectFilter" "$(run_dl)"; restore
 
+# --- 42. provenance stripped from a rendered number --------------------------
+# Pre-registered in R2b's demand list and never written, so CQ7's count-and-
+# window assertion had NEVER been seen to fail -- HT-D60 Clause 1, live in the
+# repo. A number without its count and its window is a claim with no denominator.
+mutate 's/  const head = .<div class="cmphead">\$\{n\} sold · last \$\{esc\(win\)\}<\/div>.;/  const head = "<div class=\\"cmphead\\">Recent sales<\/div>";/' app.js
+report "provenance stripped from the render" "the count is the KEPT count" "$(run_dl)"; restore
+
+# --- 43. a synthesised ladder ------------------------------------------------
+# The other pre-registered row never written. Plants exactly what D8 forbids: an
+# AVERAGE of the scatter, rendered as though it were a sale. It is a number
+# BETWEEN the sales that nothing sold for -- which is why the gate it fails is
+# "every price is one something actually sold for" rather than a search for the
+# word "ladder". Checking for the absence of a ladder is unbounded; checking that
+# every price traces to a sale is not.
+mutate 's/  const sorted = COMPS\.rows\.slice\(\)\.sort\(function \(a, b\) \{ return a\.soldPrice - b\.soldPrice; \}\);/  var _avg = COMPS.rows.reduce(function (a, r) { return a + r.soldPrice; }, 0) \/ (COMPS.rows.length || 1);\n  const sorted = COMPS.rows.concat([{ title: "estimated at this grade", soldPrice: _avg, soldCurrency: "USD", endedAt: "", bestOffer: false }]).sort(function (a, b) { return a.soldPrice - b.soldPrice; });/' app.js
+report "a synthesised ladder" "ACTUALLY SOLD FOR" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
   printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"

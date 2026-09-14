@@ -802,8 +802,8 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 | the token reaching a surface | **MET, by an existing row** — the ported redaction row (row 8, `PC3\|TC4`) already covers it; `CQ9` adds that the comps card never prints its token |
 | **raw and slabbed blended** | **SUPERSEDED by D10.** The groups were removed, so "blended" is not a state this code can reach — there is nothing to blend. **Row 34 gates the inverse defect**, which is the live risk: grouping *introduced* from a title heuristic |
 | **a range shown below N** | **SUPERSEDED by D8's amendment.** No range is computed at *any* N while the markets cannot be separated, so "below N" is no longer the boundary. **Row 33 gates the live form**: any range at all across a mixed scatter |
-| provenance stripped from a rendered number | **NOT MET.** `CQ7` asserts the count and window *are* rendered, but **no row removes them**, so that assertion has not been seen to fail. Outstanding |
-| a synthesised ladder | **NOT MET.** No ladder exists to plant against, and no row constructs one. `CQ7`'s scatter assertions cover the render; the *defect* is ungated. Outstanding |
+| provenance stripped from a rendered number | **MET 2026-09-13 — row 42.** Strips the count and window from the header; fails `CQ7: the count is the KEPT count and rides on the surface`. It had been pre-registered and never written, so that assertion had never been seen to fail — Clause 1, live in the repo until closed |
+| a synthesised ladder | **MET 2026-09-13 — row 43**, and it needed a new gate to exist at all. `CQ7` could not *see* a ladder: checking for the absence of one is unbounded. The assertion added instead is D8's claim stated directly — **every price on the surface is one something ACTUALLY SOLD FOR** — because a ladder puts numbers *between* the sales and no comp has them. The row plants an average of the scatter rendered as though it were a sale |
 | a filter that does not narrow | **NOT MET for the SOURCE's filter.** Row 40 covers *our* client-side filter hiding rows without counting them — a different claim. **`categoryId=259104` is still unproven** (D5), and now costs one run, not four |
 
 **Three demands outstanding, named rather than quietly absorbed into a count of eleven.**
@@ -831,8 +831,12 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 
 - **`compsLookup` has never run against the live API.** Every case drives the `__setComps` seam or a pure function. The actor id, endpoint path, bearer header and response shape are verified against Apify's published schema and unauthenticated probes — **not against a round trip with a real token**. The first real lookup is a device test, and it is exactly where a contract mismatch would surface: R1's `##` bug reached a device because a gate measured the document instead of the header.
 - **`categoryId=259104` is still unproven** (D5). One run settles it: send a category that cannot contain comics and expect zero.
-- **Provenance-stripping and a synthesised ladder are ungated**, per the demand table above.
-- **No device pass on the comps surface.** The scatter at phone width, the dropped-rows disclosure and the no-token floor are unmeasured on a real screen.
+- ~~**Provenance-stripping and a synthesised ladder are ungated**~~ — **closed 2026-09-13**, rows 42 and 43, with a new assertion for the ladder (see the demand table).
+- **No device pass on the comps surface** — the outstanding list, to be run on a real screen:
+  - **the scatter at phone width** — prices, seller titles and dates legible without horizontal scroll, titles wrapping rather than truncating the grade signal they carry;
+  - **the dropped-rows disclosure** — "1 lot, 1 reprint hidden" with the show/hide control, since a filter the user cannot inspect is one they cannot correct;
+  - **the no-token floor** — with no comps token saved, the confirmed surface names the manual route instead of offering a button that can only fail (D2 Fork G1's shape);
+  - **the D10 line where the numbers are** — that this tier cannot tell a raw copy from a slab, read on the device rather than asserted in a fixture.
 - **Eight comps is a thin sample.** "No lots in the first eight" is a lead, not a settled noise level, and a lot at the top of a scatter is the tail risk the client-side filter exists for.
 
 ### What this pre-registration does not settle

@@ -1514,6 +1514,17 @@ window.setLS({});
       prices7.join(','));
   res(/<h[1-6][^>]*>/.test(c7) === false,
       'CQ7 GATE (D10): no heading element appears among the comps -- a group header is a claim about what the app knows');
+  // D8's core claim expressed DIRECTLY, and the gate its pre-registered "a
+  // synthesised ladder" row needed in order to exist at all. A scatter is
+  // individual sales, so every number on the surface must be a number something
+  // ACTUALLY SOLD FOR. A ladder -- an average, a midpoint, an interpolated grade
+  // step -- puts numbers BETWEEN the sales, and no comp has them. Checking for
+  // the absence of a ladder is unbounded; checking that every price traces to a
+  // sale is not.
+  var srcPrices7 = CT.compsFilter(p5.rows).kept.map(function (r) { return r.soldPrice; });
+  res(prices7.length > 0 && prices7.every(function (p) { return srcPrices7.indexOf(p) >= 0; }),
+      'CQ7 GATE (D8): EVERY price on the surface is one something ACTUALLY SOLD FOR -- a synthesised ladder puts numbers between the sales, and no comp has them',
+      prices7.join(',') + ' vs ' + srcPrices7.join(','));
   res(c7.indexOf('cannot tell a raw copy from a graded slab') >= 0,
       'CQ7 GATE (D10): and the inability to separate the two markets is STATED, where the numbers are');
   res(c7.indexOf('$9') >= 0 && c7.indexOf('$145') >= 0 && c7.indexOf('$9–$145') < 0 && c7.indexOf('$9-$145') < 0,
