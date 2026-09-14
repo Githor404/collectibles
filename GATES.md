@@ -1157,9 +1157,26 @@ The fix restores the shipped contract, drives the real one-door path with the ap
 
 3 census (presence, deliberate-absence control, enumeration control) + 2 SH1 content (`storeBadge`, `captureBox`) + 3 SH2 (`confirmedBox` paint, identity text by name, gated cleanup).
 
-### NOT YET DEMONSTRATED (HT-D60 Clause 1)
+### DEMONSTRATED — rows 57 and 58, each seen to fail (HT-D60 Clause 1)
 
-**The census has not been run against its defect.** Two rows are being added: one deleting `#versionNotice` from `index.html`, which the census must name; one stripping `renderConfirmed();` out of `identityAccept`, which re-plants the `__setComps` shape itself and is the row that decides whether the content assertion is real. Until this section says otherwise, the census is **designed, not demonstrated.**
+Run on a tree committed first at `0e46a6d`, so a clobber would have cost one `git checkout` rather than the working copy being the only copy.
+
+| row | planted defect | verdict | first named failure |
+|---|---|---|---|
+| 57 | the `#versionNotice` element **deleted** from `index.html` | `GATE: FAIL` | `SH1 GATE (D16): EVERY element the harness constructs also exists in the SHIPPED …` |
+| 58 | `renderConfirmed();` **stripped out of** `identityAccept` | `GATE: FAIL` | `SH2 GATE (D16): accepting through the SHIPPED BUTTON PATH paints #confirmedBox …` |
+
+**Row 58 is the one that mattered.** It re-plants `__setComps`' own shape one layer over: state set, surface never painted, **element present the entire time**. The presence census cannot see that — only the content assertion catches it. Had row 58 passed, the content assertion would have been decorative, and D16 would have shipped half a gate while claiming a whole one.
+
+**Both expected strings were deliberately failure-specific**, and both matched on a genuine `FAIL` line: row 57 on `:: versionNotice` (the census diagnostic) and row 58 on `shellLen=0` (the probe, which prints only on failure). Matching the assertion **label** instead would have let each row match its own *passing* line — the tautology that made CQ7 unfailable for 347 consecutive runs.
+
+### A defect found in `report()` while verifying the above
+
+`report()` matches its expected pattern in two arms: a strict one, `^FAIL +.*pattern`, and — if that finds nothing — **a fallback that greps the whole output**, PASS lines, labels and comments included. Only if *both* miss does it print `NOTHING NAMED MATCHED -- SUSPECT THE FIXTURE`.
+
+So **a row whose pattern matches only a passing line prints a plausible-looking "first named failure" and no warning at all.** That is the CQ7 tautology relocated out of an assertion and into the reporting function, where it would corrupt every row's evidence rather than one row's. The only tell was that the strict arm strips a `FAIL ` prefix and the fallback does not, so a weak match leaves `PASS ` visible — inside an 80-column truncation. That is how rows 57 and 58 were confirmed genuine, and it is far too quiet a signal for what it distinguishes.
+
+**The fallback now labels itself `WEAK-MATCH:`.** The arm is kept rather than deleted: it is what produces a usable diagnostic when a gate fails in an *unexpected* way, and removing it would trade a quiet ambiguity for a blind spot. This is a harness defect, not an app defect — it could not have produced a wrong app behaviour, only a wrong belief about which gate was holding.
 
 ### What it does not cover (Clause 2)
 

@@ -171,7 +171,18 @@ report() { # name, expected-case-pattern, output
   if [ "$ROW" -lt "$ROW_LO" ] || [ "$ROW" -gt "$ROW_HI" ]; then return 0; fi
   verdict=$(printf '%s\n' "$out" | grep -oE 'GATE: (PASS|FAIL)' | tail -1)
   named=$(printf '%s\n' "$out" | grep -E "^FAIL +.*(${pat})" | head -1 | sed -E 's/^FAIL +//' | cut -c1-80)
-  [ -n "$named" ] || named=$(printf '%s\n' "$out" | grep -E "(${pat})" | head -1 | cut -c1-80)
+  # THE WEAK ARM, and it now says so. When no FAILING line carries the pattern
+  # this greps the WHOLE output -- PASS lines, assertion labels, comments. A row
+  # whose pattern matched only a PASSING line would otherwise print a plausible
+  # "first named failure" and no warning: the CQ7 tautology, living in the
+  # reporting function instead of in one assertion, where it would corrupt every
+  # row's evidence rather than a single row's. The only tell was that the strict
+  # arm strips a "FAIL " prefix and this one does not -- inside an 80-column cut.
+  #
+  # KEPT, not deleted: it is what yields a usable diagnostic when a gate fails in
+  # an UNEXPECTED way. Labelled, so a weak match can never be read as a strong one.
+  [ -n "$named" ] || { named=$(printf '%s\n' "$out" | grep -E "(${pat})" | head -1 | cut -c1-80)
+                       [ -z "$named" ] || named="WEAK-MATCH: $named"; }
   printf '%-34s %-9s %s\n' "$name" "${verdict:-NO-VERDICT}" "${named:-(NOTHING NAMED MATCHED -- SUSPECT THE FIXTURE)}"
 }
 
