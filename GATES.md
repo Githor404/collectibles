@@ -1245,6 +1245,24 @@ Row 55 pinned the literal `const APP_VERSION = '0.1.0';`. The want-list slice bu
 
 **Open, and the reason this matters beyond one row: the full 58-row pass has not run since `2f62240`.** That slice changed `app.js`, `index.html` and `APP_VERSION`; row 55 is one casualty and there may be others. Running it is the next step, and it is the same failure `CLAUDE.md` already records — a full pass left unrun leaves rows unverified against changed code, and they fail silent rather than loud.
 
+### VERIFIED — the full pass, clean (2026-09-14)
+
+**61 rows, every one `GATE: FAIL` against its own defect. Exit code 0. Zero rotted mutations, zero fixture warnings**, tree clean with all four mutated files restored identical to their pre-run copies.
+
+That closes the episode. Four things are worth keeping, in order of how far they generalise.
+
+**1. An instrument that could not fail.** `grep -c $'\r'` was used to detect CRLF and reported **every line as CRLF on a known-LF control file** — the same number whether or not the condition held. Three claims were built on it, including *"CRLF is committed into the repo"*, which was about to be written here and is **false**: every blob was LF throughout. The correct form is `perl -ne '$c++ if /\r$/; END { print 0+$c }'`, and it was trusted only after a known-CRLF and a known-LF file made it read 2 and 0. This is the empty-grep rule one level up: the earlier version said *a silent result needs a control*; this says **a result needs a control even when it is loud**, because a confident wrong number is harder to doubt than a blank one.
+
+**2. `git checkout -- <file>` was the cause, and the ban already existed.** `defect-pass.sh`'s own header forbids it, because it restores from HEAD and discards uncommitted work. It was used anyway, as the *safe recovery* during an unrelated probe — and under `core.autocrlf=true` it rewrote `app.js` to CRLF. Every multi-line perl pattern here uses `\n`, which cannot match `\r\n`, so **seven rows stopped planting anything**. The blobs were LF the whole time; only the working copy converted, and only because the recovery step touched it. **A standing rule was right for a second reason nobody had written down.** Restore with `git show HEAD:f > f`; `.gitattributes` now pins `*.js`, `*.html` and `*.md` to `eol=lf`.
+
+**3. A warning that does not change the verdict is not a gate.** `mutate()` *detected* all seven failures and printed them — then returned 0. The rows ran clean suites, reported `GATE: PASS`, and the pass exited 0. Seven warnings in a 61-row table scroll past, and they did. Now fatal, with a loud terminal block and `exit 1`, **controlled in both directions**: an impossible pattern exits 1 naming the row, and a healthy row still exits 0. The second half matters as much — a guard that failed everything would be quietly worse than the silent pass it replaced, because it would train the reader to ignore the result.
+
+**4. A row that pins a literal rots on a schedule.** Row 55 pinned `'0.1.0'` and this repo's own v0.2.0 bump silenced it. Match the **shape**, not a value the product legitimately changes.
+
+**The `WEAK-MATCH` census landed at 3, and the prediction was wrong.** Two were predicted — the `check-refs` rows, whose matched line never identifies itself as a failure. The third, `egress`, was not: its pattern sits on a **continuation line** beneath the `FAIL -` header, so the line-based second arm cannot reach it. **Named, not fixed** — making the arm block-aware is a different mechanism with its own over-matching risk, and the label is now accurate enough to be worth reading, which was the point. The five that dropped off were the rotted rows, which had been matching on their own `PASS` lines.
+
+**Also corrected:** the row count reads **61**, not 60. The census grep was anchored `^[a-z]`, which silently dropped `EXIF pin removed` — the same anchor bug `tests/README.md` already records happening three times.
+
 ### Assertion delta: 416 → 431 (+15), re-pinned in this commit
 
 13 W assertions + the 2 SH1 shipped-shell checks. `APP_VERSION` moved to **0.2.0** with a dated `VERSION_LOG` entry — the shell changed, and `check-version.sh` demanding that bump is D14's machinery working rather than misfiring.

@@ -177,6 +177,38 @@ Use `tee`, or no filter at all, for anything whose progress you may want to watc
 
 Both are this repo's own rule pointed back at its tooling: **a monitor that cannot fail to look busy is not a monitor** — the same shape as a gate that cannot fail, as `DEFECT_PASS` before it was keyed to a live PID, and as `report()`'s weak arm before it was labelled.
 
+### An instrument that cannot fail is not a measurement
+
+The section above says a **silent** result needs a control. This is the same rule one level up, and it cost more: **a result needs a control even when it is loud.** A confident wrong number is harder to doubt than a blank one.
+
+`grep -c $'\r' <file>` was used to detect CRLF line endings. It reports **every line as CRLF on a known-LF file** — the same number whether or not the condition holds. Three conclusions were built on it before a control was run, including *"CRLF is committed into the repo"*, which was false: every blob was LF.
+
+Build the control **first**, and make it fail:
+
+```sh
+crlines() { perl -ne '$c++ if /\r$/; END { print 0+$c }' "$1"; }
+printf 'a\r\nb\r\n' > c.txt   # crlines must read 2
+printf 'a\nb\n'     > l.txt   # crlines must read 0  <-- the half that matters
+```
+
+A control that only demonstrates the positive case proves the instrument can *say yes*, never that it can say no.
+
+### NEVER `git checkout -- <file>` — and the second reason
+
+`defect-pass.sh`'s header has always banned it: it restores from HEAD, so it silently discards uncommitted work. On 2026-09-14 it cost something else entirely.
+
+Used as the *safe recovery* after a hand-run probe, under `core.autocrlf=true`, it rewrote `app.js` to **CRLF**. Every mutation here is `perl -0pi` and the multi-line ones use `\n`, which cannot match `\r\n` — so **seven defect rows stopped planting anything and reported `GATE: PASS`**. They did not error. The blobs were LF throughout; only the working copy converted, and only because the recovery step touched it.
+
+Restore with **`git show HEAD:<file> > <file>`**, which writes the blob verbatim and applies no smudge filter. `.gitattributes` now pins `*.js`, `*.html` and `*.md` to `eol=lf` so a checkout cannot reintroduce it.
+
+**The general form:** a standing rule can be right for reasons nobody has written down. Breaking it to find the second reason is the expensive way to learn it.
+
+### A warning that does not change the verdict is not a gate
+
+`mutate()` detected all seven non-applying mutations and **printed each one** — then returned 0. The rows ran clean suites, reported `GATE: PASS`, and the pass exited 0. Seven warnings inside a 61-row table scroll past, and did.
+
+It is now fatal: the pass ends with a loud block and `exit 1`. **Controlled in both directions before it was trusted** — an impossible pattern exits 1 naming the row; a healthy row still exits 0. The second half is not a formality: a guard that failed everything would be worse than the silent pass it replaced, because it trains the reader to ignore the result. That is the want-list's own noise argument (D15, amended) pointed at the harness.
+
 ## Environment
 
 - **Scope.** Browser profiles and defect-pass backups live under `tests/.tmp/` (gitignored), never `%TEMP%`. This repo's sessions stay inside their own directory.
