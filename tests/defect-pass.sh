@@ -451,6 +451,85 @@ report "comps row collapses to one run" "THREE distinct elements" "$(run_dl)"; r
 mutate 's/function compsRowHTML\(r\) \{[\s\S]*?\n\}/function compsRowHTML(r) {\n  return "<div class=\\"cmprow\\">" + esc(compsMoney(r.soldPrice, r.soldCurrency)) + esc(r.title) + esc(compsDate(r.endedAt)) + "<\/div>";\n}/' app.js
 report "comps row, measured in a viewport" "not its own element" "$(run_layout)"; restore
 
+# ============ R3 / D11-D13 -- the ask against the scatter (46-52) ============
+
+# --- 46. the marker placed by a wrong comparator -----------------------------
+# Reversing the test puts the ask at the FRONT of the scatter instead of at its
+# position. Note the mutation that does NOT work: `>` -> `>=` is inert at ask=30
+# because no sale equals 30, which is why AK14's tie case had to exist first.
+mutate 's/    if \(!placed && r\.soldPrice > ASK\) \{ out\.push\(mk\); placed = true; \}/    if (!placed \&\& r.soldPrice < ASK) { out.push(mk); placed = true; }/' app.js
+report "ask marker placed by wrong test" "the ask renders INTO the scatter at its position" "$(run_dl)"; restore
+
+# --- 47. an off-by-one at the tie boundary -----------------------------------
+# Sales at exactly the ask get counted as "at" AND as "above", so the three terms
+# no longer sum to the rendered count. Inert wherever at === 0, which is every
+# case except AK14 -- the reason that case was written before this row.
+mutate 's/  const at = rows\.filter\(function \(r\) \{ return r\.soldPrice === ASK; \}\);/  const at = rows.filter(function (r) { return r.soldPrice >= ASK; });/' app.js
+report "off-by-one at the tie boundary" "sum to the rendered count" "$(run_dl)"; restore
+
+# --- 48. a percentile reintroduced -------------------------------------------
+# D13's exact defect: the same count, expressed as a ratio, which reads as a
+# score out of a hundred and invites "so it's about average".
+# A PRECOMPUTED LITERAL, not an expression. The first version wrote
+# `${Math.round(100 * c.below / c.total)}%` into the replacement and perl read
+# the `/` as opening a regex: "Illegal division by zero", mutation never applied,
+# row would have been vacuous. 2 of 9 below the ask is 22%; hardcoding it
+# exhibits the identical defect without asking perl to evaluate arithmetic.
+# EVERY `$` IN THE REPLACEMENT IS ESCAPED. The first version left `${c.below}`
+# bare and perl read it as a deref, emptying it -- the row still reported the
+# right verdict because AK7 fires on percentile words and does not care that the
+# count went blank. An impure mutation that happened to land.
+mutate 's/    `<div class="askcount"><b>\$\{c\.below\}<\/b> sold below/    `<div class="askcount">cheaper than 22% of sales · <b>\${c.below}<\/b> sold below/' app.js
+report "a percentile on the surface" "no percentage, percentile, median" "$(run_dl)"; restore
+
+# --- 49. the grade wired into the filter -------------------------------------
+# Rule 2 as amended, and D10's adversarial reason: an advisory attestation that
+# quietly starts selecting comps.
+mutate 's/  const below = rows\.filter\(function \(r\) \{ return r\.soldPrice < ASK; \}\)/  const below = rows.filter(function (r) { return r.soldPrice < ASK \&\& (!GRADE || r.title.indexOf(GRADE) >= 0); })/' app.js
+# PATTERN REPOINTED. It named AK8's FIRST clause, which passes: the mutation
+# touches askComparison's `below` filter, not the scatter, so "byte-identical"
+# still holds. What fails is AK8's SECOND clause, on the counts.
+report "grade wired into the filter" "counts are untouched by it" "$(run_dl)"; restore
+
+# --- 50. the bulk rate divided -----------------------------------------------
+# D12: $40 / 5 = $8, a number the seller never said, rendered exactly like a fact.
+# THE DIVIDED FIGURE AS A LITERAL. The first version computed it in the
+# replacement and perl ate it twice over: the `/` opened a regex and `"$"` is
+# perl's list separator. "5 for $40" divided is $8, so plant $8 -- the defect is
+# identical and perl evaluates nothing.
+mutate 's/  const src = ASK_TERMS \? .your figure, from: . \+ ASK_TERMS : .the price you were quoted.;/  const src = "\$8 each";/' app.js
+report "a bulk rate divided per book" "appears NOWHERE" "$(run_dl)"; restore
+
+# --- 51. a second, unlabelled number on the surface --------------------------
+# CQ7 as extended: exactly ONE price may be something nobody paid, and only while
+# it carries its label. This adds a bare number with no provenance at all.
+# A PRECOMPUTED LITERAL again. The first version used `.toFixed(2)` and perl
+# parsed it as a subroutine call -- "Undefined subroutine &main::toFixed". $37.50
+# is a price no comp in the fixture holds and the ask is not, which is precisely
+# the defect: a number on the surface that nobody paid and nothing labels.
+mutate 's/    `<div class="askcount"><b>\$\{c\.below\}<\/b> sold below/    `<div class="askcount"><span class="cmpprice">\$37.50<\/span> <b>\${c.below}<\/b> sold below/' app.js
+report "an unlabelled second number" "ACTUALLY SOLD FOR" "$(run_dl)"; restore
+
+# --- 52. the ask reaches the request body ------------------------------------
+# Brief rules 3 and 5. CQ4 was theoretical until R3 gave the ask a real input;
+# this is the row that makes it load-bearing.
+mutate 's/    includeCompletedListings: true,/    includeCompletedListings: true,\n    maxPrice: ASK,/' app.js
+report "the ask reaches the request body" "neither the ask nor the grade reaches a request body" "$(run_dl)"; restore
+
+# --- 53. the ask surface never painted -- measured in a VIEWPORT --------------
+# A REAL BUG, RE-PLANTED. __setComps stood in for a completed lookup and called
+# renderComps alone, so the ask inputs were never painted. The data-layer suite
+# stayed green throughout, because its fixture called CT.renderAsk() by hand --
+# 27 assertions passing against a sequence the shipped app never performed.
+#
+# The layout gate caught it: askBox present, phase done, rows 4, innerHTML
+# length 0. Two hypotheses read off the source were both wrong before a
+# four-fact probe inside the gate's own browser settled it.
+#
+# Pattern copied from the OBSERVED failure string, not written from source.
+mutate 's/  renderComps\(\); renderAsk\(\);\n  return COMPS;/  renderComps();\n  return COMPS;/' app.js
+report "ask surface never painted" "marker=true input=false" "$(run_layout)"; restore
+
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
   printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"

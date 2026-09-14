@@ -1448,9 +1448,14 @@ function identityAccept(v) {
 // A new book inherits NOTHING from the last one: not its comps, not its edited
 // query. A scatter left over from the previous lookup sitting under a new
 // identity would be the confidently-wrong pairing brief rule 8 exists to stop.
+// Fork D: Start over means a DIFFERENT BOOK, so the ask and the grade go with
+// it -- a seller's price carried onto a new identity is brief rule 8's
+// confidently-wrong pairing. A re-lookup with an edited query is the SAME book
+// and the same seller, so compsLookup deliberately leaves them alone.
 function clearConfirmed() {
   CONFIRMED = null; COMPS = null; COMPS_EDITED = null;
-  renderConfirmed(); renderComps();
+  askClear();
+  renderConfirmed(); renderComps(); renderAsk();
   return { ok: true };
 }
 function renderConfirmed() {
@@ -1459,7 +1464,13 @@ function renderConfirmed() {
   if (!CONFIRMED) { el.innerHTML = ''; return; }
   const f = CONFIRMED.fields;
   const head = [f.title, issueLabel(f.issue)].filter(Boolean).join(' ') || '(nothing legible)';
-  const sub = [f.publisher, f.cover_date, f.cover_price].filter(Boolean).join(' · ');
+  // RULE 7 UNDER LOAD. The cover price rendered here as a bare "$1.00" between
+  // the publisher and the date, which was harmless while it was the only price
+  // on screen. R3 puts the ASKING price on the same screen, and an unlabelled
+  // price beside a labelled one is exactly the conflation rule 7 forbids: one is
+  // printed on the book, the other is what a stranger wants for it.
+  const sub = [f.publisher, f.cover_date, f.cover_price ? 'cover ' + f.cover_price : '']
+    .filter(Boolean).join(' · ');
   const marks = CONFIRMED.markers.length ? CONFIRMED.markers.join(', ') : 'none seen';
   el.innerHTML = `<div class="confirmed">` +
     `<div class="cfhead">Confirmed: ${esc(head)}</div>` +
@@ -1685,7 +1696,7 @@ function compsLookup() {
     const split = compsFilter(parsed.rows);
     COMPS = { phase: 'done', query: q, bound: bound, rows: split.kept, dropped: split.dropped,
               error: '', at: new Date(nowMs()).toISOString(), returned: parsed.rows.length };
-    renderComps();
+    renderComps(); renderAsk();   // the ask inputs appear WITH the comps they need
     return { ok: true, kept: split.kept.length, dropped: split.dropped.length };
   });
 }
@@ -1699,7 +1710,15 @@ function __setComps(rows, dropped, query) {
   COMPS = { phase: 'done', query: String(query || ''), bound: compsBound(body),
             rows: rows || [], dropped: dropped || [], error: '',
             at: new Date(nowMs()).toISOString(), returned: (rows || []).length + (dropped || []).length };
-  renderComps();
+  // MIRRORS compsLookup's SUCCESS BRANCH EXACTLY -- renderComps THEN renderAsk.
+  // This seam stands in for a completed lookup, and for a while it did not
+  // reproduce that lookup's render sequence: it called renderComps alone, so the
+  // ask inputs were never painted. The data-layer suite stayed green because its
+  // fixture called CT.renderAsk() by hand; the layout gate, which drives the real
+  // page, failed with askBox present, phase done, rows 4 and innerHTML length 0.
+  // A seam that does not reproduce the path it replaces is D3 at its smallest --
+  // and the fixture papering over it is what kept the divergence invisible.
+  renderComps(); renderAsk();
   return COMPS;
 }
 
@@ -1734,7 +1753,7 @@ function compsDate(iso) {
 function renderComps() {
   const el = document.getElementById('compsBox');
   if (!el) return;
-  if (!COMPS) { el.innerHTML = ''; return; }
+  if (!COMPS) { el.innerHTML = ''; renderAsk(); return; }
   const win = COMPS_WINDOW_DAYS + ' days';
   if (COMPS.phase === 'loading')
     return void (el.innerHTML = `<div class="comps"><div class="opend"><span class="byokspin"></span>` +
@@ -1761,8 +1780,35 @@ function renderComps() {
     `<div class="note warnline">These are mixed: this lookup cannot tell a raw copy from a graded slab. ` +
     `eBay's search results carry no grade and no certification field, so the seller's own words below are the only grade there is. ` +
     `Read them — a slabbed 9.8 and a beaten reading copy are both in this list.</div>` +
-    `<div class="cmplist">${sorted.map(compsRowHTML).join('')}</div>` +
+    `<div class="cmplist">${compsListHTML(sorted)}</div>` +
     compsFootHTML() + `</div>`);
+}
+// FOUND BY THE LAYOUT GATE, and it was a product defect rather than a test gap:
+// the ask inputs are painted by renderAsk, and NOTHING on the shipped path
+// called it after a lookup. compsLookup ended at renderComps; only refresh()
+// reached renderAsk, so after a real lookup the ask fields would not have
+// appeared until some unrelated repaint happened to run. The data-layer suite
+// could not see it, because its fixture calls CT.renderAsk() by hand.
+//
+// Fixed at the two places that own the transition -- compsLookup's success
+// branch, and renderComps' empty branch -- rather than behind a wrapper.
+// Calling renderAsk on a repaint is safe BY CONSTRUCTION: it rebuilds only when
+// the PHASE changes, which is the same guard that stops typing destroying the
+// caret. That guard is why this is a one-line fix and not a new bug.
+// The ask marker is placed BY VALUE, before the first sale that beat it -- not
+// by an index computed elsewhere, so it cannot drift out of step with the sort.
+// Sales at exactly the ask sit below it and are counted separately.
+function compsListHTML(sorted) {
+  const mk = askMarkerHTML();
+  if (!mk) return sorted.map(compsRowHTML).join('');
+  const out = [];
+  let placed = false;
+  sorted.forEach(function (r) {
+    if (!placed && r.soldPrice > ASK) { out.push(mk); placed = true; }
+    out.push(compsRowHTML(r));
+  });
+  if (!placed) out.push(mk);
+  return out.join('');
 }
 // THREE FIELDS, THREE ELEMENTS, and the source order matches the visual order:
 // price and date on the first line, the seller's title on its own line beneath.
@@ -1798,6 +1844,162 @@ function compsShowDropped(btn) {
   return { ok: true, shown: !box.hidden };
 }
 
+// ---- R3: THE TRIAGE SURFACE -- grade and asking price ------------------------
+// R2b produces a scatter. This turns it into an answer: "you're being asked $10;
+// 47 of these 98 sold below that." Both inputs are the HUMAN'S (brief rules 3
+// and 5) and neither is ever read from a photo -- ID_REFUSED_KEYS refuses
+// asking_price on the model's path, and this is the only door it comes in by.
+//
+// THE COMPARISON IS AN ASK AGAINST A SCATTER (rule 4 as amended). No $X, no
+// midpoint, no average, no "fair", no verdict, no percentile (D13). The user
+// reads where their number sits and draws the conclusion; that reading IS the
+// product, and it is the thing the app must not do for them.
+const GRADES = ['PR', 'FR', 'GD-', 'GD', 'GD+', 'VG-', 'VG', 'VG+',
+                'FN-', 'FN', 'FN+', 'VF-', 'VF', 'VF+', 'NM-', 'NM', 'NM+'];
+const ASK_NEAREST = 3;        // either side of the ask (Fork B)
+
+let ASK = null;               // the figure the USER wants compared. Never computed.
+let ASK_TERMS = '';           // the seller's words, verbatim: "5 for $40" (D12)
+let GRADE = '';               // the user's attestation. ADVISORY ONLY (rule 2).
+let ASK_SHOWN = '';           // which phase the inputs were rendered for
+
+function askSetPrice(raw) {
+  const s = String(raw == null ? '' : raw).replace(/[^0-9.]/g, '');
+  const n = Number(s);
+  ASK = (s === '' || !(n > 0)) ? null : n;
+  renderAskLive();
+  renderComps();              // safe: the scatter holds no inputs (see renderAsk)
+  return { ok: true, ask: ASK };
+}
+// D12: the terms are TEXT, kept verbatim. Nothing parses them, nothing divides
+// them. They exist to say where the user's figure came from.
+function askSetTerms(raw) { ASK_TERMS = String(raw == null ? '' : raw).trim(); renderAskLive(); renderComps(); return { ok: true, terms: ASK_TERMS }; }
+// Rule 2 as amended: grade is ADVISORY. It deliberately does NOT call
+// renderComps -- it must not touch a comp, an order or a count, and the surest
+// way to guarantee that is to give it no path to the scatter at all.
+function askSetGrade(raw) {
+  const s = String(raw == null ? '' : raw);
+  GRADE = (GRADES.indexOf(s) >= 0) ? s : '';
+  renderAskLive();
+  return { ok: true, grade: GRADE };
+}
+function askClear() { ASK = null; ASK_TERMS = ''; GRADE = ''; ASK_SHOWN = ''; }
+function askState() { return { ask: ASK, terms: ASK_TERMS, grade: GRADE }; }
+
+// D11: where the cap cuts a group that shares a price, say what it cut. A
+// cluster at one price is the densest fact on the surface; hiding it behind
+// three arbitrary examples loses the finding, not an edge case.
+function askNearest(list, cap) {
+  const shown = list.slice(0, cap), rest = list.slice(cap);
+  let truncated = null;
+  if (shown.length && rest.length) {
+    const edge = shown[shown.length - 1].soldPrice;
+    const more = rest.filter(function (r) { return r.soldPrice === edge; }).length;
+    if (more > 0) {
+      const here = shown.filter(function (r) { return r.soldPrice === edge; }).length;
+      truncated = { price: edge, shown: here, total: here + more };
+    }
+  }
+  return { shown: shown, truncated: truncated };
+}
+
+function askComparison() {
+  if (!COMPS || COMPS.phase !== 'done' || ASK === null) return null;
+  const rows = COMPS.rows;
+  if (!rows.length) return null;
+  const curs = [];
+  rows.forEach(function (r) { if (curs.indexOf(r.soldCurrency) < 0) curs.push(r.soldCurrency); });
+  // Fork F: a scatter in two currencies is already incomparable, so placing an
+  // ask in it would invent a comparison. D10's shape, applied to currency:
+  // where the thing that would make the numbers comparable is absent, say so.
+  if (curs.length > 1) return { mixed: true, currencies: curs.slice() };
+  const recent = function (a, b) { return String(b.endedAt).localeCompare(String(a.endedAt)); };
+  const below = rows.filter(function (r) { return r.soldPrice < ASK; })
+                    .sort(function (a, b) { return (b.soldPrice - a.soldPrice) || recent(a, b); });
+  const above = rows.filter(function (r) { return r.soldPrice > ASK; })
+                    .sort(function (a, b) { return (a.soldPrice - b.soldPrice) || recent(a, b); });
+  const at = rows.filter(function (r) { return r.soldPrice === ASK; });
+  // below + at + above === total, always. Asserted, because an off-by-one at a
+  // tie boundary is invisible on a surface and wrong in the only number here.
+  return { mixed: false, currency: curs[0], ask: ASK, total: rows.length,
+           below: below.length, at: at.length, above: above.length,
+           nearestBelow: askNearest(below, ASK_NEAREST),
+           nearestAbove: askNearest(above, ASK_NEAREST) };
+}
+
+// The ONE number on this surface that is not a sale (CQ7 as extended), and it
+// carries its own label so it cannot be read as one.
+function askMarkerHTML() {
+  const c = askComparison();
+  if (!c || c.mixed) return '';
+  const src = ASK_TERMS ? 'your figure, from: ' + ASK_TERMS : 'the price you were quoted';
+  return `<div class="cmprow askrow">` +
+    `<span class="cmpprice">${esc(compsMoney(ASK, c.currency))}</span>` +
+    `<span class="cmpmeta askmark">YOUR ASK</span>` +
+    `<span class="cmptitle">${esc(src)}${GRADE ? ' · you graded it ' + esc(GRADE) : ''}</span>` +
+    `</div>`;
+}
+
+// THE INPUTS ARE RENDERED ONCE AND NEVER REBUILT WHILE TYPING. renderComps
+// rebuilds #compsBox on every keystroke; if the inputs lived there, each
+// character would destroy and recreate the field and the caret would jump to
+// the end. renderConfirmQuery already exists for exactly this reason. Here the
+// separation is structural: the inputs are in #askBox, which renderComps never
+// touches, and this function rebuilds only when the PHASE changes.
+function renderAsk() {
+  const el = document.getElementById('askBox');
+  if (!el) return;
+  const phase = (COMPS && COMPS.phase === 'done' && COMPS.rows.length) ? 'done' : 'none';
+  if (phase === ASK_SHOWN) { renderAskLive(); return; }
+  ASK_SHOWN = phase;
+  if (phase === 'none') { el.innerHTML = ''; return; }
+  const opts = ['<option value="">not graded</option>'].concat(GRADES.map(function (g) {
+    return `<option value="${esc(g)}"${g === GRADE ? ' selected' : ''}>${esc(g)}</option>`;
+  })).join('');
+  el.innerHTML = `<div class="askbox">` +
+    `<div class="row"><div><label for="askPrice">Asking price <small>(theirs, not the cover price)</small></label>` +
+    `<input id="askPrice" type="text" inputmode="decimal" placeholder="what they want for it" ` +
+    `value="${esc(ASK === null ? '' : String(ASK))}" oninput="askSetPrice(this.value)"></div>` +
+    `<div><label for="askGrade">Your grade <small>(advisory)</small></label>` +
+    `<select id="askGrade" onchange="askSetGrade(this.value)">${opts}</select></div></div>` +
+    `<label for="askTerms">If it's a bulk rate, their words</label>` +
+    `<input id="askTerms" type="text" placeholder="e.g. 5 for $40 — typed as they said it" ` +
+    `value="${esc(ASK_TERMS)}" oninput="askSetTerms(this.value)">` +
+    `<div class="note">The price above is <b>yours to decide</b>. This app never divides a bulk rate into a per-book figure — ` +
+    `that would be a number the seller never said (D12).</div>` +
+    `<div id="askLive"></div></div>`;
+  renderAskLive();
+}
+
+// D13: COUNTS, never percentiles. A count is checkable by pointing at rows; a
+// ratio is a verdict the user cannot verify and reads as a score out of a
+// hundred -- which invites "so it's about average", the one inference D8 refuses.
+function renderAskLive() {
+  const el = document.getElementById('askLive');
+  if (!el) return;
+  const c = askComparison();
+  if (!c) { el.innerHTML = ''; return; }
+  if (c.mixed) {
+    el.innerHTML = `<div class="note warnline">These sales are in more than one currency (` +
+      `${esc(c.currencies.join(', '))}), so there is nothing to place your price against. ` +
+      `Narrow the search to one marketplace and look again.</div>`;
+    return;
+  }
+  const side = function (label, near) {
+    if (!near.shown.length) return '';
+    const rows = near.shown.map(compsRowHTML).join('');
+    const cut = near.truncated
+      ? `<div class="note">${near.truncated.shown} of ${near.truncated.total} at ` +
+        `${esc(compsMoney(near.truncated.price, c.currency))} shown — the rest sold at that same price (D11).</div>`
+      : '';
+    return `<div class="asknear"><div class="asknearh">${esc(label)}</div>${rows}${cut}</div>`;
+  };
+  el.innerHTML =
+    `<div class="askcount"><b>${c.below}</b> sold below · <b>${c.at}</b> at your price · <b>${c.above}</b> above` +
+    `<span class="fine"> — of ${c.total} in the last ${COMPS_WINDOW_DAYS} days</span></div>` +
+    side('Nearest below', c.nearestBelow) +
+    side('Nearest above', c.nearestAbove);
+}
 // ---- the no-key floor (D2 Fork G1) ------------------------------------------
 // Copy the prompt into your own assistant, paste the reply back. HT-D63 is the
 // warning this is built against: HealthTracker's floor sat DEAD for weeks because
@@ -1908,6 +2110,7 @@ function refresh() {
   renderPromptCard();
   renderConfirmed();
   renderComps();
+  renderAsk();
   renderCaptureBtn(); renderCaptureOutcome();
 }
 function openSettings() {
@@ -1960,8 +2163,11 @@ window.CT = {
   COMPS_WINDOW_DAYS, COMPS_COUNT, COMPS_MIN_SHOWN, COMPS_EXCLUDE, COMPS_NEVER_SENT, COMP_KEYS,
   compsDefaultQuery, compsQuery, compsSetQuery, compsResetQuery, compsBody, compsBound,
   parseComps, compsFilter, compsBodyIsClean, compsLookup, compsClear, renderComps, compsPing,
-  compsRowHTML, compsShowDropped, compsMoney, compsDate, __setComps,
+  compsRowHTML, compsShowDropped, compsMoney, compsDate, compsListHTML, __setComps,
   compsState: () => COMPS,
+  // R3 / D11-D13 -- the triage surface: an ask against a scatter
+  GRADES, ASK_NEAREST, askSetPrice, askSetTerms, askSetGrade, askClear, askState,
+  askNearest, askComparison, askMarkerHTML, renderAsk, renderAskLive,
   promptBoxes, promptBoxFor, renderPromptCard, copyPrompt,
   state: () => APP_STATE,
   resave: () => Store.saveState(APP_STATE),

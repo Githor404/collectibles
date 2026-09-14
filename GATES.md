@@ -904,6 +904,8 @@ The actor's real input schema and output for a comics query (needs the paid prob
 
 **Fork B — "nearest comps" when many sales share a price.** With 98 sales ties are certain. B1: nearest by absolute price distance, ties by recency. B2: nearest by distance, ties by sorted position. B3: show every sale at a tied price. **Leaning: B1 capped at three either side, AND when the cap truncates a tie group, say so — "3 of 12 at $25".** A cluster at one price is *signal*, not noise: twelve sales at $25 tells the user more than three arbitrary examples of it, and silently truncating hides the densest fact on the surface.
 
+> **Forks B, C and E were RULED AS RULES, 2026-09-14** — each generalises past this slice, so each became a decision rather than a choice: **B → D11** (a cap that truncates a tie group must say what it truncated), **C → D12** (the app never divides a seller's quote), **E → D13** (counts, never percentiles). The leanings below are kept as the record of how they were first put; the binding form is the decision.
+
 **Fork C — a bulk rate, without inventing a per-book number.** *"$10 each, 5 for $40."* Dividing 40 by 5 manufactures $8, which the seller never said — D8's family, and rule 7's. C1: quantity + total fields, compared as a pair (but a pair cannot be placed on a single-price scatter). C2: one number, user's own arithmetic, bulk terms discarded. **Leaning: C3 — the user enters the figure THEY want compared, and the bulk terms ride alongside as attested text**, so the record reads *"$8 — your figure, from: 5 for $40"*. The app never divides; what it shows is a number the human chose and the words the seller used.
 
 **Fork D — does the ask survive Start over?** **Leaning: no on Start over, yes on re-lookup.** Start over means a different book, and an ask carried onto a new identity is brief rule 8's confidently-wrong pairing. A re-lookup with an edited query is the *same* book and the same seller, so clearing the ask there would punish refining the search.
@@ -932,6 +934,39 @@ The actor's real input schema and output for a comics query (needs the paid prob
 | R3-layout | **layout-gate extended**: at 360px the ask marker, its label and the nearest comps are disjoint rectangles, no horizontal overflow |
 
 **Defect pass required** (HT-D60), with rows at minimum for: the marker placed by a wrong comparator, a count off by one at a tie boundary, a midpoint or percentile reintroduced, the grade wired into the filter, a bulk rate divided into a per-book figure, an unlabelled second number on the surface, and the ask reaching a request body.
+
+### BUILT — evidence, 2026-09-14
+
+**All seven forks ruled as leaned; B, C and E recorded as D11, D12 and D13.**
+
+**Assertions: executed 386 · pinned 386** — 357 → 386 (**+29**), taken from the suite's own output rather than computed. **Defect pass 45 → 53 rows**; rows 46–53 are R3's, **every one `GATE: FAIL` naming its own case**, zero vacuous, zero unnamed, zero `GATE: PASS`.
+
+**The layout gate extends to the comparison**: at four viewports, the ask marker's price and its label occupy disjoint rectangles, the marker clears the comps above and below it, the input clears the scatter, the counts render, and the page does not overflow horizontally.
+
+| row | planted defect | named by |
+|---|---|---|
+| 46 | the marker placed by a reversed comparator | `AK5 GATE (Fork E): the ask renders INTO the scatter at its position` |
+| 47 | an off-by-one at the tie boundary | `AK14 GATE: …sum to the rendered count when the tie term is NON-ZERO` |
+| 48 | a percentile reintroduced | `AK7 GATE (D13): no percentage, percentile, median…` |
+| 49 | the grade wired into the filter | `AK8 GATE: and the counts are untouched by it` |
+| 50 | the bulk rate divided into $8 | `AK9 GATE (D12): $40 / 5 = $8 appears NOWHERE` |
+| 51 | an unlabelled second number | `AK6 GATE (CQ7 extended): every price…ACTUALLY SOLD FOR` |
+| 52 | the ask reaching the request body | `AK11 GATE (brief rules 3,5): neither the ask nor the grade reaches a request body` |
+
+**Two gate holes the defect pass found, neither visible to review.**
+
+1. **AK7 banned a VOCABULARY and fired on the surface's own refusal.** It listed `average`, and the comps footer says *"No average, no estimate — these are the sales"* **because** the surface refuses to average. That is the CQ7 tautology's mirror image: that one could never fail, this one could never pass while the refusal was stated. Rewritten to ban only tokens that can *only* be a verdict (`%`, `percentile`, `median`, `midpoint`, `bargain`, `overpriced`), **plus a second assertion requiring the refusal to still be present** — which is the stronger claim a word-ban never made, because it catches a future edit that simply deletes the disclaimer.
+2. **AK9 could not catch the defect it was named for.** It checked rendered `.cmpprice` values, `state.ask` and `state.terms` — and a divided per-book figure rendered in the *marker's title* is none of the three. Row 50 exposed it; "nowhere" now means the whole rendered surface.
+
+**And a third hole, the most serious, found by the layout gate and invisible to 27 passing assertions: a SEAM THAT DID NOT REPRODUCE ITS PATH.**
+
+`__setComps` stands in for a completed `compsLookup`. It called `renderComps()` alone where the real path calls `renderComps(); renderAsk();` — **so the ask inputs were never painted.** The data-layer suite was green the entire time, because `akSeed()` called `CT.renderAsk()` by hand and supplied precisely what the seam omitted. **The fixture was hiding the divergence it existed to expose**, and every assertion was true of the fixture's world rather than the app's.
+
+The layout gate caught it because it drives the real page with no fixture to help it. **Two hypotheses read off the source were both wrong** — first "nothing calls `renderAsk`" (fixed, symptom unchanged), then "the shipped shell lacks `#askBox`" (it is at `index.html:173`). A **four-fact probe inside the gate's own browser** settled it in one run: `askBox=present askBoxHTMLlen=0 phase=done rows=4 askState={"ask":30,…}` — element present, state correct, **nothing had ever painted it**.
+
+Fixed at the seam rather than in the gate or the fixture, so the divergence is removed at its source; `akSeed()`'s hand-written `renderAsk()` was deleted with it. **Row 53 re-plants the real bug** and fails the layout gate by name. The lesson is in `tests/README.md`: a seam mirrors its path exactly, and a fixture that supplies what a seam omits is concealing a defect in one of the two.
+
+**And a fourth failure, in the mutations rather than the gates: `$` interpolation in the replacement half, four times.** `$37.50` became `.50` (capture group 37), `${c.below}` emptied silently, `"$"` substituted perl's list separator. **The replacement half of `s///` is a perl double-quoted string and bash single-quoting does not protect it** — an earlier note in `tests/README.md` claimed it did, which was wrong and is corrected there. One row reported the right verdict with a corrupted mutation, because the assertion that fired did not care about the part that broke, so the dry-run now **reads the mutated text** rather than only checking that the file changed.
 
 ### What this pre-registration does not settle
 

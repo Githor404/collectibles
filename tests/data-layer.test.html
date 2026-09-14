@@ -60,7 +60,7 @@ window.setLS({});
       var e = document.createElement(tag); e.id = id; if (cls) e.className = cls;
       (parent || document.body).appendChild(e); return e;
     };
-    ['storeBadge','dataStatus','captureBox','credBox-vision','credBox-prices','credBox-comps','confirmedBox','compsBox','replyReport','toast','prerestoreWrap'].forEach(function (id) { mk('div', id); });
+    ['storeBadge','dataStatus','captureBox','credBox-vision','credBox-prices','credBox-comps','confirmedBox','askBox','compsBox','replyReport','toast','prerestoreWrap'].forEach(function (id) { mk('div', id); });
     mk('textarea', 'replyBox'); mk('textarea', 'prerestoreBox');
     mk('div', 'outcomeScrim', 'scrim oscrim');
     var w = mk('div', 'captureOutcome', 'omodal');
@@ -203,7 +203,7 @@ window.setLS({});
     CT.credSave('comps', 'apify', CTOKEN);
   }
   function surfacesText() {
-    return ['credBox-vision', 'credBox-prices', 'credBox-comps', 'captureBox', 'dataStatus', 'storeBadge', 'toast', 'outcomeMsg', 'outcomeTitle', 'outcomeFoot', 'captureResult', 'replyReport', 'confirmedBox', 'compsBox']
+    return ['credBox-vision', 'credBox-prices', 'credBox-comps', 'captureBox', 'dataStatus', 'storeBadge', 'toast', 'outcomeMsg', 'outcomeTitle', 'outcomeFoot', 'captureResult', 'replyReport', 'confirmedBox', 'askBox', 'compsBox']
       .map(function (id) { var e = document.getElementById(id); return e ? e.innerHTML : ''; }).join('|');
   }
 
@@ -981,6 +981,14 @@ window.setLS({});
     var cssAll = Array.prototype.map.call(D.querySelectorAll('style'), function (s) { return s.textContent; }).join('');
     res(cssAll.indexOf('.cmprow') >= 0 && cssAll.indexOf('.cmptitle') >= 0 && cssAll.indexOf('.cmpprice') >= 0,
         'SH1 GATE (device pass): the shipped shell carries CSS for the comps row, price and title -- it shipped with NONE, and unstyled inline spans is what merged the year and the date');
+    // EVERY AK assertion runs against the harness's synthetic mk('div','askBox'),
+    // so until now nothing proved the SHIPPED shell had one at all. That hole is
+    // part of why a seam/path divergence survived: the suite was never looking at
+    // the real element. Same shape as the credBox-comps and comps-CSS checks above.
+    res(!!D.getElementById('askBox') && !!D.getElementById('compsBox'),
+        'SH1 GATE (R3): the shipped shell carries #askBox AND #compsBox as separate elements -- separate is what lets the scatter repaint on every keystroke without destroying the ask input');
+    res(cssAll.indexOf('.askrow') >= 0 && cssAll.indexOf('.askmark') >= 0 && cssAll.indexOf('.askcount') >= 0,
+        'SH1 GATE (R3): and CSS for the ask marker, its label and the counts -- the marker is the one number here that is not a sale, so it must be unmistakable');
     // A token saved by an EARLIER build must not be stranded: it appears in
     // Storage with a way out, and only when it exists.
     W.CT.credClear('prices');
@@ -1585,6 +1593,174 @@ window.setLS({});
       'Gated on role === "prices" the spending token was the one with no warning at all');
   res(CT.PROVIDERS.apify.auth === 'bearer',
       'CQ9 GATE (D1): the Apify token rides as a BEARER HEADER, never a URL parameter -- PriceCharting\'s t= is the lesson');
+
+  // ======== R3 / D11-D13: the ask against the scatter ========================
+  // THE FIXTURE CARRIES A DELIBERATE TIE CLUSTER. CQ7's has six distinct prices
+  // and no repeats, so D11's truncation branch is UNREACHABLE with it and an
+  // assertion against it would be vacuous -- HT-D60 Clause 4. Four sales at $25
+  // make both the truncation disclosure and the tie-at-the-ask boundary
+  // reachable, and therefore falsifiable.
+  var AKROWS = [
+    { itemId:'k1', title:'Hulk 271 GD 1 CF staple detached', condition:'Pre-Owned', endedAt:'2026-08-01T09:00:00Z', soldPrice:9,     soldCurrency:'USD', isBestOfferAccepted:false },
+    { itemId:'k2', title:'Hulk 271 VG- complete',            condition:'Pre-Owned', endedAt:'2026-08-02T09:00:00Z', soldPrice:16.21, soldCurrency:'USD', isBestOfferAccepted:false },
+    { itemId:'k3', title:'Hulk 271 VG cream pages',          condition:'Pre-Owned', endedAt:'2026-08-03T09:00:00Z', soldPrice:25,    soldCurrency:'USD', isBestOfferAccepted:false },
+    { itemId:'k4', title:'Hulk 271 VG+ nice spine',          condition:'Pre-Owned', endedAt:'2026-08-09T09:00:00Z', soldPrice:25,    soldCurrency:'USD', isBestOfferAccepted:false },
+    { itemId:'k5', title:'Hulk 271 VG tape on cover',        condition:'Pre-Owned', endedAt:'2026-08-07T09:00:00Z', soldPrice:25,    soldCurrency:'USD', isBestOfferAccepted:false },
+    { itemId:'k6', title:'Hulk 271 VG reading copy',         condition:'Pre-Owned', endedAt:'2026-08-05T09:00:00Z', soldPrice:25,    soldCurrency:'USD', isBestOfferAccepted:false },
+    { itemId:'k7', title:'Hulk 271 FN- bright',              condition:'Pre-Owned', endedAt:'2026-08-11T09:00:00Z', soldPrice:40,    soldCurrency:'USD', isBestOfferAccepted:false },
+    { itemId:'k8', title:'The Incredible Hulk #271 First Rocket Raccoon Appearance 1982', condition:'Pre-Owned', endedAt:'2026-08-17T09:00:00Z', soldPrice:52.46, soldCurrency:'USD', isBestOfferAccepted:false },
+    { itemId:'k9', title:'Hulk 271 CGC 9.8 WHITE PAGES',     condition:'Pre-Owned', endedAt:'2026-08-13T09:00:00Z', soldPrice:145,   soldCurrency:'USD', isBestOfferAccepted:false }
+  ];
+  var akRows = CT.parseComps(JSON.stringify(AKROWS)).rows;
+  // NO EXPLICIT renderAsk. It used to call CT.renderAsk() here, which made every
+  // AK assertion pass against a sequence the shipped app never performed -- the
+  // seam painted only the scatter, and the fixture quietly painted the rest. The
+  // layout gate caught it because it drives the real page and has no fixture to
+  // help it. __setComps now mirrors compsLookup, so this seeds exactly what a
+  // completed lookup produces, and nothing more.
+  function akSeed() { CT.clearConfirmed(); CT.__setComps(akRows, [], 'incredible hulk 271'); }
+  function akBoth() { return document.getElementById('compsBox').innerHTML + document.getElementById('askBox').innerHTML; }
+  function akPrices(h) {
+    return (h.match(/<span class="cmpprice">\$([0-9.,]+)</g) || [])
+      .map(function (s) { return Number(s.replace(/[^0-9.]/g, '')); });
+  }
+
+  akSeed();
+  res(CT.askComparison() === null,
+      'AK1 GATE (rule 4): with no ask entered there is NO comparison -- the scatter renders and the app says nothing about it');
+
+  CT.askSetPrice('30');
+  var c30 = CT.askComparison();
+  res(c30.below === 6 && c30.at === 0 && c30.above === 3,
+      'AK2 GATE: the counts are exact -- 6 below, 0 at, 3 above',
+      c30.below + '/' + c30.at + '/' + c30.above);
+  res(c30.below + c30.at + c30.above === c30.total && c30.total === 9,
+      'AK2 GATE: below + at + above equals the rendered count -- an off-by-one at a tie boundary is invisible on a surface and wrong in the only number here');
+
+  // D11: the cap cuts a group of four sales sharing $25, and says so.
+  res(c30.nearestBelow.shown.length === 3 && c30.nearestBelow.truncated &&
+      c30.nearestBelow.truncated.shown === 3 && c30.nearestBelow.truncated.total === 4 &&
+      c30.nearestBelow.truncated.price === 25,
+      'AK3 GATE (D11): the cap truncates a tie group and reports it -- "3 of 4 at $25", because a cluster at one price is the densest fact on the surface',
+      JSON.stringify(c30.nearestBelow.truncated));
+  res(c30.nearestAbove.truncated === null && c30.nearestAbove.shown.length === 3,
+      'AK3 CONTROL: a side with no truncation reports none -- the disclosure is not printed unconditionally');
+  res(akBoth().indexOf('3 of 4 at') >= 0,
+      'AK3 GATE (D11): and the truncation reaches the SURFACE, not only the return value');
+
+  // Fork B: nearest ordered by distance, ties by recency -- k4 (Aug 9) before k5 (Aug 7) before k6 (Aug 5).
+  res(c30.nearestBelow.shown.map(function (r) { return r.itemId; }).join(',') === 'k4,k5,k6',
+      'AK4 GATE (Fork B): nearest-first by price, ties broken by RECENCY',
+      c30.nearestBelow.shown.map(function (r) { return r.itemId; }).join(','));
+  res(akBoth().indexOf(CT.esc('Hulk 271 VG+ nice spine')) >= 0 &&
+      akBoth().indexOf(CT.esc('The Incredible Hulk #271 First Rocket Raccoon Appearance 1982')) >= 0,
+      'AK4 GATE: the nearest comps carry the seller titles VERBATIM -- they are the only grade signal this tier has (D10)');
+
+  // The marker is placed BY VALUE: before the first sale that beat the ask.
+  var mkPos = akPrices(document.getElementById('compsBox').innerHTML);
+  res(mkPos.join(',') === '9,16.21,25,25,25,25,30,40,52.46,145',
+      'AK5 GATE (Fork E): the ask renders INTO the scatter at its position -- after every sale below it, before the first one above',
+      mkPos.join(','));
+
+  // CQ7 EXTENDED, and swept across BOTH containers: the scatter and the
+  // nearest-comps lists both render prices, and CQ7 only ever read the first.
+  var src = akRows.map(function (r) { return r.soldPrice; });
+  var stray = akPrices(akBoth()).filter(function (p) { return src.indexOf(p) < 0 && p !== 30; });
+  res(stray.length === 0,
+      'AK6 GATE (CQ7 extended): every price on the surface is one something ACTUALLY SOLD FOR, or the single user ask -- swept across the scatter AND the nearest lists',
+      stray.join(','));
+  res((akBoth().match(/askmark/g) || []).length === 1 &&
+      akBoth().indexOf('YOUR ASK') >= 0,
+      'AK6 GATE: and the one exception is LABELLED as the user\'s -- exactly one marker, named, so it cannot be read as a sale');
+
+  // D13: counts, never percentiles.
+  // THE FIRST VERSION OF THIS BANNED A VOCABULARY AND FIRED ON A REFUSAL.
+  // It listed "average", and the comps footer says "No average, no estimate --
+  // these are the sales" precisely BECAUSE the surface refuses to average. An
+  // assertion that cannot tell a claim from its denial is the CQ7 tautology's
+  // mirror: that one could never fail, this one could never pass while the
+  // refusal was stated. "fair", "worth" and "typical" had the same defect.
+  //
+  // So: ban the tokens that can ONLY be a verdict, and separately REQUIRE the
+  // refusal to still be there -- which is the stronger claim a word-ban never
+  // made, because it catches a future edit that quietly deletes the disclaimer.
+  res(/%|percentile|per cent|percent\b|median|midpoint|bargain|overpriced|good deal|better than/i.test(akBoth()) === false,
+      'AK7 GATE (D13): no percentage, percentile, median, midpoint or verdict word anywhere on the surface with an ask entered -- a ratio is a count dressed as a score, and it invites the one inference D8 refuses',
+      (akBoth().match(/%|percentile|per cent|percent\b|median|midpoint|bargain|overpriced|good deal|better than/ig) || []).join(','));
+  res(akBoth().indexOf('No average, no estimate') >= 0,
+      'AK7 GATE (D8): and the REFUSAL is still stated on the surface -- banning a word is weaker than requiring the denial, which is what catches a future edit that simply drops it');
+
+  // Rule 2 as amended: the grade is a LABEL. It touches nothing.
+  var beforeGrade = document.getElementById('compsBox').innerHTML;
+  CT.askSetGrade('VF-');
+  res(document.getElementById('compsBox').innerHTML === beforeGrade,
+      'AK8 GATE (rule 2 amended): setting a grade leaves the scatter BYTE-IDENTICAL -- it filters nothing, reorders nothing, counts nothing');
+  res(CT.askComparison().below === 6 && CT.askComparison().above === 3,
+      'AK8 GATE: and the counts are untouched by it -- the grade is an attestation beside the ask, never an index (D10s adversarial reason)');
+  res(document.getElementById('askBox').innerHTML.indexOf('VF-') >= 0,
+      'AK8: the attestation IS recorded and shown -- advisory is not the same as discarded');
+
+  // D12: a bulk rate, with no per-book figure the seller never said.
+  CT.askSetTerms('5 for $40');
+  res(CT.askState().ask === 30 && CT.askState().terms === '5 for $40',
+      'AK9 GATE (D12): the terms are kept VERBATIM beside the user figure -- nothing parses them');
+  res(akBoth().indexOf('5 for $40') >= 0 && akBoth().indexOf('your figure') >= 0,
+      'AK9 GATE (D12): the surface names the figure as the USER\'S and shows the seller\'s words as its source');
+  // WAS A TAUTOLOGY on first writing: `JSON.stringify(...).indexOf('8') !== 1`
+  // is a typo for an absence check and is true for almost any string -- the CQ7
+  // failure mode exactly, caught here before it could be banked as evidence.
+  // The real claim: no rendered price equals 8, and no state field holds 8.
+  // WIDENED after its own defect row exposed the hole: this checked rendered
+  // .cmpprice values, state.ask and state.terms -- and a divided per-book figure
+  // rendered in the MARKER'S TITLE is none of the three, so the assertion could
+  // not catch the defect it is named for. "Nowhere" has to mean nowhere.
+  var st9 = CT.askState();
+  res(akPrices(akBoth()).indexOf(8) < 0 && st9.ask !== 8 &&
+      String(st9.terms).indexOf('$8') < 0 && akBoth().indexOf('$8') < 0,
+      'AK9 GATE (D12): $40 / 5 = $8 appears NOWHERE -- not as a price, not in state, not anywhere in the rendered surface. The app never divides a seller\'s quote',
+      JSON.stringify(st9));
+
+  // Fork F: a scatter in two currencies is incomparable; say so, do not place.
+  var mixed = akRows.slice(0, 3).map(function (r) { return JSON.parse(JSON.stringify(r)); });
+  mixed[2].soldCurrency = 'GBP';
+  CT.__setComps(mixed, [], 'q'); CT.renderAsk(); CT.askSetPrice('20');
+  res(CT.askComparison().mixed === true,
+      'AK10 GATE (Fork F): a mixed-currency scatter REFUSES the comparison rather than placing an ask among incomparable numbers');
+  res(document.getElementById('askBox').innerHTML.indexOf('more than one currency') >= 0,
+      'AK10 GATE: and states why, where the numbers are');
+
+  // Brief rules 3 and 5: the human inputs never reach a request body.
+  akSeed(); CT.askSetPrice('30'); CT.askSetGrade('VF-');
+  res(CT.compsBodyIsClean(CT.compsBody(CT.compsQuery())) === true &&
+      JSON.stringify(CT.compsBody(CT.compsQuery())).indexOf('30') < 0,
+      'AK11 GATE (brief rules 3,5): neither the ask nor the grade reaches a request body -- CQ4 moves from theoretical to load-bearing now that real inputs exist');
+
+  // The caret hazard, gated structurally: typing must not replace the element.
+  var inputRef = document.getElementById('askPrice');
+  CT.askSetPrice('31');
+  res(document.getElementById('askPrice') === inputRef,
+      'AK12 GATE: typing into the ask does NOT rebuild it -- renderComps rewrites innerHTML on every keystroke, and an input inside it would lose the caret per character');
+
+  // Fork D: a new book inherits nothing; a re-lookup keeps it.
+  CT.clearConfirmed();
+  res(CT.askState().ask === null && CT.askState().grade === '' && CT.askState().terms === '',
+      'AK13 GATE (Fork D): Start over clears the ask, the terms and the grade -- a seller\'s price carried onto a different book is brief rule 8\'s confidently-wrong pairing');
+
+  // THE TIE-AT-THE-ASK BOUNDARY. Every case above leaves `at` at zero, so the
+  // pre-registered claim "below + at + above = the rendered count" has never
+  // exercised its middle term -- HT-D60 Clause 4, the same shape as a fixture
+  // with no ties in it at all. The four sales at $25 exist to make this
+  // reachable, and until now nothing used them.
+  akSeed(); CT.askSetPrice('25');
+  var c25 = CT.askComparison();
+  res(c25.below === 2 && c25.at === 4 && c25.above === 3,
+      'AK14 GATE: sales at EXACTLY the ask are counted as their own term -- 2 below, 4 at, 3 above',
+      c25.below + '/' + c25.at + '/' + c25.above);
+  res(c25.below + c25.at + c25.above === c25.total && c25.total === 9,
+      'AK14 GATE: and the three still sum to the rendered count when the tie term is NON-ZERO -- which is the only arrangement that can catch an off-by-one at the boundary');
+  res(akPrices(document.getElementById('compsBox').innerHTML).join(',') === '9,16.21,25,25,25,25,25,40,52.46,145',
+      'AK14 GATE (Fork E): the marker sits AFTER the sales that matched it -- an equal sale is not "above" the ask, and placing the marker by value rather than by index is what keeps that true',
+      akPrices(document.getElementById('compsBox').innerHTML).join(','));
 
   // ---- ID15 (R1.2): an issue that ARRIVES with a # renders with exactly one --
   // From the first device capture: STAR WARS #2 came back with issue "#2" -- as

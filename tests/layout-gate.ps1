@@ -188,6 +188,53 @@ $install = @'
       rowText: (row.textContent || '').slice(0, 90)
     };
   };
+  // R3: the comparison. The marker is the ONE number here that is not a sale,
+  // so it must be unmistakably separate from the comps around it -- and the ask
+  // INPUT must not overlap the scatter it sits above. Geometry again: a string
+  // gate cannot tell "labelled and distinct" from "overlapping and illegible".
+  __g.ask = function(){
+    __g.comps();                       // seeds comps and dismisses the modal
+    CT.askSetPrice('30'); CT.askSetGrade('VF-'); CT.askSetTerms('5 for $40');
+    var mk = document.querySelector('#compsBox .askrow');
+    var inp = document.getElementById('askPrice');
+    var cnt = document.querySelector('#askBox .askcount');
+    // WHEN A GATE CANNOT MEASURE, IT MUST SAY WHY IN FULL. "input=false" told me
+    // what was absent and nothing about the cause, and two hypotheses read off
+    // the source were both wrong. These are the facts that separate "the element
+    // is missing" from "the phase test said none" from "nothing ever painted it".
+    // Captured WITHOUT forcing a render, so the probe cannot mask what it measures.
+    if (!mk || !inp || !cnt) {
+      var box = document.getElementById('askBox');
+      var st = CT.compsState();
+      return { found:false, why:'marker=' + !!mk + ' input=' + !!inp + ' counts=' + !!cnt +
+        ' | askBox=' + (box ? 'present' : 'MISSING') +
+        ' askBoxHTMLlen=' + (box ? box.innerHTML.length : -1) +
+        ' phase=' + (st ? st.phase : 'null') +
+        ' rows=' + (st ? st.rows.length : -1) +
+        ' askState=' + JSON.stringify(CT.askState()) };
+    }
+    var p = mk.querySelector('.cmpprice'), lab = mk.querySelector('.askmark');
+    if (!p || !lab) return { found:false, why:'marker has no price or no label' };
+    var R = function(e){ var b=e.getBoundingClientRect();
+      return { top:Math.round(b.top), bottom:Math.round(b.bottom), left:Math.round(b.left),
+               right:Math.round(b.right), w:Math.round(b.width), h:Math.round(b.height) }; };
+    var hit = function(a,b){ return !(a.right <= b.left || b.right <= a.left ||
+                                      a.bottom <= b.top || b.bottom <= a.top); };
+    var P=R(p), L=R(lab), I=R(inp), C=R(cnt);
+    // The marker must not collide with the comps immediately around it.
+    var rows = Array.prototype.slice.call(document.querySelectorAll('#compsBox .cmplist .cmprow'));
+    var idx = rows.indexOf(mk);
+    var nbr = [rows[idx-1], rows[idx+1]].filter(Boolean).map(R);
+    return {
+      found:true, price:P, label:L, input:I, counts:C,
+      priceLabelDisjoint: !hit(P,L),
+      markerClearOfNeighbours: nbr.every(function(n){ return !hit(R(mk), n); }),
+      inputClearOfScatter: !hit(I, R(document.getElementById('compsBox'))),
+      countsVisible: C.w > 0 && C.h > 0,
+      labelText: (lab.textContent || ''),
+      pageOverflowX: document.documentElement.scrollWidth > window.innerWidth + 1
+    };
+  };
   __g.ok = function(){ window.fetch=function(){ return Promise.resolve({ok:true,status:200,
     text:function(){ return Promise.resolve(__g.reply()); }}); }; };
   __g.hang = function(){ window.fetch=function(u,i){ return new Promise(function(_,rej){
@@ -234,6 +281,9 @@ function Measure-Pending {
 
 function Measure-Comps {
   return (Eval '(function(){ return JSON.stringify(__g.comps()); })()' | ConvertFrom-Json)
+}
+function Measure-Ask {
+  return (Eval '(function(){ return JSON.stringify(__g.ask()); })()' | ConvertFrom-Json)
 }
 
 $browser = Find-Browser
@@ -341,7 +391,20 @@ try {
       Write-Host ("  {0,-17} comps   : NOT MEASURABLE -- {1} -> False" -f $name, $C.why)
     }
 
-    if (-not ($sOk -and $fOk -and $pOk -and $cOk)) { $allOk = $false }
+    # R3: the ask marker, its label, the input and the counts -- all geometry.
+    $A = Measure-Ask
+    $aOk = $A.found -and $A.priceLabelDisjoint -and $A.markerClearOfNeighbours -and
+           $A.inputClearOfScatter -and $A.countsVisible -and (-not $A.pageOverflowX) -and
+           $A.labelText -like '*YOUR ASK*'
+    if ($A.found) {
+      Write-Host ("  {0,-17} ask     : price/label={1} clearOfComps={2} inputClear={3} counts={4} noOverflowX={5} -> {6}" -f `
+        $name, $A.priceLabelDisjoint, $A.markerClearOfNeighbours, $A.inputClearOfScatter,
+        $A.countsVisible, (-not $A.pageOverflowX), $aOk)
+    } else {
+      Write-Host ("  {0,-17} ask     : NOT MEASURABLE -- {1} -> False" -f $name, $A.why)
+    }
+
+    if (-not ($sOk -and $fOk -and $pOk -and $cOk -and $aOk)) { $allOk = $false }
   }
 
   # The identity draft is a fixed set of fields, so the scroll case is made by a

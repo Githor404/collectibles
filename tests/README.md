@@ -105,7 +105,45 @@ So:
 - **The lock.** `defect-pass.sh` writes its PID to `tests/.tmp/.pass.lock` at start, refuses to run if a live PID holds it, and clears it in the exit trap. A second pass now exits 2 instead of causing damage.
 - **A process check is NOT a substitute, and trusting one is what caused this.** The running process is `bash`, so `ps | grep defect-pass` returns **nothing** while a pass is very much alive. It reports safe at exactly the moment it matters.
 - **The reliable signal is the runner's own bookkeeping: a background job is running until its completion notification arrives.** Not until a process list looks quiet, not until the log stops growing.
+### A mutation's REPLACEMENT half must contain no perl syntax
+
+The repo moved every mutation to `perl -0pi` so that `|` and `&` in the *pattern* could not be misread as regex operators. **The replacement half was never covered, and it has now failed three times**, each time producing a row that reported `GATE: PASS` against unmutated source:
+
+| what was written into the replacement | how perl read it |
+|---|---|
+| `` `<div>${n} sold</div>` `` | backticks and `${…}` consumed before perl saw them |
+| `100 * c.below / c.total` | the `/` opened a regex → *Illegal division by zero* |
+| `(c.ask * 1.2).toFixed(2)` | parsed as a subroutine call → *Undefined subroutine &main::toFixed* |
+| `$37.50` | **`$37` is capture group 37** → rendered as `.50` |
+| `${c.below}` | a scalar deref → emptied, silently |
+| `("$" + _per)` | **`$"` is perl's list separator** → substituted |
+
+**The rule, in two halves.**
+
+1. **The replacement half of `s///` is a perl DOUBLE-QUOTED string, so every `$` interpolates — always.** Escape each one as `\$`, or write none. This is the half that is easiest to get wrong, because **bash single-quoting around the expression does not help**: it stops *bash* expanding `$37`, and perl then does it anyway.
+2. **No character perl treats as syntax** — no bare `/`, no `.method()`, no backtick.
+
+Where a defect needs a computed value, **plant a precomputed literal**: `22%` rather than `Math.round(100 * a / b)`, `\$8 each` rather than a division. The planted defect is identical and perl evaluates nothing.
+
+**An earlier version of this section stated that single-quoting "stops `$` interpolation". That was wrong**, and the correction is the reason three more rows failed after it was written: a rule that is confidently wrong is worse than no rule, because it is obeyed.
+
+**A corrupted replacement does not always announce itself.** One row had its `${c.below}` silently emptied and still reported the correct verdict, because the assertion that fired did not care about the part that broke — an impure mutation that happened to land on the right answer. **Dry-run every mutation against a copy AND read the mutated text**, not just whether the file changed.
+
+**And dry-run every mutation against a copy before spending it.** It costs one second and catches all three of the above; skipping it cost four minutes a row, three times.
+
 - **Recovering with no backup at all:** every mutation has a known, greppable signature (`const warn = (role === 'prices')`, `), "comic"]`, `aspectFilter`, `_slab.concat(_raw)`, …). Sweep for all of them, reverse the ones found by hand — watching for incidental changes the mutation made, such as swapping `'` for `"` — and then **let the suite prove it**: a surviving mutation fails a gate by name, so a green run is the evidence that the reversal restored the original rather than something merely plausible.
+
+### A test seam must reproduce the render sequence of the path it replaces
+
+`__setComps` exists to stand in for a completed `compsLookup`. For a while it called `renderComps()` alone, where the real path calls `renderComps(); renderAsk();` — so the ask inputs were never painted. **Twenty-seven assertions passed throughout**, because the fixture (`akSeed`) called `CT.renderAsk()` by hand and supplied exactly what the seam omitted.
+
+**The fixture was hiding the divergence it should have exposed.** The suite proved a sequence the shipped app never performed, and would have gone on proving it indefinitely: every assertion was true of the fixture's world.
+
+**The layout gate caught it** because it drives the real page and has no fixture to help it — `askBox=present phase=done rows=4 askBoxHTMLlen=0`. Two hypotheses read off the source were wrong before a **four-fact probe inside the gate's own browser** settled it: is the element there, is the state right, what does the box actually contain.
+
+- **A seam mirrors its path, exactly.** If the real path renders two things, the seam renders two things.
+- **A fixture must not supply what the seam omits.** If the fixture has to add a call to make assertions pass, that call is either missing from the seam or missing from the product — and both are bugs.
+- **When a gate cannot measure, it must report the facts that distinguish the causes**, not just the symptom. `input=false` cost two wrong guesses; `askBox=present phase=done rows=4 htmlLen=0` cost none.
 
 ### `ROWS=` must cover every way a row plants, not just `mutate()`
 
