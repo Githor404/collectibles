@@ -1,8 +1,22 @@
 # Layout gate (was capture-outcome-gate), ported from HealthTracker's R21.5 gate (HT-D51).
 #
+# RENAMED 2026-09-13. It had already outgrown "capture outcome" -- repointed for
+# R1's identity draft, and now measuring R2b's comps scatter. One CDP harness,
+# honestly named: a sibling would have duplicated ~150 lines of scaffolding, and
+# the first fix landing in one copy and not the other is D3's family.
+#
 # "Exactly one outcome, in view without scrolling" is a LAYOUT claim, so it is
 # measured as one. A string gate can prove the modal rendered; only a viewport can
 # prove it was READABLE without hunting for it.
+#
+# R2b ADDED THE SECOND LAYOUT CLAIM, and it was added because a defect escaped.
+# The comps row shipped as three inline spans with NO CSS at all and reached a
+# phone as one run of text -- "$52.46The Incredible Hulk #271 ... 198217/08",
+# the title's year merging into the date. EVERY data-layer assertion was green
+# while that shipped, because --dump-dom sees markup and cannot see geometry.
+# Emitting a class is not shipping a layout. So: price, date and title must
+# occupy DISJOINT rectangles, the title must sit below both, and the page must
+# not overflow horizontally.
 #
 # REPOINTED FOR R1 (HT-D60 Clause 3), not weakened: it now installs the SHIPPED
 # identification contract and measures the real identity draft -- the question,
@@ -130,6 +144,50 @@ $install = @'
   __g.reply = function(){
     return JSON.stringify({choices:[{message:{content:CT.ID_SAMPLE}}]});
   };
+  // R2b's comps scatter. THE DEFECT THIS MEASURES reached a phone with every
+  // data-layer assertion green: three fields emitted as inline spans with no CSS
+  // shipped for them, rendering as one run of text --
+  //   "$52.46The Incredible Hulk #271 ... Appearance 198217/08"
+  // A string gate cannot see that. Only geometry can.
+  //
+  // The modal is dismissed FIRST: Measure-Pending leaves it open over a hung
+  // fetch, and a rect is still computed for an element underneath it -- so this
+  // would measure a correct layout while the user sees a covered one.
+  __g.comps = function(){
+    CT.byokCancel(); CT.byokBusyClear(); CT.captureDiscard(); CT.clearConfirmed();
+    CT.__setComps([
+      { itemId:'a1', title:'The Incredible Hulk #271 First Rocket Raccoon Appearance 1982',
+        condition:'Pre-Owned', endedAt:'2026-08-17T09:00:00Z', soldPrice:52.46, soldCurrency:'USD', bestOffer:false },
+      { itemId:'a2', title:'INCREDIBLE HULK 271 CGC 9.8 WHITE PAGES', condition:'Pre-Owned',
+        endedAt:'2026-08-02T09:00:00Z', soldPrice:145, soldCurrency:'USD', bestOffer:false },
+      { itemId:'a3', title:'Incredible Hulk 271 VG- complete', condition:'Pre-Owned',
+        endedAt:'2026-07-29T09:00:00Z', soldPrice:16.21, soldCurrency:'USD', bestOffer:true },
+      { itemId:'a4', title:'Hulk #271 GD 1 CF staple detached', condition:'Pre-Owned',
+        endedAt:'2026-08-11T09:00:00Z', soldPrice:9, soldCurrency:'USD', bestOffer:false }
+    ], [], 'Incredible Hulk 271');
+    var row = document.querySelector('#compsBox .cmplist .cmprow');
+    if (!row) return { found:false, why:'no .cmplist .cmprow rendered' };
+    var p = row.querySelector('.cmpprice'), m = row.querySelector('.cmpmeta'), t = row.querySelector('.cmptitle');
+    if (!p || !m || !t) return { found:false, why:'a field is not its own element: price=' + !!p + ' date=' + !!m + ' title=' + !!t };
+    var R = function(e){ var b=e.getBoundingClientRect();
+      return { top:Math.round(b.top), bottom:Math.round(b.bottom), left:Math.round(b.left),
+               right:Math.round(b.right), w:Math.round(b.width), h:Math.round(b.height) }; };
+    var P=R(p), M=R(m), T=R(t);
+    // Disjoint = the rectangles do not intersect. Touching edges are allowed;
+    // overlap is not, because overlap is exactly what "ran together" looks like.
+    var hit = function(a,b){ return !(a.right <= b.left || b.right <= a.left ||
+                                      a.bottom <= b.top || b.bottom <= a.top); };
+    return {
+      found:true, price:P, date:M, title:T,
+      priceDateDisjoint:  !hit(P,M),
+      priceTitleDisjoint: !hit(P,T),
+      dateTitleDisjoint:  !hit(M,T),
+      titleBelowPrice: T.top >= P.bottom - 1,
+      titleBelowDate:  T.top >= M.bottom - 1,
+      pageOverflowX: document.documentElement.scrollWidth > window.innerWidth + 1,
+      rowText: (row.textContent || '').slice(0, 90)
+    };
+  };
   __g.ok = function(){ window.fetch=function(){ return Promise.resolve({ok:true,status:200,
     text:function(){ return Promise.resolve(__g.reply()); }}); }; };
   __g.hang = function(){ window.fetch=function(u,i){ return new Promise(function(_,rej){
@@ -172,6 +230,10 @@ function Measure-Pending {
   $r = Eval '(function(){ return JSON.stringify(__g.snap()); })()' | ConvertFrom-Json
   Eval '(function(){ CT.byokCancel(); return 1; })()' | Out-Null
   return $r
+}
+
+function Measure-Comps {
+  return (Eval '(function(){ return JSON.stringify(__g.comps()); })()' | ConvertFrom-Json)
 }
 
 $browser = Find-Browser
@@ -266,7 +328,20 @@ try {
     Write-Host ("  {0,-17} pending : spinner={1} counted='{2}' cancel={3} -> {4}" -f `
       $name, $P.spin.inView, ($P.msgText -replace '[^0-9]*(\d+s).*', '$1'), $P.primary.inView, $pOk)
 
-    if (-not ($sOk -and $fOk -and $pOk)) { $allOk = $false }
+    # R2b: the comps row is THREE FIELDS, and "separated" is a geometric claim.
+    # Runs last in each viewport because it dismisses the outcome modal.
+    $C = Measure-Comps
+    $cOk = $C.found -and $C.priceDateDisjoint -and $C.priceTitleDisjoint -and $C.dateTitleDisjoint -and
+           $C.titleBelowPrice -and $C.titleBelowDate -and (-not $C.pageOverflowX)
+    if ($C.found) {
+      Write-Host ("  {0,-17} comps   : disjoint p/d={1} p/t={2} d/t={3} titleBelow={4} noOverflowX={5} -> {6}" -f `
+        $name, $C.priceDateDisjoint, $C.priceTitleDisjoint, $C.dateTitleDisjoint,
+        ($C.titleBelowPrice -and $C.titleBelowDate), (-not $C.pageOverflowX), $cOk)
+    } else {
+      Write-Host ("  {0,-17} comps   : NOT MEASURABLE -- {1} -> False" -f $name, $C.why)
+    }
+
+    if (-not ($sOk -and $fOk -and $pOk -and $cOk)) { $allOk = $false }
   }
 
   # The identity draft is a fixed set of fields, so the scroll case is made by a
@@ -279,9 +354,25 @@ try {
          (-not $L.pageOverflowX) -and $L.pageScrollY -eq 0
   Write-Host ("  {0,-17} scrolled: bodyScrolls={1} question={2} confirm={3} discard={4} -> {5}" -f `
     'phone 360x520', $L.bodyScrolls, $L.lead.inView, $L.primary.inView, $L.second.inView, $lOk)
+  # The comps row at the TIGHTEST width, where a long seller title is likeliest
+  # to overflow. (It also makes the comps-line count four rather than three,
+  # which is a coincidence and not the reason: the reason is that 360x520 is the
+  # narrowest viewport this gate drives.)
+  $CL = Measure-Comps
+  $clOk = $CL.found -and $CL.priceDateDisjoint -and $CL.priceTitleDisjoint -and $CL.dateTitleDisjoint -and
+          $CL.titleBelowPrice -and $CL.titleBelowDate -and (-not $CL.pageOverflowX)
+  if ($CL.found) {
+    Write-Host ("  {0,-17} comps   : disjoint p/d={1} p/t={2} d/t={3} titleBelow={4} noOverflowX={5} -> {6}" -f `
+      'phone 360x520', $CL.priceDateDisjoint, $CL.priceTitleDisjoint, $CL.dateTitleDisjoint,
+      ($CL.titleBelowPrice -and $CL.titleBelowDate), (-not $CL.pageOverflowX), $clOk)
+  } else {
+    Write-Host ("  {0,-17} comps   : NOT MEASURABLE -- {1} -> False" -f 'phone 360x520', $CL.why)
+  }
+  if (-not $clOk) { $allOk = $false }
+
   if (-not $lOk) { $allOk = $false }
 
-  Write-Host ("  thresholds        : exactly one outcome state; the identity question and BOTH actions fully inside the viewport with the page unscrolled; actions >={0}px tall; footer fixed while the body scrolls; capture surface carries no outcome" -f $MIN_ACTION_H)
+  Write-Host ("  thresholds        : exactly one outcome state; the identity question and BOTH actions fully inside the viewport with the page unscrolled; actions >={0}px tall; footer fixed while the body scrolls; capture surface carries no outcome; and a comps row's price, date and title occupy DISJOINT rectangles with the title below both and no horizontal page overflow" -f $MIN_ACTION_H)
   Write-Host "-----------------------------------------"
   if ($allOk) {
     Write-Host "LAYOUT GATE: PASS (one explicit state per capture, in view without scrolling, at every width)"

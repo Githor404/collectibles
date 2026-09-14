@@ -27,6 +27,8 @@ Every gate must print a `GATE: PASS` or `GATE: FAIL` line. One that prints neith
 | full 41-row defect pass | **~8.5 min** — ~35s fixed + **~12s per selected row** |
 | a two-row subset (`ROWS=31-32`) | **59s** |
 | `git commit` before a pass | **~10s** |
+| the layout gate (`layout-gate.ps1`) | **~140s** — real-time CDP, Chrome bring-up, four viewports |
+| a defect row that runs the layout gate | **~145s** — worth about **twelve** ordinary rows |
 
 **These are measurements. Do not re-derive them by feel.** On 2026-09-13 the working figure was *"~250s per row"*, inferred from elapsed times that were in fact a **fixed** cost — `run_dl` was unguarded, so every invocation ran the full suite for all 40 rows whatever `ROWS=` said (see `../GATES.md`). The estimate was wrong by **20×**, and the error was not academic:
 
@@ -52,9 +54,17 @@ In order, each failing the whole gate:
 
 **The vision contract is unruled (D1).** The capture-chain cases install a synthetic contract through `CT.setVisionContract`. They prove the chain, never a contract.
 
-## `layout-gate.ps1` — one outcome, in view without scrolling (HT-D51)
+## `layout-gate.ps1` — the claims that only a viewport can settle (HT-D51)
 
-"Exactly one outcome, in view" is a **layout** claim, so it is measured in a viewport. The gate drives the shipped capture path against the real `index.html`, with fetch stubbed, at 360×690, 390×745 and 1200×900, and asserts per state:
+**Renamed from the capture-outcome gate on 2026-09-13.** It had already outgrown that name — repointed for R1's identity draft, and now measuring R2b's comps scatter. One CDP harness, honestly named: a sibling would have duplicated ~150 lines of scaffolding, and the first fix landing in one copy and not the other is D3's family.
+
+**Why the second claim exists.** R2b's comps row shipped as three inline spans with **no CSS at all** and reached a phone as one run of text — `"$52.46The Incredible Hulk #271 … 198217/08"`, the title's year merging into the date. **Every data-layer assertion was green while that shipped**, because `--dump-dom` sees markup and cannot see geometry. Emitting a class is not shipping a layout, and asserting the class exists is not asserting it separates anything.
+
+**The comps claims**, measured at all four viewports: the price, date and title rectangles are **disjoint** (touching edges allowed, overlap is exactly what "ran together" looks like); the title's top sits **below both**; and the page does not overflow horizontally. The modal is dismissed first — `Measure-Pending` leaves it open over a hung fetch, and a rect is still computed for an element underneath it, so measuring without dismissing would report a correct layout while the user sees a covered one.
+
+**Proven against its defect** (row 45): restoring the concatenation gives `NOT MEASURABLE -- a field is not its own element: price=false date=false title=false` and `LAYOUT GATE: FAIL`, exit 1.
+
+"Exactly one outcome, in view" is likewise a **layout** claim. The gate drives the shipped capture path against the real `index.html`, with fetch stubbed, at 360×690, 390×745 and 1200×900, and asserts per state:
 
 - **success**: the first result row and **both** footer actions are fully in view with the page unscrolled; actions ≥ 44 px;
 - **success, long result**: the body scrolls and the footer **does not**;

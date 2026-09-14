@@ -129,6 +129,20 @@ run_dl() {
   row_wanted || return 0
   local o; o=$(timeout 300 bash tests/run-data-layer.sh 2>&1); reap; printf '%s' "$o"
 }
+# THE LAYOUT GATE, for rows whose claim is GEOMETRIC. run_dl() runs the
+# data-layer suite, which sees markup and cannot see geometry -- the comps row
+# shipped as three unstyled inline spans, reached a phone as one run of text, and
+# every data-layer assertion was green while it did. A row planting a layout
+# defect must run the gate that can measure one.
+#
+# Invocation mirrors run-all-gates.sh exactly rather than being reinvented.
+# MEASURED COST: ~140s, against ~12s for run_dl -- a row using this is worth
+# about twelve ordinary rows, and the full pass goes ~500s -> ~645s.
+run_layout() {
+  row_wanted || return 0
+  local o; o=$(timeout 400 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/layout-gate.ps1 2>&1)
+  reap; printf '%s' "$o"
+}
 report() { # name, expected-case-pattern, output
   local name="$1" pat="$2" out="$3" verdict named
   ROW=$((ROW + 1))
@@ -423,6 +437,19 @@ report "a synthesised ladder" "ACTUALLY SOLD FOR" "$(run_dl)"; restore
 # title's trailing year running into the date.
 mutate 's/function compsRowHTML\(r\) \{[\s\S]*?\n\}/function compsRowHTML(r) {\n  return "<div class=\\"cmprow\\">" + esc(compsMoney(r.soldPrice, r.soldCurrency)) + esc(r.title) + esc(compsDate(r.endedAt)) + "<\/div>";\n}/' app.js
 report "comps row collapses to one run" "THREE distinct elements" "$(run_dl)"; restore
+
+# --- 45. the comps row collapses -- measured in a VIEWPORT this time ---------
+# Row 44 plants this same concatenation and proves the STRUCTURAL gate. This one
+# proves the LAYOUT gate: the half that could have caught the defect that
+# actually shipped, because --dump-dom sees markup and geometry is invisible to
+# it. Two rows, one mutation, two different claims.
+#
+# THE PATTERN IS TAKEN FROM THE STRING THE GATE WAS OBSERVED TO PRINT, not from
+# this file's source: a prediction of it said "price=False" where the gate
+# prints "price=false". "not its own element" is case-stable and was copied out
+# of a real failing run.
+mutate 's/function compsRowHTML\(r\) \{[\s\S]*?\n\}/function compsRowHTML(r) {\n  return "<div class=\\"cmprow\\">" + esc(compsMoney(r.soldPrice, r.soldCurrency)) + esc(r.title) + esc(compsDate(r.endedAt)) + "<\/div>";\n}/' app.js
+report "comps row, measured in a viewport" "not its own element" "$(run_layout)"; restore
 
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do

@@ -126,6 +126,31 @@ Run everything: `bash tests/run-all-gates.sh`. Defect pass: `bash tests/defect-p
 | **SH / NS / CL** the shipped shell (HT-D47, HT-D58, HT-D63) | no duplicate id; the result and message live in the modal body and the footer outside it; both credential cards in Settings; the shipped shell carries **no contract** and says so; the file input is wired to the shipped handler and a photo paints pending **before the decode**; the request fires and the counter moves; **four adversarial files × both inputs each end in a request or a stated failure, never in nothing**; camera-vs-library derived from the `capture` attribute; HEIC advice differs by source; the EXIF pin, structurally and behaviourally; a large library photo measured at the bound; a cancelled library pick is not a camera fault (with a camera control) |
 | **CAP / PFX** | past the daily cap **no call is made at all** and it says so, with the counter living beside the key; **every storage key written in the whole run is prefixed `collectibles-`**, and the sweep saw the state, the backup and both credential stores |
 
+### The comps row: a layout claim that escaped every string gate — 2026-09-13
+
+**Reported from the first live device pass**, verbatim off a phone:
+
+```
+$52.46The Incredible Hulk #271 First Rocket Raccoon Appearance 198217/08
+```
+
+Three fields with nothing between them, the title's trailing `1982` merging into the date `17/08`. **The cause was worse than a missing separator: the comps surface shipped with class names and no CSS at all** — zero rules for `.cmprow` / `.cmpprice` / `.cmptitle` / `.cmpmeta` / `.cmphead`, against six for R1's surface. Inline elements do not separate.
+
+**Every data-layer assertion was green while this shipped**, and correctly so: `--dump-dom` sees markup, and *separation is geometry*. **Emitting a class is not shipping a layout, and asserting the class exists is not asserting it separates anything.**
+
+**Gated in two halves, because the claim has two halves.**
+
+| half | where | asserts |
+|---|---|---|
+| structural | `CQ10`, data-layer | three distinct elements; the literal string `198217` absent; spelled-month date; no `D/M` form anywhere; the title byte-identical to source; and the shipped shell actually carrying the CSS |
+| **geometric** | **`layout-gate.ps1`**, CDP, four viewports | price, date and title rectangles **disjoint**; the title's top **below both**; **no horizontal page overflow** |
+
+**Both proven against the same defect, by two different rows.** Row 44 restores the concatenation and fails `CQ10 GATE: a comp is THREE distinct elements`; **row 45** restores it and fails the layout gate with `NOT MEASURABLE -- a field is not its own element: price=false date=false title=false`, `LAYOUT GATE: FAIL`, exit 1. One mutation, two claims, two gates.
+
+**A note on how row 45's pattern was written.** It matches `not its own element`, copied out of an **observed** failing run. The prediction made from the source said `price=False`; the gate prints `price=false`. Predicting a gate's own output is how a report pattern goes stale without anyone noticing — the same class as the pattern that survived a rename earlier the same day and left a row failing correctly while naming nothing.
+
+**Measured cost:** the layout gate is **~140s** against a data-layer run's **~12s**, so row 45 is worth about twelve ordinary rows and the full pass moves ~500s → ~645s. Recorded so it is not re-derived by feel.
+
 ### `layout-gate.ps1` — the layout claim, measured (HT-D51)
 
 Real `index.html`, shipped capture path, CDP, **real time** (so it exercises the `createImageBitmap` decoder the harness cannot reach), at 360×690, 390×745 and 1200×900. Per state: success (first result row and both actions in view, ≥ 44 px), success with a long result (**body scrolls, footer does not**), failure (message + both ways out), pending (counted spinner + cancel), and the capture surface carrying none of it. A real capture in that gate reports `15 kB · 1280×960 · encode 0.0s`, so the decode is genuinely running.
