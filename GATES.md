@@ -728,6 +728,23 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 >
 > **So `categoryId` is settled by one run**, not four: send a category that cannot contain comics and expect zero. The design below is kept only as the record of how it was first approached.
 
+> **PROBED AND SETTLED, 2026-09-14 — the pin narrows.**
+>
+> | input | value |
+> |---|---|
+> | `keywords` | `["amazing spider-man 151"]` |
+> | `categoryId` | **`"6000"`** — eBay Motors, which cannot contain a comic |
+> | `aspectFilter` | `{}` — **cleared, to isolate the variable**, so the result is attributable to the category pin and nothing else |
+> | `daysToScrape` / `count` | 90 / 100 |
+>
+> **Result: ZERO.** Nothing but a live, narrowing filter produces that from a query whose keyword alone returns a full page.
+>
+> **`categoryId=259104` is therefore a real filter, not a decoration**, and stays pinned. D5's last unproven filter in this slice is closed — and closed for **$0.40 at most**, because a falsifying probe returns no rows to bill for. The four-run set-difference design would have spent $1.60 to reach a weaker conclusion.
+>
+> **Twice now the false value has done what the true one could not.** `{"Publisher":"Marvel Comics"}` returned ~100 and proved nothing; `{"Publisher":"DC Comics"}` returned zero and proved everything. The same shape settled the category. That is no longer an observation about one probe — it is D5's method.
+>
+> **What kind of evidence this is, stated because this file promises re-runnable gates.** It is **not** re-runnable and cannot become one: it needs a live token and spends money, so no automated gate can hold it. It sits with the device passes and the aspect probe — a measurement, recorded once, with its date and its exact inputs, because that is the only durability available to it. **A gate that cannot exist is better named than quietly assumed.**
+
 **D5 requires this and there is no shortcut.** The probe set the category, and a filter that changes nothing looks exactly like one that works. **There is no category field on a result**, so narrowing cannot be checked by inspecting rows: the only available method is a **set difference between a filtered and an unfiltered run**.
 
 **One specimen is not enough — this is D3's rule applied to a filter.** A category pin is inert on an *unambiguous* keyword (nothing but comics is called *"amazing spider-man 151"*) and can still be load-bearing on an *ambiguous* one, where toys, DVDs, shirts and trading cards share the words. **Testing only the unambiguous case would read "inert, remove it" — and remove the filter that carries the ambiguous books.**
@@ -829,7 +846,7 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 | **a range shown below N** | **SUPERSEDED by D8's amendment.** No range is computed at *any* N while the markets cannot be separated, so "below N" is no longer the boundary. **Row 33 gates the live form**: any range at all across a mixed scatter |
 | provenance stripped from a rendered number | **MET 2026-09-13 — row 42.** Strips the count and window from the header; fails `CQ7: the count is the KEPT count and rides on the surface`. It had been pre-registered and never written, so that assertion had never been seen to fail — Clause 1, live in the repo until closed |
 | a synthesised ladder | **MET 2026-09-13 — row 43**, and it needed a new gate to exist at all. `CQ7` could not *see* a ladder: checking for the absence of one is unbounded. The assertion added instead is D8's claim stated directly — **every price on the surface is one something ACTUALLY SOLD FOR** — because a ladder puts numbers *between* the sales and no comp has them. The row plants an average of the scatter rendered as though it were a sale |
-| a filter that does not narrow | **NOT MET for the SOURCE's filter.** Row 40 covers *our* client-side filter hiding rows without counting them — a different claim. **`categoryId=259104` is still unproven** (D5), and now costs one run, not four |
+| a filter that does not narrow | **MET 2026-09-14, in two halves.** *Ours*: row 40 gates the client-side filter hiding rows without counting them. *The source's*: `categoryId: "6000"` returned **zero**, so the pin demonstrably narrows (D5). The second half is a **measurement, not a gate** — it needs a live token and spends money, so it cannot be made re-runnable and is dated and inputs-recorded instead |
 
 **Three demands outstanding, named rather than quietly absorbed into a count of eleven.**
 
@@ -855,7 +872,7 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 ### What this slice does NOT prove — stated, not left to be assumed
 
 - **`compsLookup` has never run against the live API.** Every case drives the `__setComps` seam or a pure function. The actor id, endpoint path, bearer header and response shape are verified against Apify's published schema and unauthenticated probes — **not against a round trip with a real token**. The first real lookup is a device test, and it is exactly where a contract mismatch would surface: R1's `##` bug reached a device because a gate measured the document instead of the header.
-- **`categoryId=259104` is still unproven** (D5). One run settles it: send a category that cannot contain comics and expect zero.
+- ~~**`categoryId=259104` is still unproven** (D5)~~ — **closed 2026-09-14.** `categoryId: "6000"` (eBay Motors) with `aspectFilter` cleared returned **zero** on a query whose keyword alone returns a full page: the pin narrows, and stays. Proven by measurement, not by a gate — it needs a live token and cannot be automated.
 - ~~**Provenance-stripping and a synthesised ladder are ungated**~~ — **closed 2026-09-13**, rows 42 and 43, with a new assertion for the ladder (see the demand table).
 - **No device pass on the comps surface** — the outstanding list, to be run on a real screen:
   - **the scatter at phone width** — prices, seller titles and dates legible without horizontal scroll, titles wrapping rather than truncating the grade signal they carry;
