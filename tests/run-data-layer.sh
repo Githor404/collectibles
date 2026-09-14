@@ -76,6 +76,40 @@ if ! bash "$DIR/check-refs.sh"; then
   exit 1
 fi
 
+# APP_VERSION DRIFT (D14, and D1's split service-worker deferral). Lives here with
+# the other static checks because this is where they live -- moving one out to
+# dodge the defect pass would be a structural change made to avoid a mechanism,
+# and the next static check would face the same question with no principle to
+# answer it.
+#
+# THE STAND-DOWN, and why it is keyed to a PID rather than a flag. A defect pass
+# mutates app.js 53 times; the drift arm compares the tree to HEAD, so every row
+# would fail on "shell changed, APP_VERSION did not bump" BEFORE reaching its own
+# case -- 53 vacuous rows. So the pass stands this check down. But a gate with an
+# off switch is a gate whose off switch someone leaves on, so the switch is not a
+# boolean: DEFECT_PASS carries the pass's PID and must MATCH the live lock that
+# defect-pass.sh alone writes. A hand-set flag matches nothing and fails loudly.
+# Proven by a defect row that forges the value from inside a real pass.
+if [ -n "${DEFECT_PASS:-}" ]; then
+  LOCKPID=$(cat "$TMP/.pass.lock" 2>/dev/null)
+  if [ -n "$LOCKPID" ] && [ "$DEFECT_PASS" = "$LOCKPID" ] && kill -0 "$LOCKPID" 2>/dev/null; then
+    echo "check-version: stood down (defect pass $LOCKPID holds the lock; the tree is deliberately mutated)"
+  else
+    echo "check-version: FAIL - DEFECT_PASS=$DEFECT_PASS was set, but no live defect pass holds that PID."
+    echo "  This flag exists for defect-pass.sh alone and carries its PID. Set by"
+    echo "  hand it would silently disable the version gate -- which is exactly the"
+    echo "  silent-skip this gate was built to prevent."
+    echo "  lock holds: ${LOCKPID:-<no lock file>}"
+    echo "VERSION CHECK: FAIL"
+    echo "GATE: FAIL"
+    exit 1
+  fi
+elif ! bash "$DIR/check-version.sh"; then
+  echo "VERSION CHECK: FAIL"
+  echo "GATE: FAIL"
+  exit 1
+fi
+
 if command -v cygpath >/dev/null 2>&1; then
   URL="file:///$(cygpath -m "$HTML")"
   PROFILE="$(cygpath -w "$TMP/dl-profile")"
@@ -113,7 +147,7 @@ echo "-----------------------------------------"
 #
 # Re-pin deliberately, in the same commit that adds or removes cases, and state
 # the delta in GATES.md.
-EXPECTED_ASSERTIONS=386
+EXPECTED_ASSERTIONS=408
 TOTAL=$(printf '%s\n' "$OUT" | grep -oE 'SUMMARY [0-9]+/[0-9]+' | head -1 | sed -E 's#.*/##')
 AUTHORED=$(grep -cE '(^|[^A-Za-z_.])res\(' "$HTML")
 echo "assertions: executed ${TOTAL:-0} · pinned $EXPECTED_ASSERTIONS · authored-lines(static lower bound) $AUTHORED"

@@ -60,7 +60,7 @@ window.setLS({});
       var e = document.createElement(tag); e.id = id; if (cls) e.className = cls;
       (parent || document.body).appendChild(e); return e;
     };
-    ['storeBadge','dataStatus','captureBox','credBox-vision','credBox-prices','credBox-comps','confirmedBox','askBox','compsBox','replyReport','toast','prerestoreWrap'].forEach(function (id) { mk('div', id); });
+    ['storeBadge','dataStatus','captureBox','credBox-vision','credBox-prices','credBox-comps','confirmedBox','askBox','compsBox','versionNotice','buildLine','replyReport','toast','prerestoreWrap'].forEach(function (id) { mk('div', id); });
     mk('textarea', 'replyBox'); mk('textarea', 'prerestoreBox');
     mk('div', 'outcomeScrim', 'scrim oscrim');
     var w = mk('div', 'captureOutcome', 'omodal');
@@ -989,6 +989,29 @@ window.setLS({});
         'SH1 GATE (R3): the shipped shell carries #askBox AND #compsBox as separate elements -- separate is what lets the scatter repaint on every keystroke without destroying the ask input');
     res(cssAll.indexOf('.askrow') >= 0 && cssAll.indexOf('.askmark') >= 0 && cssAll.indexOf('.askcount') >= 0,
         'SH1 GATE (R3): and CSS for the ask marker, its label and the counts -- the marker is the one number here that is not a sale, so it must be unmistakable');
+    // THE VERSION PAIR -- same hole, same fix. All 17 VN assertions run against
+    // the harness's synthetic mk('div','versionNotice'), so until these lines
+    // nothing proved the SHIPPED shell had either element. That is exactly the
+    // gap that let the __setComps seam divergence survive 27 green assertions.
+    var vn = D.getElementById('versionNotice'), bl = D.getElementById('buildLine');
+    res(!!vn && !!bl,
+        'SH1 GATE (D14): the shipped shell carries #versionNotice AND #buildLine -- the version machinery shipped with neither, so every VN assertion was true of the harness and of nothing else');
+    res(cssAll.indexOf('.vnotice') >= 0 && cssAll.indexOf('.vnhead') >= 0 && cssAll.indexOf('.vnrow') >= 0,
+        'SH1 GATE (D14): and CSS for the notice, its heading and each release row -- renderVersionNotice EMITS .vnhead and .vnrow, and emitting a class is not shipping a layout');
+    // CONTENT, not presence (HT-D63). refresh() calls renderBuildLine(), so a
+    // booted shell must NAME the build. "The span exists" is the assertion that
+    // let HealthTracker tell people to copy from an empty box for weeks.
+    res(!!bl && bl.textContent.indexOf('collectibles v' + W.CT.APP_VERSION) === 0,
+        'SH1 GATE (HT-D63/D14): the build line in the SHIPPED shell HOLDS the version after boot -- presence would pass against a permanently empty span',
+        bl && JSON.stringify(bl.textContent));
+    var about = D.querySelector('.about');
+    res(!!bl && !!about && about.contains(bl),
+        'SH1 GATE (D14 ruling): the build line lives in .about and NOWHERE else -- reference information, not a control, and a second copy of one value is a pair that can disagree');
+    // Deterministic whichever way the iframe booted: hidden, or actually painted.
+    // An accent-bordered EMPTY card on every load is the failure being excluded.
+    res(!!vn && (vn.style.display === 'none' || vn.innerHTML.indexOf('vnhead') >= 0),
+        'SH1 GATE (D14): the shipped notice is either HIDDEN or has genuinely rendered a heading -- never a blank accent-bordered card sitting on the page',
+        vn && vn.style.display + '/' + (vn.innerHTML.length));
     // A token saved by an EARLIER build must not be stranded: it appears in
     // Storage with a way out, and only when it exists.
     W.CT.credClear('prices');
@@ -1761,6 +1784,78 @@ window.setLS({});
   res(akPrices(document.getElementById('compsBox').innerHTML).join(',') === '9,16.21,25,25,25,25,25,40,52.46,145',
       'AK14 GATE (Fork E): the marker sits AFTER the sales that matched it -- an equal sale is not "above" the ask, and placing the marker by value rather than by index is what keeps that true',
       akPrices(document.getElementById('compsBox').innerHTML).join(','));
+
+  // ======== VN: build identity -- which version, and what changed ============
+  // The version machinery shipped with NO coverage at all, which is the state
+  // HT-D6 records as fatal: HealthTracker's hand-bumped integer was missed on
+  // every slice after Phase 0 and served a frozen shell, silently, in both
+  // directions. These are the assertions that would have said so.
+  res(CT.cmpVersion('0.2.0', '0.10.0') < 0 && CT.cmpVersion('0.3.0', '0.3.0') === 0 &&
+      CT.cmpVersion('1.0.0', '0.9.9') > 0,
+      'VN1 GATE: cmpVersion compares NUMERICALLY per segment -- a string compare puts 0.10.0 before 0.2.0 and would quietly stop showing notices after the ninth release');
+
+  res(CT.versionNotice(CT.APP_VERSION) === null,
+      'VN2: the running version stored -> no notice');
+  res(CT.versionNotice('9.9.9') === null,
+      'VN2 GATE: a DOWNGRADE shows no notice -- an older build must not announce itself as an update');
+  var vnUp = CT.versionNotice('0.0.1');
+  res(!!vnUp && vnUp.from === '0.0.1' && vnUp.to === CT.APP_VERSION,
+      'VN2: an older stored version -> a notice carrying from and to', JSON.stringify(vnUp && { f: vnUp.from, t: vnUp.to }));
+
+  var vnFresh = CT.versionNotice(null);
+  res(!!vnFresh && vnFresh.from === null && vnFresh.notes.length === 1 &&
+      vnFresh.notes[0].v === CT.APP_VERSION,
+      'VN3: nothing stored -> the current line only, never the whole history');
+
+  // Accumulation, against an INJECTED log -- unreachable with the one entry that
+  // ships, so the real log cannot exercise it (Clause 4).
+  var synth = [{ v: '0.1.0', d: '2026-09-14', note: 'a' }, { v: '0.2.0', d: '2026-09-15', note: 'b' },
+               { v: '0.3.0', d: '2026-09-16', note: 'c' }];
+  var jump = CT.versionNotesBetween('0.1.0', '0.3.0', synth);
+  res(jump.length === 2 && jump[0].v === '0.2.0' && jump[1].v === '0.3.0',
+      'VN4 GATE: a multi-version jump accumulates EVERY skipped release, not just the newest -- the case that cannot occur until it does',
+      jump.map(function (e) { return e.v; }).join(','));
+  res(CT.versionNotesBetween('0.2.0', '0.3.0', synth).length === 1,
+      'VN4: a single-step jump carries just that release');
+
+  res(CT.VERSION_LOG[CT.VERSION_LOG.length - 1].v === CT.APP_VERSION,
+      'VN5 GATE: the newest VERSION_LOG entry IS APP_VERSION -- check-version.sh gates this too, and a shipped update with no changelog line is what it prevents');
+  res(CT.VERSION_LOG.every(function (e) { return /^\d{4}-\d{2}-\d{2}$/.test(e.d || ''); }),
+      'VN5 GATE: EVERY entry carries a release date (ruled 2026-09-14) -- HealthTracker exempts pre-convention entries; there are none here, so the exemption would protect nobody');
+  res(CT.versionLine().indexOf('collectibles v' + CT.APP_VERSION) === 0 &&
+      CT.versionLine().indexOf('released') > 0,
+      'VN5: the build line names the product, the version and the release date', CT.versionLine());
+
+  // The notice fires ONCE, and the write happens before the render.
+  setLS({}); CT.boot();
+  try { localStorage.removeItem(CT.VERSION_KEY); } catch (e) {}
+  res(CT.appSource() === 'empty' && CT.checkVersionNotice() === null,
+      'VN6 GATE: a GENUINE first run shows no "updated" notice -- APP_SOURCE separates a fresh install from a restore and from the unversioned builds', CT.appSource());
+  res(localStorage.getItem(CT.VERSION_KEY) === CT.APP_VERSION,
+      'VN6: and the running version is persisted anyway, so the next load is quiet');
+
+  // The EXPORTED key, not a literal. Spelling it out by hand would seed a key
+  // boot() never reads, APP_SOURCE would come back 'empty', and VN7 would fail
+  // for a reason unrelated to what it tests.
+  var vnSeed = {};
+  vnSeed[CT.keys.STORE_KEY] = JSON.stringify({ kind: CT.STATE_KIND, version: CT.SCHEMA_VERSION, settings: {} });
+  setLS(vnSeed);
+  CT.boot();
+  try { localStorage.removeItem(CT.VERSION_KEY); } catch (e) {}
+  document.getElementById('versionNotice').innerHTML = '';
+  var vnExisting = CT.checkVersionNotice();
+  res(CT.appSource() === 'store' && !!vnExisting && vnExisting.from === null,
+      'VN7 GATE: someone already running an UNVERSIONED build DOES get the notice -- for them this is an update, and nothing stored is not the same as nothing installed', CT.appSource());
+  res(document.getElementById('versionNotice').innerHTML.indexOf('Updated to v' + CT.APP_VERSION) >= 0,
+      'VN7: and it renders, naming the version they arrived at');
+  res(CT.checkVersionNotice() === null,
+      'VN7 GATE: a second call is silent -- the notice fires once per change, not once per load');
+  CT.dismissVersionNotice();
+  res(document.getElementById('versionNotice').innerHTML === '',
+      'VN8: dismissing clears it');
+
+  res(String(CT.VERSION_KEY).indexOf('collectibles-') === 0,
+      'VN8 GATE (D1): the version key is prefixed -- a shared GitHub Pages origin shares storage with HealthTracker');
 
   // ---- ID15 (R1.2): an issue that ARRIVES with a # renders with exactly one --
   // From the first device capture: STAR WARS #2 came back with issue "#2" -- as

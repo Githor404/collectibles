@@ -127,7 +127,27 @@ reap() {
 # that. One suite run is ~12s; a full 41-row pass is ~500s.
 run_dl() {
   row_wanted || return 0
-  local o; o=$(timeout 300 bash tests/run-data-layer.sh 2>&1); reap; printf '%s' "$o"
+  # DEFECT_PASS carries THIS pass's PID, which is also what the lock holds. The
+  # version gate stands down only on a match, so the flag cannot be forged from a
+  # shell and cannot outlive the pass that set it. See run-data-layer.sh.
+  local o; o=$(DEFECT_PASS=$$ timeout 300 bash tests/run-data-layer.sh 2>&1); reap; printf '%s' "$o"
+}
+# Same runner, with a CHOSEN DEFECT_PASS value -- the seam that lets a row forge
+# the stand-down from inside a real pass and prove it fails loudly.
+run_dl_as() {
+  row_wanted || return 0
+  local o; o=$(DEFECT_PASS="$1" timeout 300 bash tests/run-data-layer.sh 2>&1); reap; printf '%s' "$o"
+}
+# check-version.sh DIRECTLY, because the stand-down suppresses it inside a pass --
+# so a row testing the version gate's OWN arms cannot reach it through run_dl.
+# The script speaks its own vocabulary ("check-version: FAIL"), not the runner's,
+# so the exit code is translated into the GATE: line `report` reads. Cheap: no
+# browser, no suite.
+run_cv() {
+  row_wanted || return 0
+  local o rc
+  o=$(bash tests/check-version.sh 2>&1); rc=$?
+  printf '%s\nGATE: %s\n' "$o" "$([ "$rc" = 0 ] && echo PASS || echo FAIL)"
 }
 # THE LAYOUT GATE, for rows whose claim is GEOMETRIC. run_dl() runs the
 # data-layer suite, which sees markup and cannot see geometry -- the comps row
@@ -529,6 +549,30 @@ report "the ask reaches the request body" "neither the ask nor the grade reaches
 # Pattern copied from the OBSERVED failure string, not written from source.
 mutate 's/  renderComps\(\); renderAsk\(\);\n  return COMPS;/  renderComps();\n  return COMPS;/' app.js
 report "ask surface never painted" "marker=true input=false" "$(run_layout)"; restore
+
+# --- 54. the version gate's stand-down, FORGED -------------------------------
+# NO MUTATION -- the defect IS the flag. DEFECT_PASS is set to a PID no live pass
+# holds, which is the "someone left the off switch on" case: a hand-set flag, a
+# stale value from an earlier run, a copied command line. It must fail LOUDLY
+# rather than skip quietly.
+#
+# This row is why the stand-down is keyed to a PID instead of a boolean. A boolean
+# could not be tested from inside a pass at all -- the flag would be legitimately
+# set, and the row would prove nothing. A stand-down that cannot be seen to
+# misfire is the same vacuous shape every other gate here guards against.
+report "version stand-down forged" "no live defect pass holds that PID" "$(run_dl_as 999999)"; restore
+
+# --- 55. a shipped version with no changelog line ----------------------------
+# HT-D6's first arm. Force-and-notify makes the bump the user-facing event, so a
+# version with no VERSION_LOG entry ships an update that announces nothing.
+mutate "s/const APP_VERSION = '0\.1\.0';/const APP_VERSION = '0.9.9';/" app.js
+report "version with no changelog line" "has no VERSION_LOG changelog entry" "$(run_cv)"; restore
+
+# --- 56. a changelog entry with no release date ------------------------------
+# Ruled 2026-09-14: every entry carries d:. The date is what the build line shows,
+# so an undated entry renders a version with no answer to "released when".
+mutate "s/\{ v: '0\.1\.0', d: '2026-09-14', note:/{ v: '0.1.0', note:/" app.js
+report "changelog entry with no date" "every entry needs one" "$(run_cv)"; restore
 
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do

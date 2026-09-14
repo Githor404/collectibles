@@ -153,6 +153,18 @@
   .cfq input{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
   .cfq .btn{flex:0 0 auto}
   .confirmed .btn{margin-top:10px}
+  /* D14: version legibility. The notice is the ONLY surface here that appears
+     unbidden, so it is accent-bordered and sits ABOVE the card it interrupts --
+     it must read as the app speaking, never as a result. renderVersionNotice
+     emits .vnhead and .vnrow; the comps row shipped with class names and NO
+     stylesheet once already, and that is what merged the year and the date. */
+  .vnotice{border:1px solid var(--accent)}
+  .vnhead{font-size:15px;font-weight:800;line-height:1.3}
+  .vnrow{font-size:12.5px;line-height:1.5;margin-top:8px;word-break:break-word}
+  .vnotice .btn{margin-top:12px}
+  /* The build line is the opposite kind of thing: reference information, muted,
+     inside .about and nowhere else (ruled 2026-09-14). */
+  .buildline{display:block;margin-top:8px;font-variant-numeric:tabular-nums;opacity:.85}
   @media (min-width:560px){.omodal{left:50%;right:auto;bottom:auto;top:50%;transform:translate(-50%,-50%);
     width:496px;max-height:86vh;border-radius:18px;border:1px solid var(--line)}}
 </style>
@@ -161,6 +173,11 @@
   <div class="top"><h1>collectibles</h1><button type="button" id="settingsBtn" class="topbtn" onclick="openSettings()" aria-label="Settings">Settings</button></div>
   <div id="storeBadge">…</div>
   <div class="wrap">
+    <!-- D14: what changed, on the load after it changed. Above the Capture card
+         because it is the app interrupting, not an answer to anything the user
+         did. Starts hidden: checkVersionNotice() shows it only on a real change,
+         and a genuine first run never sees it. -->
+    <div id="versionNotice" class="card vnotice" style="display:none"></div>
     <div class="card">
       <h2>Capture</h2>
       <!-- R1: the confirmed identity lands here, above the capture controls,
@@ -192,7 +209,7 @@
       <button class="btn" onclick="doReplyPaste()">Read reply</button>
       <div id="replyReport"></div>
     </div>
-    <div class="about">collectibles — flea-market triage for comics. All data stays on this device; no accounts, no telemetry. <b>Identify, then see what copies actually sold for.</b> Recent eBay sold listings, shown as individual sales — never averaged, never called a value. It cannot tell a raw copy from a graded slab, and it says so where the numbers are.</div>
+    <div class="about">collectibles — flea-market triage for comics. All data stays on this device; no accounts, no telemetry. <b>Identify, then see what copies actually sold for.</b> Recent eBay sold listings, shown as individual sales — never averaged, never called a value. It cannot tell a raw copy from a graded slab, and it says so where the numbers are.<span id="buildLine" class="buildline"></span></div>
   </div>
 
   <div id="settingsScrim" class="scrim" style="display:none" onclick="closeSettings()"></div>

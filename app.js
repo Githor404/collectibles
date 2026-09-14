@@ -95,6 +95,12 @@ const Store = (() => {
       return writeRaw(PRERESTORE_KEY, JSON.stringify(blob));
     },
     peekBackup() { return readRaw(PRERESTORE_KEY); },
+    // Auxiliary keys OUTSIDE the state object -- the running version, and whatever
+    // later needs to outlive a restore without entering the export. Mirrors
+    // readRaw's asymmetry deliberately: on the memory tier readRaw returns null and
+    // this is a no-op, so a feature built on it degrades to "never fires" rather
+    // than "fires on every load", which is the safe direction for a notice.
+    writeAux(key, value) { return writeRaw(key, value); },
     revertBackup(snapshot) {
       if (tier !== 'local') return;
       if (snapshot == null) { try { localStorage.removeItem(PRERESTORE_KEY); } catch (e) {} }
@@ -2000,6 +2006,119 @@ function renderAskLive() {
     side('Nearest below', c.nearestBelow) +
     side('Nearest above', c.nearestAbove);
 }
+// ---- BUILD IDENTITY: which version is running, and what changed -------------
+// D1's service-worker deferral was SPLIT (2026-09-14). This is the legibility
+// half and it is ENTIRELY page-side -- no worker, no cache, no manifest, no
+// icons. The worker follows as its own slice if offline is ever wanted for its
+// own sake; the premise "if installability is wanted" was asked and answered no.
+//
+// D14 -- THE GATE SHIPS BEFORE THE MECHANISM. HealthTracker shipped the worker
+// first with a hand-bumped version integer, missed it on every slice after Phase
+// 0, and served a frozen first-deploy shell with nothing to say so. Here the
+// drift gate exists while there is still no cache that could serve one, so the
+// failure class is closed before the mechanism that makes it dangerous arrives.
+//
+// WHY A NOTICE WORKS WITH NO WORKER: there is no app-controlled cache, so a load
+// fetches current bytes and the notice fires on it. The worker is what would
+// CREATE the stale-shell problem it then solves.
+const APP_VERSION = '0.1.0';
+const VERSION_KEY = 'collectibles-version';   // PFX1: every storage key is prefixed
+
+// One line per release, newest LAST. The newest entry's `v` must equal
+// APP_VERSION, and EVERY entry carries `d` -- both enforced by check-version.sh.
+// HealthTracker exempts entries predating its date convention; there are none
+// here, so the exemption would protect nobody and the field is mandatory from
+// the first line.
+//
+// R1, R2b AND R3 SHIPPED UNVERSIONED, and no entries are invented for them.
+// Guessing dates or writing notes for releases nobody stamped is the same
+// fabrication this app refuses everywhere else -- D8 will not synthesise a price
+// the data does not contain, D12 will not divide a quote the seller did not give.
+// The record says they shipped unversioned and stops.
+const VERSION_LOG = [
+  { v: '0.1.0', d: '2026-09-14', note: 'Version numbers. The app now says which build it is running, and tells you what changed when a new one arrives. Identification, sold comps and the asking-price comparison all shipped before this, unversioned; nothing about them changes here.' },
+];
+
+// Numeric per segment, so 0.2.0 < 0.10.0 -- a string compare gets that backwards
+// and would silently stop showing notices after the ninth release.
+function cmpVersion(a, b) {
+  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x < y) return -1;
+    if (x > y) return 1;
+  }
+  return 0;
+}
+// Every version in (from, to] -- a returning user who skipped releases gets the
+// ACCUMULATED changelog, not just the newest line.
+// The optional `log` is what makes accumulation TESTABLE TODAY. With one entry
+// shipped, a multi-version jump is unreachable against the real log, and an
+// assertion on it would be vacuous -- HT-D60 Clause 4, the same shape as a
+// fixture with no ties in it. D14's argument applied to a helper: exercise the
+// accumulation before there is anything to accumulate, because the first real
+// multi-version jump is the one that would silently show only the newest line.
+function versionNotesBetween(fromV, toV, log) {
+  log = log || VERSION_LOG;
+  return log.filter((e) =>
+    (fromV ? cmpVersion(e.v, fromV) > 0 : e.v === toV) && cmpVersion(e.v, toV) <= 0);
+}
+function versionNotice(stored) {
+  stored = stored || null;
+  if (stored && cmpVersion(stored, APP_VERSION) >= 0) return null;   // unchanged, or a downgrade
+  return { from: stored, to: APP_VERSION, notes: versionNotesBetween(stored, APP_VERSION) };
+}
+function versionLine(version, log) {
+  version = version || APP_VERSION;
+  log = log || VERSION_LOG;
+  const entry = (log || []).filter((e) => e && e.v === version)[0];
+  const d = (entry && typeof entry.d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(entry.d)) ? entry.d : null;
+  return 'collectibles v' + version + (d ? ' · released ' + d : '');
+}
+
+// Fires ONCE per version change. The write happens before the render, so a throw
+// in rendering cannot make the notice repeat on every load.
+function checkVersionNotice() {
+  let stored = null;
+  try { stored = Store.readRaw(VERSION_KEY); } catch (e) {}
+  const notice = versionNotice(stored);
+  Store.writeAux(VERSION_KEY, APP_VERSION);
+  if (!notice) return null;
+  // A GENUINE first run shows no "updated" notice. APP_SOURCE is a truer test than
+  // "nothing stored": it separates a fresh install ('empty') from a RESTORE onto a
+  // new device ('restored'), and from the people already running the unversioned
+  // builds ('store') -- who SHOULD see it, because for them this is an update.
+  if (!stored && APP_SOURCE === 'empty') return null;
+  renderVersionNotice(notice);
+  return notice;
+}
+function renderVersionNotice(notice) {
+  const el = document.getElementById('versionNotice');
+  if (!el || !notice) return;
+  const head = notice.from
+    ? 'Updated from v' + esc(notice.from) + ' to v' + esc(notice.to)
+    : 'Updated to v' + esc(notice.to);
+  const notes = (notice.notes || []).map(function (e) {
+    return `<div class="vnrow"><b>v${esc(e.v)}</b> — ${esc(e.note)}</div>`;
+  }).join('');
+  el.innerHTML = `<div class="vnhead">${esc(head)}</div>${notes}` +
+    `<button class="btn" onclick="dismissVersionNotice()">Dismiss</button>`;
+  el.style.display = 'block';
+}
+function dismissVersionNotice() {
+  const el = document.getElementById('versionNotice');
+  if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+  return { ok: true };
+}
+// Reference information, not a control -- so it lives in `.about` and NOWHERE
+// else. Settings already carries the schema version and the load source, and a
+// second copy of one value is a pair that can disagree.
+function renderBuildLine() {
+  const el = document.getElementById('buildLine');
+  if (el) el.textContent = versionLine();
+}
+
 // ---- the no-key floor (D2 Fork G1) ------------------------------------------
 // Copy the prompt into your own assistant, paste the reply back. HT-D63 is the
 // warning this is built against: HealthTracker's floor sat DEAD for weeks because
@@ -2111,6 +2230,7 @@ function refresh() {
   renderConfirmed();
   renderComps();
   renderAsk();
+  renderBuildLine();
   renderCaptureBtn(); renderCaptureOutcome();
 }
 function openSettings() {
@@ -2131,6 +2251,10 @@ function main() {
   boot();
   requestPersistentStorage();
   refresh();
+  // AFTER boot(), which is what sets APP_SOURCE -- the first-run suppression
+  // reads it, so calling this earlier would make every load look like a fresh
+  // install and show nobody the notice.
+  checkVersionNotice();
 }
 
 // Console seam for review and testing.
@@ -2169,7 +2293,16 @@ window.CT = {
   GRADES, ASK_NEAREST, askSetPrice, askSetTerms, askSetGrade, askClear, askState,
   askNearest, askComparison, askMarkerHTML, renderAsk, renderAskLive,
   promptBoxes, promptBoxFor, renderPromptCard, copyPrompt,
+  // D1-split / D14 -- build identity: which version is running, and what changed
+  APP_VERSION, VERSION_LOG, VERSION_KEY, cmpVersion, versionNotesBetween,
+  versionNotice, versionLine, checkVersionNotice, renderVersionNotice,
+  dismissVersionNotice, renderBuildLine,
   state: () => APP_STATE,
+  // Read-only seam. checkVersionNotice suppresses the notice on a GENUINE first
+  // run, and APP_SOURCE is what distinguishes that from a restore or from the
+  // people already running the unversioned builds -- so a gate cannot tell those
+  // three apart without being able to read it.
+  appSource: () => APP_SOURCE,
   resave: () => Store.saveState(APP_STATE),
 };
 

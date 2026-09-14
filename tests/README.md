@@ -133,6 +133,16 @@ Where a defect needs a computed value, **plant a precomputed literal**: `22%` ra
 
 - **Recovering with no backup at all:** every mutation has a known, greppable signature (`const warn = (role === 'prices')`, `), "comic"]`, `aspectFilter`, `_slab.concat(_raw)`, …). Sweep for all of them, reverse the ones found by hand — watching for incidental changes the mutation made, such as swapping `'` for `"` — and then **let the suite prove it**: a surviving mutation fails a gate by name, so a green run is the evidence that the reversal restored the original rather than something merely plausible.
 
+### An empty grep is not a finding until it has a control
+
+**Three times in one session, a search that returned nothing was reported as a result.** The sharpest: grepping `tests/defect-pass.sh` inside a repo that has no such file. `grep` prints nothing and exits non-zero — **which is indistinguishable from a clean scan of a file that does exist.** So *"HealthTracker's defect pass doesn't do X"* and *"HealthTracker has no defect pass"* produce byte-identical output, and only one of them is true.
+
+**A silent result needs a control before it is evidence** — the discipline every gate here already applies to itself. `check-refs` plants a nonexistent gate name and requires the matcher to catch it. `check-egress` plants four network primitives and requires 4 of 4. Port-residue pipes a known-bad line through its own regex and fails if it does *not* match. Each exists because **a matcher that cannot match reads exactly like a clean pass**.
+
+The cheap form for an ad-hoc search: **assert the haystack exists first** (`ls`, `wc -l`), or grep for something known to be present. A second's work, and it converts "nothing found" from a guess into a measurement.
+
+**The cost is not the wasted minute — it is that a silent result gets reported with confidence.** Twice it was stated as a finding about the record, and the record was not what was broken.
+
 ### A test seam must reproduce the render sequence of the path it replaces
 
 `__setComps` exists to stand in for a completed `compsLookup`. For a while it called `renderComps()` alone, where the real path calls `renderComps(); renderAsk();` — so the ask inputs were never painted. **Twenty-seven assertions passed throughout**, because the fixture (`akSeed`) called `CT.renderAsk()` by hand and supplied exactly what the seam omitted.

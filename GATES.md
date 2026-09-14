@@ -999,3 +999,49 @@ Fixed at the seam rather than in the gate or the fixture, so the divergence is r
 ### What this pre-registration does not settle
 
 The forks above; whether the ask or the grade persist into any record (schema v2 remains unwritten, and R3 is memory-only until it is); and whether the comparison needs a second device pass of its own, which it probably does — the first one found a layout defect that every string gate had passed.
+
+## Version legibility — the app says which build it is running — BUILT AND GATED (D14, 2026-09-14)
+
+**Why this went before the service worker, and not after.** The subscriber asked for the worker slice because *"I have no way to tell which build I'm running or when a new one lands, and that's now costing me on every device pass."* The worker is what would **cause** that problem at its worst — a cached shell served silently over a new one — and the version surface is what makes it **visible**. Building them together would mean introducing the failure and its diagnostic in one commit, with no period in which the diagnostic had been observed working on its own. So the slice was split: **legibility now, offline later**, and D14 records the general form — *the gate ships before the mechanism it exists to diagnose.*
+
+### What was ruled, and what shipped
+
+| ruling | shipped as |
+|---|---|
+| **Start at 0.1.0** | `APP_VERSION = '0.1.0'`; single `VERSION_LOG` entry |
+| **No invented entries for the three unversioned releases** | the log begins at 0.1.0 and claims nothing about what came before |
+| **`d:` mandatory on every entry** | gated twice — `check-version.sh` and a suite assertion; HealthTracker's pre-convention exemption was **not** ported, because there are no pre-convention entries here for it to protect |
+| **Build line in `.about` only** | `renderBuildLine()` writes `#buildLine`, and an assertion requires it to live inside `.about` — reference information, not a control |
+| **`check-version.sh` joins the suite immediately** | runs inside `run-data-layer.sh` with the other static checks, not as a separate optional step |
+
+**The two surfaces.** `#versionNotice` sits **above** the Capture card — it is the app interrupting, never an answer to something the user did — and starts hidden; `checkVersionNotice()` reveals it only on a real change. `#buildLine` sits in `.about`, painted by `refresh()` on every render.
+
+**First-run suppression reads `APP_SOURCE`, not "nothing stored".** A fresh install (`empty`) sees no notice. A **restore onto a new device** (`restored`) and, crucially, **the people already running the three unversioned builds** (`store`) do see one — for them this genuinely is an update, and *nothing stored is not the same as nothing installed*.
+
+### Assertion delta: 386 → 408 (+22), re-pinned in this commit
+
+**+17 (VN1–VN8)** — `cmpVersion` compares numerically per segment (a string compare puts `0.10.0` before `0.2.0` and would silently stop showing notices after the ninth release); a downgrade shows nothing; the newest log entry **is** `APP_VERSION`; every entry carries a date; fire-once; dismiss; and D1's storage-key prefix.
+
+**+5 (SH1) — and these are the ones that matter.** All 17 VN assertions run against the harness's synthetic `mk('div','versionNotice')`. Until these five lines, **nothing proved the shipped shell had either element** — and `index.html` in fact had neither while all 17 were green. That is the identical shape to the `__setComps` seam divergence that survived 27 passing assertions one slice earlier, so it was closed in the same commit that created the risk:
+
+- the shipped shell carries `#versionNotice` **and** `#buildLine`;
+- the shipped shell carries CSS for `.vnotice`, `.vnhead`, `.vnrow` — `renderVersionNotice` **emits** the latter two, and emitting a class is not shipping a layout (the comps row shipped with class names and no stylesheet once already);
+- **content, not presence** (HT-D63): the build line must *hold* `collectibles v0.1.0` after boot. "The span exists" is the assertion that let HealthTracker tell people to copy from an empty box for weeks;
+- the build line is inside `.about` and nowhere else — a second copy of one value is a pair that can disagree;
+- the notice is **either hidden or has genuinely rendered a heading** — never a blank accent-bordered card sitting on the page. Written to be deterministic whichever way the iframe booted, rather than asserting a display state that depends on suite ordering.
+
+**Layout gate: PASS** at 360×690, 390×745, 1200×900 and 360×520 with the new card present. `display:none` contributes no height and the comps and ask rectangles are unchanged — measured, because the previous slice's "should be fine" was a layout defect that every string gate had passed.
+
+### The stand-down, and what is NOT yet proven about it
+
+A defect pass mutates `app.js` 53 times; `check-version.sh` compares the tree to HEAD, so **every row would fail on "shell changed, APP_VERSION did not bump" before reaching its own case** — 53 vacuous rows. So the pass stands the check down. But a gate with an off switch is a gate whose off switch gets left on, so the switch is **not a boolean**: `DEFECT_PASS` carries the pass's **PID** and must match the live lockfile that `defect-pass.sh` alone writes. Set by hand, it matches nothing and fails loudly.
+
+**Rows 54, 55 and 56 have been written and have never been run.** HT-D60 Clause 1 binds: a gate is not evidence until it has been run against the defect and **seen to fail**. Row 54 forges `DEFECT_PASS` from inside a real pass and requires *"no live defect pass holds that PID"*; rows 55 and 56 plant a bumped `APP_VERSION` with no changelog entry, and an entry with no `d:`. Until this section says otherwise, the stand-down is **designed, not demonstrated**.
+
+### What this does not cover (HT-D60 Clause 2)
+
+- **`check-version.sh` compares the working tree to HEAD. It cannot see what was DEPLOYED.** A commit that never reaches Pages passes it. Deploy verification is still a separate byte-fingerprint check.
+- **The build line reports a constant compiled into `app.js`.** It cannot detect a *stale cached `app.js` served under a fresh `index.html`* — which is precisely the service worker's failure mode. This slice makes that failure *legible* when it happens; it does not detect it. That detection is the worker slice's own obligation, and it now has a surface to report on.
+- **Nothing gates that a `VERSION_LOG` note describes the change it is attached to.** The note is prose; the gate checks that it exists, is dated, and matches `APP_VERSION`.
+- **VN4's multi-version accumulation is unreachable against the real one-entry log**, so it runs against an **injected synthetic log** — HT-D60 Clause 4: a fixture that cannot exhibit the failure is not a gate. The `log` parameter on `versionNotesBetween` exists for that reason and for no production caller.
+- **A user who clears storage looks exactly like a first run**, and will not be told what changed. There is no way to distinguish the two from inside the page, and inventing one would mean writing a second record to detect the loss of the first.
