@@ -1,4 +1,4 @@
-# Capture-outcome gate, ported from HealthTracker's R21.5 gate (HT-D51).
+# Layout gate (was capture-outcome-gate), ported from HealthTracker's R21.5 gate (HT-D51).
 #
 # "Exactly one outcome, in view without scrolling" is a LAYOUT claim, so it is
 # measured as one. A string gate can prove the modal rendered; only a viewport can
@@ -38,7 +38,7 @@ $chrome = $null
 $server = $null
 $tmpRoot = Join-Path $PSScriptRoot '.tmp'
 if (-not (Test-Path $tmpRoot)) { New-Item -ItemType Directory -Force $tmpRoot | Out-Null }
-$udd = Join-Path $tmpRoot ("outcome-" + [System.Guid]::NewGuid().ToString('N'))
+$udd = Join-Path $tmpRoot ("layout-" + [System.Guid]::NewGuid().ToString('N'))
 $ct = [Threading.CancellationToken]::None
 
 $MIN_ACTION_H = 44   # a primary action is a thumb target, not a link
@@ -235,7 +235,7 @@ try {
 
   $viewports = @(@('phone 360x690', 360, 690, $true), @('phone 390x745', 390, 745, $true), @('desktop 1200x900', 1200, 900, $false))
 
-  Write-Host "capture outcome (real index.html, SHIPPED identity contract, CDP, real time):"
+  Write-Host "layout: capture outcome (real index.html, SHIPPED identity contract, CDP, real time):"
   $allOk = $true
   foreach ($v in $viewports) {
     $name = $v[0]; $w = $v[1]; $h = $v[2]; $mob = $v[3]
@@ -284,10 +284,10 @@ try {
   Write-Host ("  thresholds        : exactly one outcome state; the identity question and BOTH actions fully inside the viewport with the page unscrolled; actions >={0}px tall; footer fixed while the body scrolls; capture surface carries no outcome" -f $MIN_ACTION_H)
   Write-Host "-----------------------------------------"
   if ($allOk) {
-    Write-Host "CAPTURE OUTCOME GATE: PASS (one explicit state per capture, in view without scrolling, at every width)"
+    Write-Host "LAYOUT GATE: PASS (one explicit state per capture, in view without scrolling, at every width)"
     Cleanup; exit 0
   }
-  Write-Host "CAPTURE OUTCOME GATE: FAIL"
+  Write-Host "LAYOUT GATE: FAIL"
   Cleanup; exit 1
 }
 catch {

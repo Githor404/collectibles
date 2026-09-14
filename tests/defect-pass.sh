@@ -62,7 +62,7 @@ restore() {
     cp "$TMP/$(basename "$f").orig" "$f"
     cmp -s "$TMP/$(basename "$f").orig" "$f" || bad="$bad $f"
   done
-  [ -z "$MOVED" ] || { mv "$MOVED" tests/capture-outcome-gate.ps1 2>/dev/null; MOVED=""; }
+  [ -z "$MOVED" ] || { mv "$MOVED" tests/layout-gate.ps1 2>/dev/null; MOVED=""; }
   [ -z "$bad" ] || { echo "!! RESTORE FAILED for:$bad -- check git status before doing anything else"; return 9; }
 }
 trap 'restore >/dev/null 2>&1; rm -f "$LOCK"' EXIT INT TERM
@@ -211,7 +211,7 @@ report "a case throws mid-suite" "HARNESS|ASSERTION COUNT" "$(run_dl)"; restore
 # 15. the gate-script census: a gate renamed away
 # GUARDED for the same reason as row 5's plant: it bypasses mutate(), so a ROWS=
 # subset moved the gate script aside regardless of range.
-row_wanted && { mv tests/capture-outcome-gate.ps1 "$TMP/capture-outcome-gate.ps1.moved"; MOVED="$TMP/capture-outcome-gate.ps1.moved"; }
+row_wanted && { mv tests/layout-gate.ps1 "$TMP/layout-gate.ps1.moved"; MOVED="$TMP/layout-gate.ps1.moved"; }
 report "gate script renamed away" "CENSUS" "$(run_dl)"; restore
 
 # ---- R1 / D2: the identification contract ---------------------------------

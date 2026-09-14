@@ -82,6 +82,45 @@ scan() {
   printf '%b' "$out"
 }
 
+# ---- GATE-SCRIPT FILENAME CENSUS (D3) ---------------------------------------
+# The citation census above resolves Dnn / HT-Dnn / Rnn identifiers. It CANNOT
+# see a FILENAME -- and a gate script is referenced by filename in prose, in
+# run-data-layer.sh's census manifest, and in defect-pass.sh's row that MOVES it
+# by name. Renaming the capture-outcome gate to the layout gate touched FOURTEEN
+# references across five files; the reference count was estimated by eye three
+# times (10, then 12) and was wrong every time. A single missed one would have
+# left a live file pointing at a script that does not exist, and nothing in this
+# repo would have said so.
+#
+# SCANNED OVER A WIDER SET than the citation census: gate filenames appear in the
+# test scripts and the harness, not only in the three documents. INHERITED-*.md
+# are excluded -- they are frozen at healthtracker@dcf3d78 and name HealthTracker's
+# own gates, which do not exist here and must not be rewritten to pretend they do.
+#
+# WRITING ABOUT A RENAME: this census scans itself and its neighbours, so a
+# historical mention of a retired gate WITH its .ps1 suffix would fail the very
+# check it documents. Name retired gates without the extension.
+# THIS FILE IS DELIBERATELY NOT IN THE SCAN SET, and the reason is structural
+# rather than incidental: the planted control below must name a gate script that
+# DOES NOT EXIST. A census whose fixture is a nonexistent filename cannot scan
+# its own source without failing on its own fixture -- the first version did
+# exactly that, reported a clean repo as broken, and made its own defect proof
+# vacuous, because the "planted" name was the string the control already emits.
+#
+# THE LIMIT THIS BUYS, stated so it is not assumed away: a gate filename written
+# into check-refs.sh's own prose is outside this census's reach. Nothing else is.
+GATE_FILE_SCAN="$DOCS tests/README.md tests/run-all-gates.sh tests/run-data-layer.sh"
+GATE_FILE_SCAN="$GATE_FILE_SCAN tests/defect-pass.sh tests/check-egress.sh"
+GATE_FILE_SCAN="$GATE_FILE_SCAN tests/restore-backups.sh tests/data-layer.test.html"
+
+gate_files() {   # $1 = files to scan
+  local out="" f
+  for f in $(grep -hoE '[A-Za-z0-9_-]+-gate\.ps1' $1 2>/dev/null | sort -u); do
+    [ -f "tests/$f" ] || out="${out}cites ${f}, which is not a script in tests/\n"
+  done
+  printf '%b' "$out"
+}
+
 # ---- PLANTED CONTROL --------------------------------------------------------
 mkdir -p tests/.tmp
 CTRL=tests/.tmp/refs-control.md
@@ -90,7 +129,17 @@ CTRL=tests/.tmp/refs-control.md
   printf '1. **A rule**\n2. **Another**\n2. **A duplicate**\n\n'
   printf '## Elsewhere\n'
   printf 'See D999 and HT-D998 and R997 and HT-R996, per brief rules 3-5.\n'
+  printf 'Driven by no-such-layout-gate.ps1, which does not exist.\n'
 } > "$CTRL"
+
+# The filename census proves itself on EVERY run, not once when it was written:
+# a matcher that cannot match reads exactly like a clean sweep.
+CTRL_G=$(gate_files "$CTRL")
+if [ -z "$CTRL_G" ]; then
+  echo "refs: FAIL - the gate-filename CONTROL did not match a script that does not exist."
+  echo "  The matcher is broken, so a clean scan of the real files would mean nothing."
+  exit 1
+fi
 CTRL_OUT=$(scan "$CTRL" "$CTRL")
 CTRL_HITS=$(printf '%s' "$CTRL_OUT" | grep -c .)
 if [ "$CTRL_HITS" -lt 5 ]; then
@@ -108,5 +157,14 @@ if [ -n "$OUT" ]; then
   echo "  A rename that consumers do not follow is D3. Repoint the citation, or add the heading."
   exit 1
 fi
-echo "refs: OK (control caught $CTRL_HITS planted problems; every citation in $DOCS resolves, rule list contiguous)"
+GOUT=$(gate_files "$GATE_FILE_SCAN")
+if [ -n "$GOUT" ]; then
+  echo "refs: FAIL - a live file names a gate script that does not exist:"
+  printf '%s\n' "$GOUT" | grep -v '^$' | sed 's/^/    /'
+  echo "  A rename is only complete when its consumers follow. The citation census"
+  echo "  cannot see filenames; this is the half that can."
+  exit 1
+fi
+
+echo "refs: OK (control caught $CTRL_HITS planted problems and a nonexistent gate script; every citation in $DOCS resolves, rule list contiguous, every gate filename in $(printf '%s' "$GATE_FILE_SCAN" | wc -w | tr -d ' ') live files exists)"
 exit 0

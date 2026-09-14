@@ -53,7 +53,7 @@ window.setLS({});
     res(false, 'HARNESS: uncaught exception aborted the synchronous suite -- cases after it did NOT run', String(e.message) + ' @' + (e.lineno || '?'));
   });
   // Host elements the renderers paint into, mirroring the shell. That the SHELL
-  // has them is what the iframe cases and capture-outcome-gate.ps1 prove.
+  // has them is what the iframe cases and layout-gate.ps1 prove.
   (function ensureDOM(){
     var mk = function (tag, id, cls, parent) {
       if (document.getElementById(id)) return document.getElementById(id);
@@ -403,7 +403,7 @@ window.setLS({});
   step(function () {
     // HARNESS LIMITATION (HT-D47), recorded rather than hidden: createImageBitmap
     // NEVER settles under --virtual-time-budget. The suite proves the LEASH and
-    // the fallback; the preferred decoder runs in capture-outcome-gate.ps1, in
+    // the fallback; the preferred decoder runs in layout-gate.ps1, in
     // real time. The lease is shortened so the fallback engages at once.
     CT.setByokBitmapLease(20);
     CT.setVisionContract(TEST_CONTRACT);

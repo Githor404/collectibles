@@ -17,7 +17,7 @@ mkdir -p "$TMP"
 # naming the file ends the hunt, and a manifest also catches a rename.
 #
 # Adding a gate: add its name here, in the same commit, deliberately.
-GATE_SCRIPTS="capture-outcome-gate.ps1"
+GATE_SCRIPTS="layout-gate.ps1"
 EXPECTED_GATE_SCRIPTS=1
 
 GS_MISSING=""
@@ -97,7 +97,7 @@ if [ -z "$BROWSER" ]; then echo "ERROR: no headless Chrome/Edge found" >&2; echo
 # --virtual-time-budget: the shell cases load index.html into an iframe and the
 # async cases wait on timers (pacing, budgets), so the dump must wait for them.
 # HT-D47: createImageBitmap NEVER settles under virtual time; the harness proves
-# the leash and the fallback, and capture-outcome-gate.ps1 runs in REAL time.
+# the leash and the fallback, and layout-gate.ps1 runs in REAL time.
 OUT=$("$BROWSER" --headless --disable-gpu --no-sandbox --allow-file-access-from-files \
   --user-data-dir="$PROFILE" --no-first-run --no-default-browser-check \
   --virtual-time-budget=60000 --dump-dom "$URL" 2>/dev/null \

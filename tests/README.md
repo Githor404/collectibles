@@ -48,11 +48,11 @@ In order, each failing the whole gate:
 4. **Cross-reference census** (`check-refs.sh`, D3): every `Dnn`, `HT-Dnn`, `HT-Rnn`, `Rn` and `rule(s) N` cited in `CLAUDE.md` / `DECISIONS.md` / `GATES.md` must resolve to a heading or rule that exists, and the brief's rule list must be 1..N with no duplicates or gaps. Planted control first. **It catches unresolvable citations and an inconsistent list — not a citation that resolves to the wrong thing.**
 5. **`data-layer.test.html`** in headless Chrome: the real `app.js`, plus the real `index.html` in an iframe. The **executed assertion count must equal the pin** (`EXPECTED_ASSERTIONS`), so a silently dropped case fails the gate.
 
-**Harness limitation (HT-D47), stated rather than hidden:** `createImageBitmap` never settles under `--virtual-time-budget`. The harness therefore proves the **leash** and the fallback decoder, and cannot exercise the preferred decoder. `capture-outcome-gate.ps1` runs in real time and does.
+**Harness limitation (HT-D47), stated rather than hidden:** `createImageBitmap` never settles under `--virtual-time-budget`. The harness therefore proves the **leash** and the fallback decoder, and cannot exercise the preferred decoder. `layout-gate.ps1` runs in real time and does.
 
 **The vision contract is unruled (D1).** The capture-chain cases install a synthetic contract through `CT.setVisionContract`. They prove the chain, never a contract.
 
-## `capture-outcome-gate.ps1` — one outcome, in view without scrolling (HT-D51)
+## `layout-gate.ps1` — one outcome, in view without scrolling (HT-D51)
 
 "Exactly one outcome, in view" is a **layout** claim, so it is measured in a viewport. The gate drives the shipped capture path against the real `index.html`, with fetch stubbed, at 360×690, 390×745 and 1200×900, and asserts per state:
 
