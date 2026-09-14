@@ -264,6 +264,36 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 
 **What was removed, and what was not.** The prices Settings card is gone; the prices **role keeps every piece of its machinery**, which the gates still exercise — pacing at 1 call/s, redaction of an echoing provider, and the `auth: 'none'` proof that the metering server of D1 is a table edit. **The capability is intact; only the invitation is gone.**
 
+## D11 — A cap that truncates a tie group must say what it truncated (2026-09-14)
+
+**Ruled on R3's Fork B.** With 98 sales, ties are certain, and a "nearest three" cap will routinely cut through a group of sales that all went at the same price.
+
+**A cluster at one price is SIGNAL, not noise.** Twelve sales at $25 is the densest fact on the surface — it says the market has a floor there — and showing three arbitrary examples of it hides exactly that. Silent truncation does not lose an edge case; it loses the finding.
+
+**So: where a cap cuts a group sharing a value, the surface states what it cut** — *"3 of 12 at $25"*. The user can see that eleven more sat at that price without the surface having to render all twelve.
+
+**The general form, and it is D8's family:** D8 forbids *manufacturing* a number the data does not contain. This forbids *concealing* a number the data does contain, by presentation. **A display rule that changes what the data says is a claim, not a layout**, and both directions are the same offence against a scatter that is supposed to be the claim.
+
+## D12 — The app never divides a seller's quote (2026-09-14)
+
+**Ruled on R3's Fork C.** A flea-market price is often a bulk rate: *"$10 each, 5 for $40."* Dividing 40 by 5 produces **$8 — a number the seller never said**.
+
+**The app does not do that arithmetic, at all.** The user enters the figure **they** want compared; the seller's terms ride alongside **verbatim**, labelled as the source of that figure. The record reads *"$8 — your figure, from: 5 for $40"*, and the $8 is attributable to the person who chose it.
+
+**Why not just divide.** It looks like arithmetic and it is a judgement: whether the bulk rate is even available for one book, whether the other four are wanted, whether the seller would split it. The division smuggles all of that in behind a number that renders exactly like a fact. **Brief rule 3 says the asking price is attested, never derived — and $40 ÷ 5 is derivation wearing attestation's clothes.**
+
+**Consequence:** the per-book figure exists nowhere in state and nowhere on the surface unless the user typed it.
+
+## D13 — Counts, never percentiles (2026-09-14)
+
+**Ruled on R3's Fork E.** The comparison reports how the ask sits among the sales. *"47 sold below · 2 at your price · 49 above"* is a **count**: a fact about the rows, checkable by pointing at them.
+
+***"Cheaper than 52% of sales"* is the same fact dressed as a score.** It reads as a grade out of a hundred, and it invites the single inference this product exists to refuse: *"so it's about average."* D8 forbids the average; a percentile reintroduces it by implication and without the arithmetic being visible.
+
+**The rule: a count is a fact and may render; a ratio derived from the scatter is a verdict and may not.** No percentile, no percentage, no rank-as-score, no "better than", no band.
+
+**The test, for the next case that is not this one:** can the user verify it by counting rows on the surface? A count can. A ratio requires trusting a computation they cannot see, which is exactly what a scatter was chosen over a modelled value to avoid.
+
 ## D10 — A group exists only where a field exists that constitutes it (2026-09-13)
 
 **Ruled on R2b's probe, and it resolves a collision between two already-ruled forks.** Fork E had ruled *"raw and slabbed are two markets; show them as two groups, never blend."* Fork A had ruled **one stage**. The probe then showed the search tier returns **no Grade, no Certification and no Variant field** — **the split E requires is not in the data A buys.** Both were ruled before anyone had seen a real result.
