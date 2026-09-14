@@ -975,6 +975,12 @@ window.setLS({});
         'SH1 GATE (D9): and the shell still names no deferred provider -- nothing invites a credential that nothing would use');
     res(D.body.innerHTML.indexOf('credBox-prices') < 0,
         'SH1 GATE (D9): the deferred price role has NO field, though its provider row and pacing are still live -- machinery without an invitation');
+    // The comps surface shipped with class names and NO STYLESHEET, which is what
+    // collapsed three fields into one string on a phone. Emitting a class is not
+    // shipping a layout: the gate is that the rule EXISTS in the served shell.
+    var cssAll = Array.prototype.map.call(D.querySelectorAll('style'), function (s) { return s.textContent; }).join('');
+    res(cssAll.indexOf('.cmprow') >= 0 && cssAll.indexOf('.cmptitle') >= 0 && cssAll.indexOf('.cmpprice') >= 0,
+        'SH1 GATE (device pass): the shipped shell carries CSS for the comps row, price and title -- it shipped with NONE, and unstyled inline spans is what merged the year and the date');
     // A token saved by an EARLIER build must not be stranded: it appears in
     // Storage with a way out, and only when it exists.
     W.CT.credClear('prices');
@@ -1535,6 +1541,30 @@ window.setLS({});
       'which is exactly the string a title-parsing split would have mis-grouped as slabbed');
   res(c7.indexOf('1 lot') >= 0 && c7.indexOf('1 reprint') >= 0,
       'CQ7: what the filter hid is COUNTED ON THE SURFACE -- a filter the user cannot see is one they cannot correct');
+
+  // ---- CQ10: three fields, laid out, and a date that reads one way ----------
+  // REPORTED FROM THE FIRST LIVE DEVICE PASS (2026-09-13), verbatim:
+  //   "$52.46The Incredible Hulk #271 First Rocket Raccoon Appearance 198217/08"
+  // Three fields emitted as inline spans with NO CSS shipped for them at all, so
+  // they ran together -- the title's trailing year and the date merged into
+  // "198217/08". The data was right and every data-layer assertion passed; what
+  // failed was a LAYOUT claim no --dump-dom gate can see, which is why the
+  // structural half lives here and the visual half belongs in a viewport.
+  var dvRow = { soldPrice: 52.46, soldCurrency: 'USD', endedAt: '2026-08-17T09:00:00Z',
+                title: 'The Incredible Hulk #271 First Rocket Raccoon Appearance 1982', bestOffer: false };
+  var rowD = CT.compsRowHTML(dvRow);
+  res((rowD.match(/<span class="cmp[a-z]+"/g) || []).length === 3,
+      'CQ10 GATE: a comp is THREE distinct elements -- price, date, title -- never one run of text',
+      (rowD.match(/<span class="cmp[a-z]+"/g) || []).join(' ') || '(none)');
+  res(rowD.indexOf('198217') < 0,
+      'CQ10 GATE: the title year and the date do not merge -- "198217" is the literal string a phone showed');
+  res(CT.compsDate('2026-08-17T09:00:00Z') === '17 Aug',
+      'CQ10 GATE: the date is spelled-month -- "17/08" reads as 17 Aug to half the world and as a US month-first slip to the rest',
+      CT.compsDate('2026-08-17T09:00:00Z'));
+  res(/\d{1,2}\/\d{1,2}/.test(rowD) === false,
+      'CQ10 GATE: no D/M form survives anywhere in the row');
+  res(rowD.indexOf(CT.esc(dvRow.title)) >= 0,
+      'CQ10 GATE (D10): the seller title renders VERBATIM and unaltered -- it is the only grade signal this tier has');
 
   // ---- CQ8 (D8): below three, the surface says so --------------------------
   CT.__setComps(CT.compsFilter(p5.rows).kept.slice(0, 2), [], 'Amazing Spider-Man 151');

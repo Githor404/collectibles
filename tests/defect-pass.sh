@@ -415,6 +415,15 @@ report "provenance stripped from the render" "the count is the KEPT count" "$(ru
 mutate 's/  const sorted = COMPS\.rows\.slice\(\)\.sort\(function \(a, b\) \{ return a\.soldPrice - b\.soldPrice; \}\);/  var _avg = COMPS.rows.reduce(function (a, r) { return a + r.soldPrice; }, 0) \/ (COMPS.rows.length || 1);\n  const sorted = COMPS.rows.concat([{ title: "estimated at this grade", soldPrice: _avg, soldCurrency: "USD", endedAt: "", bestOffer: false }]).sort(function (a, b) { return a.soldPrice - b.soldPrice; });/' app.js
 report "a synthesised ladder" "ACTUALLY SOLD FOR" "$(run_dl)"; restore
 
+# --- 44. the comps row collapses back into one run of text -------------------
+# The first live device pass, verbatim off a phone:
+#   "$52.46The Incredible Hulk #271 First Rocket Raccoon Appearance 198217/08"
+# Three fields with no elements and no CSS between them. This restores exactly
+# that concatenation -- price, title and date emitted bare into one div, with the
+# title's trailing year running into the date.
+mutate 's/function compsRowHTML\(r\) \{[\s\S]*?\n\}/function compsRowHTML(r) {\n  return "<div class=\\"cmprow\\">" + esc(compsMoney(r.soldPrice, r.soldCurrency)) + esc(r.title) + esc(compsDate(r.endedAt)) + "<\/div>";\n}/' app.js
+report "comps row collapses to one run" "THREE distinct elements" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
   printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"

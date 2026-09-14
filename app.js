@@ -1708,9 +1708,16 @@ function compsMoney(n, cur) {
   return (String(cur || 'USD') === 'USD' ? '$' : '') + s +
          (String(cur || 'USD') === 'USD' ? '' : ' ' + String(cur));
 }
+// SPELLED MONTH, never D/M. Reported from the first device pass: "17/08" reads
+// as 17 August to half the world and as a malformed US month-first date to the
+// other half, and there is nothing on the surface to disambiguate it. A comp's
+// date is provenance -- it is what makes the 90-day window checkable -- so it
+// must not be a number the reader has to guess the convention for.
 function compsDate(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
-  return m ? (m[3] + '/' + m[2]) : '';
+  if (!m) return '';
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return String(Number(m[3])) + ' ' + (MON[Number(m[2]) - 1] || '?');
 }
 
 // D10: ONE SCATTER, NO GROUPS. The search tier returns no Grade, no Certification
@@ -1757,11 +1764,17 @@ function renderComps() {
     `<div class="cmplist">${sorted.map(compsRowHTML).join('')}</div>` +
     compsFootHTML() + `</div>`);
 }
+// THREE FIELDS, THREE ELEMENTS, and the source order matches the visual order:
+// price and date on the first line, the seller's title on its own line beneath.
+// The structured fields and the free text are different KINDS of thing -- one is
+// provenance, the other is the only grade signal this tier has (D10) -- so they
+// are separated rather than run together. They shipped as three unstyled inline
+// spans and a phone rendered them as one string; see index.html's .cmprow.
 function compsRowHTML(r) {
   return `<div class="cmprow">` +
     `<span class="cmpprice">${esc(compsMoney(r.soldPrice, r.soldCurrency))}</span>` +
-    `<span class="cmptitle">${esc(r.title)}</span>` +
     `<span class="cmpmeta">${esc(compsDate(r.endedAt))}${r.bestOffer ? ' · best offer accepted' : ''}</span>` +
+    `<span class="cmptitle">${esc(r.title)}</span>` +
     `</div>`;
 }
 function compsFootHTML() {
@@ -1947,7 +1960,7 @@ window.CT = {
   COMPS_WINDOW_DAYS, COMPS_COUNT, COMPS_MIN_SHOWN, COMPS_EXCLUDE, COMPS_NEVER_SENT, COMP_KEYS,
   compsDefaultQuery, compsQuery, compsSetQuery, compsResetQuery, compsBody, compsBound,
   parseComps, compsFilter, compsBodyIsClean, compsLookup, compsClear, renderComps, compsPing,
-  compsRowHTML, compsShowDropped, compsMoney, __setComps,
+  compsRowHTML, compsShowDropped, compsMoney, compsDate, __setComps,
   compsState: () => COMPS,
   promptBoxes, promptBoxFor, renderPromptCard, copyPrompt,
   state: () => APP_STATE,

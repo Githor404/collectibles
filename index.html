@@ -102,6 +102,20 @@
     color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:8px;
     padding:6px 8px;margin:6px 0;user-select:text;-webkit-user-select:text;word-break:break-word}
   .cresult{margin-top:6px}
+  /* R2b: the comps scatter. Three fields per row -- price, date, title -- and the
+     first device pass proved they must be LAID OUT, not merely emitted: these
+     shipped as three inline spans with NO CSS AT ALL, so they ran together and
+     "...Appearance 1982" + "17/08" read as "198217/08" on a phone. The title is
+     the seller's free text and the only grade signal there is (D10), so it takes
+     its own line rather than competing with the structured fields. */
+  .comps{margin-top:10px}
+  .cmphead{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;margin:2px 0 6px}
+  .cmprow{display:grid;grid-template-columns:auto 1fr;column-gap:10px;row-gap:3px;padding:10px 0;border-top:1px solid var(--line)}
+  .cmplist .cmprow:first-child{border-top:none}
+  .cmpprice{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .cmpmeta{justify-self:end;align-self:center;color:var(--muted);font-size:11.5px;text-align:right}
+  .cmptitle{grid-column:1 / -1;font-size:12.5px;line-height:1.45;word-break:break-word}
+  .cmpdrop{display:block;margin-top:6px;opacity:.72}
   /* R1: the identity draft. The QUESTION leads -- it is what this slice is about,
      so it sits above every control and carries the weight (D2, HT-R30's rule). */
   .idq{font-size:17px;font-weight:800;line-height:1.3}
