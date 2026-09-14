@@ -1036,7 +1036,17 @@ The forks above; whether the ask or the grade persist into any record (schema v2
 
 A defect pass mutates `app.js` 53 times; `check-version.sh` compares the tree to HEAD, so **every row would fail on "shell changed, APP_VERSION did not bump" before reaching its own case** — 53 vacuous rows. So the pass stands the check down. But a gate with an off switch is a gate whose off switch gets left on, so the switch is **not a boolean**: `DEFECT_PASS` carries the pass's **PID** and must match the live lockfile that `defect-pass.sh` alone writes. Set by hand, it matches nothing and fails loudly.
 
-**Rows 54, 55 and 56 have been written and have never been run.** HT-D60 Clause 1 binds: a gate is not evidence until it has been run against the defect and **seen to fail**. Row 54 forges `DEFECT_PASS` from inside a real pass and requires *"no live defect pass holds that PID"*; rows 55 and 56 plant a bumped `APP_VERSION` with no changelog entry, and an entry with no `d:`. Until this section says otherwise, the stand-down is **designed, not demonstrated**.
+**Rows 54, 55 and 56 were run against their defects and each was SEEN TO FAIL** (HT-D60 Clause 1), on a tree committed first at `b63a36f` — so a restore failure would have been recoverable from git rather than only from `.orig` copies:
+
+| row | planted defect | verdict | first named failure |
+|---|---|---|---|
+| 54 | `DEFECT_PASS` forged **from inside a real pass** | `GATE: FAIL` | `check-version: FAIL - DEFECT_PASS=999999 was set, but no live defect pass holds …` |
+| 55 | `APP_VERSION` bumped to 0.9.9, no changelog entry | `GATE: FAIL` | `check-version: FAIL - APP_VERSION 0.9.9 has no VERSION_LOG changelog entry` |
+| 56 | the one entry stripped of its `d:` | `GATE: FAIL` | `check-version: FAIL - 1 VERSION_LOG entries but 0 carry d: 'YYYY-MM-DD' …` |
+
+**Row 54 is the one worth reading twice.** It sets `DEFECT_PASS` to a PID that no process holds, *while a genuine pass is running and holding a different PID in the lockfile* — so the flag is live, the lock is live, and only the **match** is false. That is the precise failure a boolean could not distinguish, and the gate refused it by name rather than standing down. All four files restored identical to their pre-run copies and the tree was clean afterward.
+
+Row 55 and 56 reach `check-version.sh` **directly** rather than through `run-data-layer.sh`, via `run_cv()`, because the stand-down suppresses it inside a pass — a row that tested the suppressed path would assert nothing. `run_cv` translates the script's exit code into the `GATE:` vocabulary the report reads.
 
 ### What this does not cover (HT-D60 Clause 2)
 
