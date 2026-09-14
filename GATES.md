@@ -1055,3 +1055,37 @@ Row 55 and 56 reach `check-version.sh` **directly** rather than through `run-dat
 - **Nothing gates that a `VERSION_LOG` note describes the change it is attached to.** The note is prose; the gate checks that it exists, is dated, and matches `APP_VERSION`.
 - **VN4's multi-version accumulation is unreachable against the real one-entry log**, so it runs against an **injected synthetic log** — HT-D60 Clause 4: a fixture that cannot exhibit the failure is not a gate. The `log` parameter on `versionNotesBetween` exists for that reason and for no production caller.
 - **A user who clears storage looks exactly like a first run**, and will not be told what changed. There is no way to distinguish the two from inside the page, and inventing one would mean writing a second record to detect the loss of the first.
+
+### Deployed and verified (8e4f99c)
+
+| file | before | after |
+|---|---|---|
+| `index.html` | `a843d7f639394d17` | `c7965be5c83d2e6e` |
+| `app.js` | `18204c050e559ac4` | `ea70d2d2d1aaabde` |
+
+Both matched `HEAD` about 15s after the push. **The Pages URL was confirmed by measuring it, not by remembering it** — the repo contains no `github.io` string anywhere, so the address was inferred from the remote and then checked: a 200, and bytes identical to `HEAD~1`, which is what makes the *after* comparison mean something. The build line served to a device now reads `collectibles v0.1.0`.
+
+## Want-list as a capture-time filter, and schema v2 — PRE-REGISTERED, ONE FORK OPEN (2026-09-14; NOT built)
+
+**Ruled in advance** (D15): the want-list is a **filter that fires on capture**, not a list to browse. The match is **generous**, never silent. v1 holds **exact issues only** (looser wanting — *"any pre-1975 Marvel key"*, *"the rest of the Byrne FF run"* — is named and deferred). The flag fires on the **draft** and re-evaluates as the reading is corrected. **The flag is a prompt to look, never a claim, and nothing about it is written to a record before confirm.** Still out: collection management, marketplace, sharing, accounts.
+
+### The fork, and why it is open rather than decided
+
+I reported a collision — *`normalizeState` is an allowlist rebuild that would silently discard a new key* — and the want-list and schema v2 were ruled into **one slice on that basis.** Reading the code rather than my own report: **the collision is avoidable, and the pairing may not be needed.**
+
+`normalizeState` allowlists **top-level** keys, but `settings` is deep-copied **wholesale** (`JSON.parse(JSON.stringify(o.settings))`) with no filtering inside it. Existing assertions already pin arbitrary nested content surviving there (`settings: { a: { b: [1,2,{c:'x'}] }, flag: true }`).
+
+- **Option A — `settings.wants`. No schema bump, no migration, no wipe risk.** The want-list persists today, under machinery already gated.
+- **Option B — top-level `wants`, `SCHEMA_VERSION = 2`.** Cleaner shape, and the cost is below.
+
+### What Option B costs — stated before anything touches storage
+
+`boot()` has exactly three paths: `v > SCHEMA_VERSION` (future — preserved, never overwritten, HT-D7); `v === SCHEMA_VERSION` (normalize); and **no branch at all for `v < SCHEMA_VERSION`**, which falls through to `state = emptyState(); dirty = true` and then `Store.saveState(state)`. Every existing user's stored state would be **silently overwritten with an empty one on their next load** — an erase on disk, at boot, with no error and no undo slot.
+
+**This is not a defect today.** With `SCHEMA_VERSION = 1` and a minimum valid version of 1, `v < SCHEMA_VERSION` is unreachable, which is exactly why no assertion covers it — HT-D60 Clause 4: a fixture that cannot exhibit the failure is not a gate. **The bump is what creates the case.** So Option B is not "add a key and bump a number"; it is a migration branch, a backup written before any rewrite, and a gate seeded with a real v1 state — in the same commit as the bump, or it ships a wipe.
+
+**My leaning: Option A**, and the reason is D14's shape rather than convenience — the want-list does not need a schema bump, so taking one on buys the wipe risk for nothing and couples a user-facing feature to the riskiest change in the codebase. Schema v2 is worth doing on its own terms, with the migration branch as its subject rather than its side effect.
+
+### Stopped here for a ruling
+
+Not built. The pairing was ruled on a report of mine that turned out to be wrong about which keys `normalizeState` discards, so the ruling deserves to be re-made against what the code does.
