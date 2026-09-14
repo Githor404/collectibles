@@ -26,6 +26,24 @@ cd "$(dirname "$0")/.."
 
 TMP="tests/.tmp"
 mkdir -p "$TMP"
+
+# MANDATORY under `set -u` above: mutate() increments these, and an unset name in
+# $(( )) is a hard error -- so a "fix" that forgot to initialise them would abort
+# on the FIRST mutation and break every row while claiming to protect them.
+#
+# They exist because A MUTATION THAT DOES NOT APPLY MUST BE FATAL (see mutate()).
+#
+# AND A SECOND REASON THE `git checkout --` BAN BELOW IS RIGHT. That rule was
+# written because checkout restores from HEAD and discards uncommitted work. On
+# 2026-09-14 it cost something else entirely: under core.autocrlf=true a checkout
+# rewrites the working file to CRLF, and every multi-line perl pattern here uses
+# \n, which cannot match \r\n. Seven rows stopped planting anything and reported
+# GATE: PASS. The blobs were LF the whole time; only the working copy converted,
+# and only because the RECOVERY step touched it. Restore with
+#   git show HEAD:<file> > <file>
+# which writes the blob verbatim, never `git checkout -- <file>`.
+ROTTED=0
+ROTTED_LIST=""
 # EVERY mutated file is backed up by COPY and restored by COPY, verified by hash.
 # NEVER `git checkout --` : that restores from HEAD, so it silently discards
 # UNCOMMITTED work. One row here did exactly that and destroyed edits made
@@ -94,7 +112,24 @@ mutate() { # perl-expression, file
   # mutation that failed to apply would have produced a row that proves nothing --
   # a vacuous gate, which is what HT-D60 Clause 4 is about.
   perl -0pi -e "$1" "$2"
-  cmp -s "$TMP/$(basename "$2").orig" "$2" && echo "!! MUTATION DID NOT APPLY (the text moved): $1"
+  # FATAL SINCE 2026-09-14, and the reason is a full pass that lied.
+  #
+  # This detection has always worked. What it did was ECHO A LINE and return 0 --
+  # so the row went on to run a CLEAN suite, and report() printed GATE: PASS for a
+  # row that had planted nothing. Seven rows did exactly that in one run, each
+  # announcing its own failure, in a 61-row table where seven warnings scroll past.
+  # They were found only because the danger signals were grepped for deliberately,
+  # and the pass exited 0 throughout.
+  #
+  # A warning that does not change the verdict is not a gate. A row that cannot
+  # plant its defect must STOP THE PASS: the run is not evidence, and the one
+  # thing worse than no evidence is evidence that reads green.
+  if cmp -s "$TMP/$(basename "$2").orig" "$2"; then
+    ROTTED=$((ROTTED + 1))
+    ROTTED_LIST="$ROTTED_LIST
+    row $((ROW + 1)) ($2): $1"
+    echo "!! MUTATION DID NOT APPLY (the text moved): $1"
+  fi
 }
 # REAP AFTER EVERY ROW. Forty rows is forty headless Chrome launches, and a
 # profile process that outlives its --dump-dom accumulates. A backgrounded pass
@@ -690,3 +725,28 @@ rm -f "$TMP"/*.orig
 echo "backups cleared (a leftover .orig now means a run was interrupted, not that one finished)"
 echo "git status (expect nothing but untracked tests/.tmp):"
 git status --short
+
+# THE PASS IS NOT EVIDENCE IF ANY ROW PLANTED NOTHING. Loud, last, and non-zero.
+# The previous design printed each failure inline and still exited 0, so a run
+# with seven dead rows was indistinguishable at a glance from a clean one -- and
+# was read as clean, committed, pushed and deployed.
+if [ "${ROTTED:-0}" -gt 0 ]; then
+  echo
+  echo "==================================================================="
+  echo "!! $ROTTED ROW(S) PLANTED NOTHING -- THIS PASS IS NOT EVIDENCE"
+  echo "==================================================================="
+  echo "A row whose mutation does not apply runs a CLEAN suite and reports"
+  echo "GATE: PASS while testing nothing at all."
+  echo "$ROTTED_LIST"
+  echo
+  echo "FIRST check line endings. A multi-line pattern using \\n cannot match a"
+  echo "CRLF file, and 'git checkout -- f' rewrites line endings under"
+  echo "core.autocrlf. Restore with 'git show HEAD:f > f' instead. Measure with"
+  echo "  perl -ne '\$c++ if /\\r\$/; END { print 0+\$c }' <file>"
+  echo "and NOT with grep -c on a CR pattern, which reported every line as CRLF"
+  echo "on a known-LF control file."
+  echo
+  echo "THEN check the pattern itself: match the SHAPE, never a literal the"
+  echo "product legitimately changes (a version string, a date, a count)."
+  exit 1
+fi

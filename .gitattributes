@@ -1,4 +1,13 @@
 # Shell scripts must stay LF so the committed gate runner executes on any OS.
 *.sh text eol=lf
+# EVERY file the defect pass mutates must stay LF in the WORKING TREE, because
+# its mutations are multi-line perl patterns using \n. Under core.autocrlf=true a
+# `git checkout` rewrites a checked-out file to CRLF, and \n then matches nothing
+# -- which silently broke seven defect rows on 2026-09-14. They did not error;
+# they reported GATE: PASS while planting nothing. The blobs were LF throughout;
+# only the working copy was converted, by the recovery step itself.
+*.js   text eol=lf
+*.html text eol=lf
+*.md   text eol=lf
 # Binary assets -- never apply text/EOL conversion.
 *.png binary
