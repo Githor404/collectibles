@@ -1263,6 +1263,74 @@ That closes the episode. Four things are worth keeping, in order of how far they
 
 **Also corrected:** the row count reads **61**, not 60. The census grep was anchored `^[a-z]`, which silently dropped `EXIF pin removed` — the same anchor bug `tests/README.md` already records happening three times.
 
+## R5 — The distribution surface — PRE-REGISTERED, FORKS OPEN (2026-09-14; NOT built)
+
+**The problem, measured on a real book.** Amazing Spider-Man #151: 98 sold, 84 rendered after the client-side filter, spanning **$2.00 to $2,300** — a 1000× range presented as a vertical list of 84 rows. The list is *correct*; every row is a real sale and the refusals hold. It is also unreadable, and every explanatory sentence competes with the data for the same screen.
+
+**The core claim, and why rendering it is honest rather than decorative.** A price distribution over 98 sales is **not one population**. Raw copies, mid-grade and slabbed are superimposed, and eBay's search tier supplies no field that separates them — *measured*, not argued: three books at an identical `Pre-Owned / 3000` sold for $9, $29.99 and $89 (D7), and no Grade, Certification or Variant field exists on a result (D10). But the populations separate **by mode**. Clusters with gaps between them are distinct markets, and the gaps are the grade boundaries the data refuses to state. **This is D8's "a scatter is the claim" rendered instead of written** — the surface stops asking the reader to reconstruct a shape from 84 ordered numbers.
+
+### What the data can support — measured before designing
+
+The ten fields as returned (recorded in R2b's probe): `keyword · itemId · title · condition · conditionId · endedAt · soldPrice · soldCurrency · listingType · isBestOfferAccepted`.
+
+**Four findings that shape the slice, and the first is a defect:**
+
+1. **`listingType` arrives and `parseComps` throws it away.** `COMP_KEYS` (`app.js:1732`) *declares* `listingType` and `conditionId`; the row builder (`1745–1753`) keeps neither. **No assertion pins the two together** — `CQ5 GATE` only checks what is *absent* from `COMP_KEYS`. So a declared contract and its consumer are free to drift, and have. Nothing breaks today because nothing reads the field; **R5 is the slice that makes it matter.** This is D3's shape exactly: both sides pass their own assertions while disagreeing about one field.
+2. **`listingType`'s ENUM VALUES ARE UNMEASURED.** The probe recorded the field's presence, never its range. "Listing-type encoding is exact" **cannot be gated against an unknown enum**, and a surface that renders an unrecognised value silently as "other" is D5's shape — a discriminator that stops discriminating looks exactly like one that works. **A value census is a precondition of the encoding, not a detail of it.**
+3. **`listingType` and `isBestOfferAccepted` are ORTHOGONAL**, not three values of one thing: a `buy_it_now` can be best-offer-accepted. "Three marks" therefore either loses that or double-counts it. **A modelling choice, surfaced as a fork rather than assumed.**
+4. **Both fields are trustworthy only because of a pin made for an unrelated reason.** With `includeCompletedListings: false` the actor reports a Best-Offer sale's **asking price in `soldPrice`** and relabels it `buy_it_now`. R2b pinned the flag `true` to protect brief rule 7; **R5 inherits that dependency and should say so**, because a vendor default flip would now corrupt the marks as well as the prices.
+
+### Ruled in advance — not forks
+
+- **No fitted model, kernel density, asserted cluster count, smoothing or trendline.** n=98 is enough to *see* modes and not enough to *characterise* them; mode-fitting on small samples finds structure in noise. The app draws the dots, the eye finds the modes — refused for the same reason D8 refuses an average.
+- **No bins that invent counts.** One mark per sale; removing a row removes a mark.
+- **Extraction only, never inference** (§5, if it ships): `"CGC 9.8"` → 9.8; `"looks like a 9.4"` → nothing; **`"CGC READY"` → NOT slabbed**, which is D10's adversarial case and the test that decides whether the feature works or poisons the data.
+- **The seller's title remains the record.** An extracted grade is a derived field *beside* it, never replacing it (D4's two objects). A wrong extraction must be visible, not laundered.
+- **Disclosure folding cuts where the sentence changes job** (HT-D53). Fold the *why*, keep the *what*.
+
+### The five reads — proposal
+
+Your lean was modes + listing type in v1, the other three named. **I'd split them differently, because two of the five are not features at all.**
+
+| read | proposal | reason |
+|---|---|---|
+| **modes** | **v1** | the slice's whole point |
+| **auction vs BIN within a mode** | **v1** | this *is* §2's encoding once drawn — it costs nothing beyond the marks themselves |
+| **dispersion within a mode** | **free, not a feature** | an emergent property of drawing one mark per sale on a legible axis. Nothing to build and nothing to park; it arrives with the plot or the axis is wrong |
+| **time-to-sell** | **parked** | needs `endedAt` as a *second visual dimension* on a 360px surface — a real design cost, and the first thing that would overload the plot |
+| **best-offer density** | **parked, and blocked** | needs a third encoding channel *on top of* listing type, so it cannot be designed before the orthogonality fork is ruled |
+
+### §5 title extraction — proposal: **its own slice, after R5**
+
+Three reasons, the third being the one I'd argue hardest:
+
+1. It adds a **third real call** and another beat to staged feedback — a different kind of risk from anything in R5.
+2. Its failure mode is **data poisoning** (D10's adversarial case), where R5's is representational. Mixing them means one defect pass covering two unrelated hazards.
+3. **The plot is the instrument that would reveal a bad extraction.** A "9.8" label sitting inside the $9 mode is visible the instant the dots are drawn — but only if the dots are already known-good. Ship the plot unlabelled, confirm it, *then* let labels land against a surface whose correctness is established. That is **D14's shape**: the diagnostic ships before the mechanism whose failures it exists to reveal.
+
+### Disclosure folding — the inventory, and one conflict with a standing decision
+
+**Fold** (the *why*): the query-derivation note (`app.js:1623`); the provenance half of the raw/slab paragraph — *"eBay's search results carry no grade and no certification field…"*; the trace line (note: it lives on the **capture outcome modal**, a different surface from the comps list).
+
+**Keep** (anything that changes what a number *means*): the kept count; the 90-day window; *"this lookup cannot tell a raw copy from a graded slab"*; *"Read them — a slabbed 9.8 and a beaten reading copy are both in this list."*
+
+**Already gate-protected, which is fortunate:** `CQ7 GATE (Fork C)` asserts the window is stated **with the count, on the surface, every render**, and `CQ8 GATE` covers the zero-comps branch. **HT-D53's safety control therefore has an existing anchor** — the folding must leave both green, and a fold that hides the count or the window fails a gate that already exists rather than one invented for this slice.
+
+**The conflict.** *"The 'pricing is not built' notices"* does not exist in the form assumed. Three variants (`566`, `793`, `1216`) say *"Identification is not built yet"* and sit behind `!visionReady()`, which the shipped contract makes false — **unreachable scaffolding that wants deleting, not folding**. The one live notice is `2350`, *"No price lookup is built, so nothing uses this token"* — and **D9 requires that to be visible**, because it is the exit for a stranded credential. Folding it would re-strand the token D9 exists to surface. **Ruled needed.**
+
+**Mechanism: reuse `citeBlock`** (`app.js:267`) — `<details class="cited"><summary>…</summary><div class="citebody">…</div></details>`, already shipped with CSS. A second folding mechanism would be `COMP_KEYS` vs `parseComps` all over again.
+
+### Gate obligations
+
+- **Every mark corresponds to exactly one row**, and removing a row removes a mark (planted control both directions).
+- **No fitted curve, smoothed density or asserted band boundary** anywhere in the rendered surface — planted control.
+- **Listing-type encoding is exact** — *blocked on the enum census*; plus an **unrecognised value must render visibly**, never silently absorbed.
+- **A tap shows the verbatim seller title** (D10: the only grade signal there is).
+- **Folded blocks are one tap from the surface; the kept statements are NOT foldable** — HT-D53's planted safety control, anchored on the existing `CQ7`/`CQ8`.
+- **`COMP_KEYS` and `parseComps` agree** — the divergence above, closed and pinned.
+- **Layout gate extended to the plot at 360px**, and it must measure the plot *populated*, not empty — the want-list flag passed a layout gate while rendering nothing, and that is one slice old.
+- **CQ7 holds**: every price on the surface is a sale or the labelled ask.
+
 ### Assertion delta: 416 → 431 (+15), re-pinned in this commit
 
 13 W assertions + the 2 SH1 shipped-shell checks. `APP_VERSION` moved to **0.2.0** with a dated `VERSION_LOG` entry — the shell changed, and `check-version.sh` demanding that bump is D14's machinery working rather than misfiring.

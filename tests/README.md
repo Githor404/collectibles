@@ -193,6 +193,14 @@ printf 'a\nb\n'     > l.txt   # crlines must read 0  <-- the half that matters
 
 A control that only demonstrates the positive case proves the instrument can *say yes*, never that it can say no.
 
+### A truncated result is not a complete one, and the tool says so
+
+A search for a constant's usages returned hits in the declaration and two comments, and the conclusion drawn was *"no render-path usage at all"* — recorded as a finding about a comment being stale. The output's last line read **`[Showing results with pagination = limit: 60]`**. The usages were past the cut. Two gates already asserted the behaviour the finding claimed was missing.
+
+**Read the truncation notice before reading the results.** When a search is being used to prove an *absence*, either raise the limit until the notice disappears, or narrow the pattern until the whole result fits — an absence measured inside a window is only an absence *in that window*.
+
+This is the same family as the entry above: the instrument reported something true (those were real hits) in a way that supported a false conclusion. **Absence is the expensive direction to get wrong**, because there is nothing on screen to contradict it.
+
 ### NEVER `git checkout -- <file>` — and the second reason
 
 `defect-pass.sh`'s header has always banned it: it restores from HEAD, so it silently discards uncommitted work. On 2026-09-14 it cost something else entirely.
