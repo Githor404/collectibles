@@ -52,10 +52,21 @@ window.setLS({});
   window.addEventListener('error', function (e) {
     res(false, 'HARNESS: uncaught exception aborted the synchronous suite -- cases after it did NOT run', String(e.message) + ' @' + (e.lineno || '?'));
   });
-  // Host elements the renderers paint into, mirroring the shell. That the SHELL
-  // has them is what the iframe cases and layout-gate.ps1 prove.
+  // Host elements the renderers paint into, mirroring the shell.
+  //
+  // D16: the comment here used to claim "that the SHELL has them is what the
+  // iframe cases and layout-gate.ps1 prove." That was FALSE for #versionNotice
+  // and #buildLine for an entire slice -- 17 assertions green against elements
+  // index.html did not contain. So the claim is now a GATE rather than a
+  // comment: mk() RECORDS every id it constructs, and an SH1 census requires
+  // each to exist in the shipped shell. Recording rather than listing is the
+  // point -- a hand-kept list would have covered the 14 in the array below and
+  // silently missed the 10 constructed individually, which is the same
+  // looks-complete-and-isn't failure the census exists to catch.
+  var MK_IDS = [];
   (function ensureDOM(){
     var mk = function (tag, id, cls, parent) {
+      if (MK_IDS.indexOf(id) < 0) MK_IDS.push(id);
       if (document.getElementById(id)) return document.getElementById(id);
       var e = document.createElement(tag); e.id = id; if (cls) e.className = cls;
       (parent || document.body).appendChild(e); return e;
@@ -1012,6 +1023,47 @@ window.setLS({});
     res(!!vn && (vn.style.display === 'none' || vn.innerHTML.indexOf('vnhead') >= 0),
         'SH1 GATE (D14): the shipped notice is either HIDDEN or has genuinely rendered a heading -- never a blank accent-bordered card sitting on the page',
         vn && vn.style.display + '/' + (vn.innerHTML.length));
+    // ---- D16: THE PRESENCE CENSUS ------------------------------------------
+    // Every element the harness CONSTRUCTS must also exist in the shipped shell.
+    // mk() records them itself, so a new mk() call enrols automatically -- a
+    // hand-kept list would have covered the 14 in the array and silently missed
+    // the 10 built individually, which is the same looks-complete-and-isn't
+    // failure this census exists to catch.
+    //
+    // The single deliberate absence is PINNED WITH ITS REASON: D9 removed the
+    // price-guide credential field because no call uses it, so requiring the
+    // shell to carry #credBox-prices would require the app to re-ship the dead
+    // end D9 deleted. It carries a control in the other direction (D3): the
+    // exception must still be ABSENT, or it has quietly come back.
+    var SHELL_ABSENT = ['credBox-prices'];
+    var shellMissing = MK_IDS.filter(function (id) {
+      return SHELL_ABSENT.indexOf(id) < 0 && !D.getElementById(id);
+    });
+    res(shellMissing.length === 0,
+        'SH1 GATE (D16): EVERY element the harness constructs also exists in the SHIPPED shell -- 17 VN assertions ran green while index.html contained neither #versionNotice nor #buildLine, and this census is what would have said so at the moment it happened',
+        shellMissing.join(',') || 'none missing');
+    res(SHELL_ABSENT.every(function (id) { return !D.getElementById(id); }),
+        'SH1 GATE (D16/D9): and the ONE deliberate absence is STILL absent -- the exception is a pinned manifest with a control, never a hole in the census',
+        SHELL_ABSENT.join(','));
+    // A CONTROL ON THE CENSUS ITSELF. An empty MK_IDS would let it pass
+    // vacuously -- the empty-grep error rebuilt as a gate. Re-pin deliberately.
+    res(MK_IDS.length === 24,
+        'SH1 GATE (D16): the census actually ENUMERATED the constructed ids -- a clean scan is evidence only once something proves the scan was capable of failing',
+        String(MK_IDS.length));
+    // ---- D16: CONTENT, not presence, on the live refresh() path -------------
+    // renderBadge() writes textContent unconditionally on every refresh, so an
+    // empty badge in the shipped shell means the paint never happened at all.
+    var sbadge = D.getElementById('storeBadge');
+    res(!!sbadge && String(sbadge.textContent).trim().length > 0,
+        'SH1 GATE (D16): the shipped storage badge HOLDS text after boot -- presence proves only that the div is in the HTML, which #askBox also was for the whole slice in which nothing painted it',
+        sbadge && JSON.stringify(String(sbadge.textContent).slice(0, 40)));
+    // renderCaptureBtn() paints on EVERY branch -- the no-key note, the capture
+    // row, or the byoks line (app.js 1216 / 1227 / 1237) -- so an EMPTY
+    // #captureBox in the shipped shell means refresh() never reached it at all.
+    var cbx = D.getElementById('captureBox');
+    res(!!cbx && String(cbx.innerHTML).trim().length > 0,
+        'SH1 GATE (D16): the shipped capture box HOLDS markup after boot -- every branch of renderCaptureBtn paints something, so empty means the paint never happened rather than that a branch was quiet',
+        cbx && String(cbx.innerHTML).length);
     // A token saved by an EARLIER build must not be stranded: it appears in
     // Storage with a way out, and only when it exists.
     W.CT.credClear('prices');
@@ -1106,6 +1158,67 @@ window.setLS({});
         res(WF.calls.length === 1 && WF.calls[0].url.indexOf('api.x.ai') > 0, 'SH2: a real image through the real DOM path FIRES THE REQUEST');
         res(!!W.CT.captureResult() && W.CT.credCap('vision').used === 1,
             'SH2: opens the result, and the counter moves -- "used today: 0" was HT-D47\'s tell');
+        // ---- D16: R1's PRIMARY SURFACE, through the REAL path ---------------
+        // #confirmedBox carried TEN harness references and NO shipped-shell
+        // assertion -- the exact configuration __setComps was in. This accepts
+        // via captureAccept(), the shipped button's own entry point
+        // (app.js:692), which reaches VISION.accept -> identityAccept ->
+        // renderConfirmed. It must NOT call renderConfirmed() by hand: a fixture
+        // that calls the renderer itself is precisely what hid the seam
+        // divergence behind 27 green assertions, and building this gate that way
+        // would reproduce the defect inside the gate meant to catch it.
+        // A MULTI-FACT PROBE rather than a hypothesis. Two hypotheses read off
+        // the source were both wrong about __setComps; a probe settled it in one
+        // run. harnessLen is the cross-document check -- if the renderer painted
+        // the HARNESS's #confirmedBox instead of the iframe's, that is a
+        // different defect wearing the same symptom. foot carries the ACTIVE
+        // contract's accept label, which separates the synthetic contract from
+        // the shipped one.
+        // MEASURED, not reasoned about. The first attempt asserted here while
+        // SH2's SYNTHETIC contract was installed, whose accept() sets a window
+        // flag and returns {ok:true} without touching CONFIRMED. A multi-fact
+        // probe said so in one run: acc={"ok":true} resultBefore=true
+        // confirmed=false boxInShell=true shellLen=0 harnessLen=0 foot=">Use
+        // this<". Two things that probe earned: harnessLen=0 ruled out a
+        // cross-document paint, and acc.ok was TRUE -- an assertion trusting the
+        // return value would have passed against a surface that never painted,
+        // which is D16's own failure mode reappearing inside D16's gate.
+        //
+        // So restore the SHIPPED contract and drive the REAL one-door path with
+        // the app's OWN sample (ID1 gates that ID_SAMPLE and the parser cannot
+        // drift apart), then accept through captureAccept() -- the shipped
+        // button's entry point, app.js:692. renderConfirmed() is never called by
+        // hand: a fixture that calls the renderer itself is exactly what hid the
+        // __setComps divergence behind 27 green assertions.
+        var prevContract = W.CT.setVisionContract(W.CT.IDENTITY_CONTRACT);
+        W.CT.captureDiscard();
+        var opened = W.CT.openCaptureResult(W.CT.ID_SAMPLE);
+        var acc = W.CT.captureAccept();
+        var cbox = D.getElementById('confirmedBox');
+        var chtml = cbox ? String(cbox.innerHTML) : '';
+        var harnessBox = document.getElementById('confirmedBox');
+        var probe = 'opened=' + JSON.stringify(opened && opened.ok) +
+                    ' acc=' + JSON.stringify(acc) +
+                    ' confirmed=' + !!W.CT.confirmedIdentity() +
+                    ' boxInShell=' + !!cbox + ' shellLen=' + chtml.length +
+                    ' harnessLen=' + String(harnessBox ? harnessBox.innerHTML.length : -1);
+        res(!!acc && acc.ok === true && chtml.indexOf('cfhead') >= 0,
+            'SH2 GATE (D16): accepting through the SHIPPED BUTTON PATH paints #confirmedBox in the SHIPPED shell -- R1s primary surface, and until now nothing asserted the real page ever received it',
+            probe);
+        res(chtml.indexOf('Confirmed:') >= 0 && chtml.indexOf('Amazing Spider-Man') >= 0 &&
+            !!W.CT.confirmedIdentity(),
+            'SH2 GATE (D16/HT-D63): and it HOLDS the identity text by NAME, not merely a container -- content is the half that presence cannot see',
+            probe);
+        // RESTORE BOTH HALVES, and assert it. captureAccept leaves CONFIRMED
+        // set, and this block borrowed the contract: NS runs next and passed
+        // 16/16 with the SYNTHETIC one installed, so leaving the identity
+        // contract in place would change the parser underneath it.
+        W.CT.clearConfirmed();
+        W.CT.captureDiscard();
+        W.CT.setVisionContract(prevContract);
+        res(String(D.getElementById('confirmedBox').innerHTML) === '' && !W.CT.confirmedIdentity() &&
+            W.CT.captureResult() === null,
+            'SH2 GATE (D16): and "Start over" EMPTIES the shipped surface, with the borrowed contract handed back -- the cleanup this gate performs is itself gated');
       });
     });
   });

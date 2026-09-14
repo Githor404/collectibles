@@ -1063,7 +1063,21 @@ Row 55 and 56 reach `check-version.sh` **directly** rather than through `run-dat
 | `index.html` | `a843d7f639394d17` | `c7965be5c83d2e6e` |
 | `app.js` | `18204c050e559ac4` | `ea70d2d2d1aaabde` |
 
-Both matched `HEAD` about 15s after the push. **The Pages URL was confirmed by measuring it, not by remembering it** — the repo contains no `github.io` string anywhere, so the address was inferred from the remote and then checked: a 200, and bytes identical to `HEAD~1`, which is what makes the *after* comparison mean something. The build line served to a device now reads `collectibles v0.1.0`.
+Both matched `HEAD` about 15s after the push. The build line served to a device now reads `collectibles v0.1.0`.
+
+### The deploy target, recorded so it is never re-derived
+
+- **Live:** `https://githor404.github.io/collectibles`
+- **Remote:** `github.com/Githor404/collectibles`, branch `main`
+
+**Verify by byte fingerprint, never by the push succeeding.** For `index.html` and `app.js`:
+
+```sh
+curl -fsS -H 'Cache-Control: no-cache' "$BASE/$f" | tr -d '\r' | sha256sum | cut -c1-16   # served
+git show "HEAD:$f"                                | tr -d '\r' | sha256sum | cut -c1-16   # intended
+```
+
+**Why it is written down.** Until this entry the repo contained **no `github.io` string anywhere**, so every deploy check re-derived its own target from the remote. *A deploy check that re-derives its target is one bad remote away from verifying the wrong thing* — and it would report PASS while doing it. The URL was confirmed on 2026-09-14 by measurement rather than memory: a 200, plus bytes identical to `HEAD~1`, which is what makes the *after* comparison mean anything at all.
 
 ## Want-list as a capture-time filter, and schema v2 — PRE-REGISTERED, ONE FORK OPEN (2026-09-14; NOT built)
 
@@ -1086,6 +1100,69 @@ I reported a collision — *`normalizeState` is an allowlist rebuild that would 
 
 **My leaning: Option A**, and the reason is D14's shape rather than convenience — the want-list does not need a schema bump, so taking one on buys the wipe risk for nothing and couples a user-facing feature to the riskiest change in the codebase. Schema v2 is worth doing on its own terms, with the migration branch as its subject rather than its side effect.
 
-### Stopped here for a ruling
+### RULED: Option A — `settings.wants`, no schema bump (2026-09-14)
 
-Not built. The pairing was ruled on a report of mine that turned out to be wrong about which keys `normalizeState` discards, so the ruling deserves to be re-made against what the code does.
+The want-list does not need the bump, so taking it on would buy the wipe risk for nothing. The want-list slice proceeds against `settings`, which existing assertions already pin as free-form and deeply preserved.
+
+### Schema v2 — NAMED AND PARKED, not vaguely deferred
+
+Schema v2 gets **its own slice, with the migration branch as its subject** rather than as a side effect of shipping a feature. Its three obligations, ruled in advance:
+
+1. **A migration branch for `v < SCHEMA_VERSION`.** `boot()` has none: a v1 state read by a v2 app falls through to `emptyState()` and `Store.saveState()` **overwrites the user's data at boot, silently, with no undo slot.** That is data loss *created by the bump itself*, in a repo whose discipline is largely about not doing that.
+2. **A backup written before any rewrite** — the rolling undo slot (HT-D3/HT-D5), taken before the migrated state is saved, never after.
+3. **A gate seeded with a real v1 state**, exercising the migration end to end.
+
+**Not a defect today, and the reason matters:** with `SCHEMA_VERSION = 1` and a minimum valid version of 1, `v < SCHEMA_VERSION` is **unreachable** — which is exactly why nothing gates it (HT-D60 Clause 4: a fixture that cannot exhibit the failure is not a gate). **The bump is what would create the case.** So the gate cannot be written ahead of the slice; it must land in the same commit as the bump, which is D14's shape applied to storage.
+
+## D16 — the constructed-element census, and content checks on the shipped shell — BUILT (2026-09-14)
+
+Ruled as D16 after **two instances in two consecutive slices**: `__setComps` (the harness supplied the *call*) and the version slice (the harness supplied the *element*). The generalisation is the subscriber's: **any assertion that runs against a constructed element proves the function, never the shipped page.**
+
+### What shipped
+
+**`mk()` records every id it constructs.** Structural, not a hand-kept list — a new `mk()` call enrols automatically. This mattered concretely: a list transcribed from the array literal would have covered **14** ids and silently missed the **10** built individually, which is the same looks-complete-and-isn't failure the census exists to catch.
+
+**The census (SH1).** Every constructed id must exist in the shipped shell, with:
+
+- a **pinned manifest of deliberate absences** — exactly one, `credBox-prices`, because D9 requires no field where no call exists. Without the manifest the census would demand the app re-ship the dead end D9 deleted;
+- a **control in the other direction** (D3): the exception must still be *absent*, or it has quietly come back;
+- a **control on the census itself**: `MK_IDS.length === 24`. An empty list would make it pass vacuously — the empty-grep error rebuilt as a gate.
+
+**Content assertions against the shipped shell**, for `storeBadge` and `captureBox` (SH1) and `confirmedBox` (SH2).
+
+### The coverage finding, measured at ruling
+
+24 ids constructed, 30 declared by the shell, **23 in both, 1 deliberately absent**. Of the 23, **13 carried a shipped-shell assertion and 10 did not**.
+
+**Closed by this slice:** `confirmedBox`, `storeBadge`, `captureBox`.
+
+**Parked by name, with what each needs** — not deferred vaguely:
+
+| id | why it is not covered yet |
+|---|---|
+| `replyReport` | painted only after a paste attempt; needs a driven paste in the iframe |
+| `toast` | transient, cleared on a timer; needs the clock seam to assert deterministically |
+| `prerestoreBox`, `prerestoreWrap` | exist only during a restore; need a driven restore in the iframe |
+| `outcomeTitle`, `outcomeX`, `outcomeScrim` | modal internals. OM3 gates the dismiss *behaviour* in the harness, so the specific gap is that the **shipped** modal's wiring is unasserted |
+
+### The probe episode, recorded because it repeated a lesson and paid
+
+The `confirmedBox` assertion was first placed inside SH2 **while SH2's synthetic contract was installed** — `TEST_CONTRACT.accept` sets a window flag and returns `{ok:true}` without touching `CONFIRMED`. Rather than act on that hypothesis, a **multi-fact probe** was run: `acc={"ok":true} resultBefore=true confirmed=false boxInShell=true shellLen=0 harnessLen=0 foot=">Use this<"`.
+
+Two facts that probe earned and a source reading would not have: **`harnessLen=0` ruled out a cross-document paint** (the renderer writing into the wrong `document`, a different defect with the same symptom), and **`acc.ok` was TRUE** — so an assertion trusting the accept's return value would have passed against a surface that never painted. **D16's own failure mode, reappearing inside D16's gate.**
+
+The fix restores the shipped contract, drives the real one-door path with the app's **own** `ID_SAMPLE` (ID1 gates that the sample and parser cannot drift apart), and accepts through `captureAccept()` — the shipped button's entry point. `renderConfirmed()` is never called by hand. It also **hands the borrowed contract back**, and `NS` passing 16/16 is the evidence that worked, since NS parses under whichever contract is installed.
+
+### Assertion delta: 408 → 416 (+8), re-pinned in this commit
+
+3 census (presence, deliberate-absence control, enumeration control) + 2 SH1 content (`storeBadge`, `captureBox`) + 3 SH2 (`confirmedBox` paint, identity text by name, gated cleanup).
+
+### NOT YET DEMONSTRATED (HT-D60 Clause 1)
+
+**The census has not been run against its defect.** Two rows are being added: one deleting `#versionNotice` from `index.html`, which the census must name; one stripping `renderConfirmed();` out of `identityAccept`, which re-plants the `__setComps` shape itself and is the row that decides whether the content assertion is real. Until this section says otherwise, the census is **designed, not demonstrated.**
+
+### What it does not cover (Clause 2)
+
+- **The census is presence-only.** It cannot distinguish a painted element from an unpainted one — `#askBox` was present throughout the slice in which nothing painted it. That is what the content assertions are for, and they cover **3 of 10**.
+- **It censuses what the HARNESS constructs.** The shell declares 30 ids; 6 are outside the census entirely because no harness block builds them.
+- **`MK_IDS.length === 24` is a pin, not a property.** Adding a `mk()` call requires a deliberate re-pin, in the same commit.

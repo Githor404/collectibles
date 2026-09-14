@@ -273,6 +273,29 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 
 **What was removed, and what was not.** The prices Settings card is gone; the prices **role keeps every piece of its machinery**, which the gates still exercise — pacing at 1 call/s, redaction of an echoing provider, and the `auth: 'none'` proof that the metering server of D1 is a table edit. **The capability is intact; only the invitation is gone.**
 
+## D16 — An assertion against a constructed element proves the function, never the shipped page (governance, 2026-09-14)
+
+**Two instances in two consecutive slices. That makes it a pattern, not an incident.**
+
+**R3.** `#askBox` existed in the shipped shell, but `__setComps` called `renderComps()` where the real path calls `renderComps(); renderAsk();`. **27 assertions were green** because `akSeed()` called `CT.renderAsk()` by hand — the fixture supplied exactly what the seam omitted. Found by the layout gate, which has no fixture to help it, and only after two hypotheses read off the source were both wrong.
+
+**The version slice.** **17 VN assertions were green while `index.html` contained neither `#versionNotice` nor `#buildLine`.** Every one ran against the harness's `mk('div','versionNotice')`. The machinery was shipped code with no gate on the page at all.
+
+### The rule
+
+A harness that constructs its own DOM proves the **function under test**. It proves **nothing** about the page that ships. Where a function writes to a named element, the suite must **also** assert against the **shipped shell, loaded as served** — and assert **content, not presence** (HT-D63: HealthTracker told people to copy from an empty box for weeks because its gate asserted that a box *existed*).
+
+### Two sub-failures under one banner, and they need different gates
+
+- **The harness supplies the ELEMENT.** The shell lacks it entirely. Caught by a **presence census**: every id the harness constructs must exist in the shipped shell, except a **pinned manifest of deliberate absences with their reasons** — today exactly one, `credBox-prices`, which D9 requires to be absent because no call uses it. Without the manifest the census would demand the app ship the field D9 removed, so the exception carries a control asserting it stays absent (D3's both-directions convention).
+- **The harness supplies the CALL.** The element exists, but nothing on the real path paints or wires it. **A presence census cannot see this** — `#askBox` was present throughout. Only a content assertion against the shipped shell catches it.
+
+### Measured when this was ruled (2026-09-14)
+
+24 ids constructed by the harness, 30 declared by the shell, **23 in both, 1 deliberately absent**. Of the 23, **13 carry a shipped-shell assertion and 10 do not**: `confirmedBox`, `captureBox`, `storeBadge`, `replyReport`, `toast`, `prerestoreBox`, `prerestoreWrap`, `outcomeTitle`, `outcomeX`, `outcomeScrim`. **`confirmedBox` is the sharpest** — R1's primary surface, ten harness references, and `renderConfirmed()` on the live `refresh()` path: the exact configuration `__setComps` was in.
+
+**The presence census is a REGRESSION gate, not a discovery gate.** It finds nothing today, because both known instances were fixed in the slices that produced them. It would have caught the version slice at the moment of introduction, and `#askBox` before R3. Saying it finds something now would be the empty-grep error again — a clean scan is only evidence once a control has shown the scan can fail.
+
 ## D15 — The want-list is a capture-time FILTER, and it errs toward firing (2026-09-14)
 
 **Scope correction, ruled.** The want-list is **in**, and the reason it is in is what it does: **not a list to browse, but a filter that fires on capture.** Photograph a box at a flea market and the app says which of these you were already looking for. Browsing a list you wrote is something a notes app does; recognising an entry in a box you are standing in front of is not.

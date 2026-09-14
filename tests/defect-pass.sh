@@ -574,6 +574,30 @@ report "version with no changelog line" "has no VERSION_LOG changelog entry" "$(
 mutate "s/\{ v: '0\.1\.0', d: '2026-09-14', note:/{ v: '0.1.0', note:/" app.js
 report "changelog entry with no date" "every entry needs one" "$(run_cv)"; restore
 
+# --- 57. an element the harness constructs, GONE from the shipped shell -------
+# D16's first arm, and the exact defect the version slice shipped: 17 assertions
+# green while index.html contained neither #versionNotice nor #buildLine, because
+# every one of them ran against the harness's own mk('div','versionNotice').
+#
+# The expected string is the DIAGNOSTIC, not the assertion label. The label prints
+# on the PASS line too, so matching it would let this row match its own success --
+# the tautology that made CQ7 unfailable for 347 consecutive runs.
+mutate 's/ *<div id="versionNotice"[^\n]*\n//' index.html
+report "shell element the census constructs is missing" ":: versionNotice" "$(run_dl)"; restore
+
+# --- 58. accepted, but the shipped surface never painted ---------------------
+# D16's SECOND arm, and the one the presence census CANNOT see: the element is
+# present the whole time. This re-plants __setComps' own shape one layer over --
+# identityAccept sets CONFIRMED and then does not paint it, exactly as __setComps
+# set COMPS and did not call renderAsk(). 27 assertions survived that, because the
+# fixture called the renderer by hand; this row is what proves the replacement
+# assertion does not.
+#
+# shellLen=0 comes from the probe, which prints only on failure -- and it is the
+# fact that separates "never painted" from "painted something wrong".
+mutate 's/  renderConfirmed\(\);\n  return \{ ok: true, query: q \};/  return { ok: true, query: q };/' app.js
+report "identity accepted but never painted" "shellLen=0" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
   printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"
