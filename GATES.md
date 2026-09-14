@@ -1362,9 +1362,23 @@ All forks ruled as leaned. Assertions **431 → 463 (+32)**, re-pinned in this c
 
 **5. `PL2` was written against a fixture that could not exhibit it.** The first version tested equal-ratio spacing using $1/$10/$100 against a domain of $9–$145, where `x()` legitimately **clamps** — HT-D60 Clause 4, inside the assertion enforcing this slice's central ruling. Fixed to in-domain ratios (9→27→81), and the clamp is now **gated on purpose**, having been discovered only by colliding with it.
 
-### NOT YET DEMONSTRATED (HT-D60 Clause 1)
+### DEMONSTRATED — rows 62–66, each seen to fail (HT-D60 Clause 1)
 
-Rows **62–66** are written and **have not been run**: a sale drawn nowhere (`PL5`), a fitted line (`PL10`), the fold ceasing to fold (`R5 GATE`), an unknown listing type absorbed (`CQ12`), and a field consumed but never declared (`CQ11`). A dry-run on copies confirms all five apply — including row 64, which matches `${innerHTML}` inside a template literal, the exact place perl's `$` interpolation has bitten this repo four times. Until this section says otherwise, the R5 gates are **designed, not demonstrated**.
+Run on a tree committed first at `9494ce1`.
+
+| row | planted defect | verdict | first named failure |
+|---|---|---|---|
+| 62 | the first mark of every column dropped into **neither** `marks` nor `hidden` | `GATE: FAIL` | `PL5 GATE: ONE MARK, ONE SALE …` |
+| 63 | the axis emitted as a **polyline** | `GATE: FAIL` | `PL10 GATE (D8): NO fitted curve, smoothed density, polyline …` |
+| 64 | `citeBlock`'s body moved **outside** its `<details>` | `GATE: FAIL` | `R5 GATE (HT-D53): while the PROVENANCE … IS folded` |
+| 65 | an unrecognised listing type **absorbed** into `bin`/known | `GATE: FAIL` | `CQ12 GATE (D5): an UNRECOGNISED value renders VISIBLY …` |
+| 66 | a `from` consumed that `COMP_KEYS` never declares | `GATE: FAIL` | `CQ11 GATE (D3/R5): every field the parser CONSUMES is declared …` |
+
+**None came back `WEAK-MATCH`**, which was the second thing being watched: all five target `res()` assertions, so a weak label would have meant the expected string matched a *passing* line — the CQ7 tautology in this slice's vocabulary. Every one landed on a genuine `FAIL` line. All four mutated files restored identical to their pre-run copies; tree clean.
+
+**Row 62 is the weighted one.** One-mark-one-sale is the property the entire plot rests on, and the mutation breaks it *silently* — no error, no gap, just a distribution showing fewer sales than it was given. That is D8's failure transposed into a new medium: a picture asserting more agreement than the sales support, which is exactly what a fitted curve would do and why row 63 exists beside it.
+
+**Row 64 was the one most likely to be written wrong rather than to find something.** Its pattern matches `${innerHTML}` inside a template literal, and perl's replacement half is a double-quoted string where `$` interpolates — the hazard that has bitten this repo four times. A dry-run on a copy confirmed `\${innerHTML}` yields a literal before the row was spent.
 
 ### What this does not cover (Clause 2)
 
