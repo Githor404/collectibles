@@ -867,3 +867,55 @@ Fork A (and with it, whether R2a or R2b goes first); the ranking rules for candi
 ### What this pre-registration does not settle
 
 The actor's real input schema and output for a comics query (needs the paid probe); whether Item Specifics are reachable at all through any of these actors; N, the window, and the deepening budget, all of which want real noise data; eBay's terms position beyond "grey zone, personal tool"; and whether comps persist into any record — schema v2 is still unwritten.
+
+---
+
+## R3 — The triage surface: grade and asking price — PRE-REGISTERED, FORKS OPEN (2026-09-13; NOT built)
+
+**What it is for.** R2b produces a scatter. R3 turns it into an answer — *"you're being asked $10; 47 of these 98 sold below that."* It is the slice the product exists for, and the one where every refusal ruled so far has to hold under pressure, because a comparison is exactly where a number wants to be invented.
+
+**Ruled already, and built to rather than re-opened:** rule 4 as amended (the comparison is an **ask against a scatter** — position, counts below and above, nearest comps with titles verbatim; no $X, no midpoint, no average, no "fair", no verdict), rule 2 as amended (grade is **advisory**, recorded as attestation, never filtering the scatter — D10's adversarial reason), and rules 3 and 5 (both inputs human-supplied and attested; the asking price never read from the photo, which `ID_REFUSED_KEYS` already refuses; cover price and asking price never conflated).
+
+### Two hazards this slice CREATES, neither inherited
+
+1. **It is the first surface to show two prices at once.** The confirmed identity renders `cover_price`; the comparison renders the asking price. Rule 7 has forbidden conflating them since 2026-09-12, but until now they never co-existed on screen, so the rule has never been under load. **Both must be labelled at the point of display**, and a gate must assert they are distinguishable — not merely present.
+2. **`renderComps` rebuilds `innerHTML` in eleven places.** An ask input inside that block loses its caret on every keystroke. `renderConfirmQuery` already exists for exactly this reason — *"repainted without rebuilding the inputs — retyping a title must not cost the caret"* — so the precedent is in the file and the mistake is available to anyone who does not read it.
+
+### The forks
+
+**Fork A — where the inputs live, and how they survive a repaint.** Ruled in the brief: *after* comps return, since the comparison needs both. Open: **which block**. The ask is a property of *this seller's copy*, not of the scatter, which argues for the confirmed-identity block; but the comparison renders in the scatter, which argues for one block rather than two. **Leaning: inside the comps surface, above the scatter, with the inputs rendered ONCE and only a live comparison line repainted** — `renderConfirmQuery`'s pattern, not a second full rebuild.
+
+**Fork B — "nearest comps" when many sales share a price.** With 98 sales ties are certain. B1: nearest by absolute price distance, ties by recency. B2: nearest by distance, ties by sorted position. B3: show every sale at a tied price. **Leaning: B1 capped at three either side, AND when the cap truncates a tie group, say so — "3 of 12 at $25".** A cluster at one price is *signal*, not noise: twelve sales at $25 tells the user more than three arbitrary examples of it, and silently truncating hides the densest fact on the surface.
+
+**Fork C — a bulk rate, without inventing a per-book number.** *"$10 each, 5 for $40."* Dividing 40 by 5 manufactures $8, which the seller never said — D8's family, and rule 7's. C1: quantity + total fields, compared as a pair (but a pair cannot be placed on a single-price scatter). C2: one number, user's own arithmetic, bulk terms discarded. **Leaning: C3 — the user enters the figure THEY want compared, and the bulk terms ride alongside as attested text**, so the record reads *"$8 — your figure, from: 5 for $40"*. The app never divides; what it shows is a number the human chose and the words the seller used.
+
+**Fork D — does the ask survive Start over?** **Leaning: no on Start over, yes on re-lookup.** Start over means a different book, and an ask carried onto a new identity is brief rule 8's confidently-wrong pairing. A re-lookup with an edited query is the *same* book and the same seller, so clearing the ask there would punish refining the search.
+
+**Fork E — how D5's "no number that is not a sale or the user's own entry" extends to the marker.** E1: a row in the scatter at the ask's position, visually distinct, labelled as the user's. E2: a rank — *"47th of 98"*. E3: a percentile — *"cheaper than 52%"*. **Leaning: E1 plus counts, and explicitly NOT E3.** A count is a fact about the data; a percentile is the same fact dressed as a score, and *"cheaper than 52%"* invites *"so it's about average"* — the one inference D8 exists to refuse. **The CQ7 assertion becomes: every price on the surface is one something actually sold for, OR the single user-entered ask carrying its own label.** One exception, labelled, and a defect row that plants a second unlabelled number must fail.
+
+**Fork F — mixed currency, which is not in the brief's list.** Comps carry `soldCurrency` per row. If a lookup returns more than one, the scatter is already incomparable and the ask cannot be placed in it. **Leaning: detect it and state it, refusing the comparison the way the below-three branch states absence** — D10's shape applied to currency instead of grade. Silently mixing is the worst option and is what naive code does.
+
+**Fork G — the grade vocabulary.** Brief gives PR/FR/GD/VG/FN/VF/NM with common pluses and minuses, plus "not graded". Open: whether **numeric** grades (0.5–10.0) are also offered, since sellers write *"VF- 7.5"* in the titles the user is reading. **Leaning: descriptive only.** A numeric grade implies a precision that a hand-and-eye judgement at a table does not have, and the titles carry both forms anyway for the human to match against.
+
+### Pre-registered gates
+
+| case | asserts |
+|---|---|
+| R3-position | the ask's marker sits at the correct index among the sorted prices, **against a fixture containing ties** |
+| R3-counts | "N sold below · M sold above" are exact, and **N + M + ties-at-the-ask = the rendered count** |
+| R3-nearest | the nearest comps either side carry **verbatim titles**, and a truncated tie group states what it truncated |
+| R3-one-exception | **CQ7 extended**: every price on the surface is a sale, **or** the single labelled user ask. A second unlabelled number fails |
+| R3-no-verdict | with an ask entered, no average, midpoint, range, percentile or evaluative word appears anywhere on the surface |
+| R3-grade-inert | changing the grade changes **no comp, no order, no count** — it is a label beside the ask and nothing else |
+| R3-two-prices | **rule 7**: cover price and asking price are both labelled where shown, and neither renders adjacent to the other unlabelled |
+| R3-bulk | a bulk rate is representable with **no synthesised per-book figure** anywhere in state or on the surface |
+| R3-currency | a mixed-currency scatter **states the mismatch and refuses the comparison** |
+| R3-no-egress | the ask and the grade **never enter a request body** — CQ4 extended from theoretical to load-bearing, now that real inputs exist |
+| R3-caret | the ask input survives a comps repaint without losing focus or content |
+| R3-layout | **layout-gate extended**: at 360px the ask marker, its label and the nearest comps are disjoint rectangles, no horizontal overflow |
+
+**Defect pass required** (HT-D60), with rows at minimum for: the marker placed by a wrong comparator, a count off by one at a tie boundary, a midpoint or percentile reintroduced, the grade wired into the filter, a bulk rate divided into a per-book figure, an unlabelled second number on the surface, and the ask reaching a request body.
+
+### What this pre-registration does not settle
+
+The forks above; whether the ask or the grade persist into any record (schema v2 remains unwritten, and R3 is memory-only until it is); and whether the comparison needs a second device pass of its own, which it probably does — the first one found a layout defect that every string gate had passed.
