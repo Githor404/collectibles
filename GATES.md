@@ -1497,9 +1497,26 @@ Removing the list took the substrate out from under `akPrices`, CQ7's extraction
 
 **AK6's plot sweep was identified in R5 and never written**, which is a different fact about the record from "newly discovered". R5's own notes say `akPrices` reads `.cmpprice` spans, that marks do not have them, and that the sweep's coverage *"would silently shrink to exclude the surface where prices are now drawn"* — and then the AK5 repoint and the fold gates were written and this was not. `PL7` gated that marks *carry* `data-p`, so the property was never unguarded; what was missing was AK6's own claim reaching them. R6 made it sharper rather than softer, because the plot is now the primary surface. Written, with a paired assertion that the ask is **not** among the marks — if it ever became one, the sweep would start treating the user's figure as a sale.
 
-### NOT YET DEMONSTRATED (HT-D60 Clause 1)
+### DEMONSTRATED — rows 67–70, each seen to fail (HT-D60 Clause 1)
 
-Rows **67–70** are written and **have not been run**: the permanent list returning, the affordance buried back in the paragraph, `.ptl` back to 9px (through the layout gate, since only a computed-size measurement catches it), and — the one that matters most — **`compsListToggle` ceasing to repaint**, which leaves the absence assertion passing while its control fails. An absence gate is unfalsifiable alone; that row is what proves the pair is real.
+Run on a tree committed first at `a3940fa`.
+
+| row | planted defect | verdict | first named failure |
+|---|---|---|---|
+| 67 | the list rendered unconditionally again | `GATE: FAIL` | `R6 GATE: no full list renders BY DEFAULT …` |
+| 68 | the `.plottap` element deleted | `GATE: FAIL` | `R6 GATE: the tap affordance renders in its OWN element …` |
+| 69 | `.ptl` back to 9px | `GATE: FAIL` | `under 12px: ptl=9px:$10 \| ptl=9px:$100` |
+| 70 | `compsListToggle` stops repainting | `GATE: FAIL` | `R6 GATE: and SUMMONING produces it …` |
+
+**Row 70 is the one that proves the pair.** An absence gate — *no list renders by default* — is unfalsifiable alone: it passes just as happily against a renderer that has simply broken. Row 70 breaks precisely that, and the asymmetry is the evidence: **the absence assertion stayed green while only its control failed.** Had both failed, the control would not have been isolating what it claims to.
+
+**Row 69 failed twice before it worked, and both failures were mine.**
+
+First, its expected string was `belowFloor=1` — a guess at output I had never read. The real count is **2**, because two tick labels render. The row reported `NOTHING NAMED MATCHED -- SUSPECT THE FIXTURE`, which is the machinery working: the gate failed, my description of *how* it would fail did not match, and the harness refused to call that evidence. **That is D19 — an unmeasured quantifier — applied to a number in a fixture rather than to a word in a recommendation**, three hours after D19 was written. Repointed to `under 12px`, a line that prints *only* on violation, so it is failure-specific and independent of how many labels happen to be under the floor — because `belowFloor=2` would be correct today and would rot the moment the plot fixture's price span changed the tick count, which is exactly how row 55 died.
+
+Second, planting it revealed the gate's diagnostic read `[object SVGAnimatedString]=9px:$10`. On SVG elements `className` is an object, not a string. **The one gate written for D17 — a slice's own chrome, sized last and smallest — caught SVG chrome correctly and could not say which element it was.** Useless precisely where it exists to be useful. Fixed to `getAttribute('class')`; it now reads `ptl=9px:$10`.
+
+**Row 69's `WEAK-MATCH` label is legitimate and was predicted.** It reports through the layout gate, whose output lines are script-style and carry none of the `FAIL -` / `NOT MEASURABLE` markers `report()`'s second strict arm matches. The line genuinely does not identify itself as a failure — the same category as the two `check-refs` rows that stay weak-labelled by design.
 
 ### What this does not cover (Clause 2)
 

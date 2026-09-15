@@ -774,7 +774,16 @@ report "the tap affordance buried again" "R6 GATE" "$(run_dl)"; restore
 # Caught only by a gate that measures COMPUTED sizes on the shipped page, which
 # is why it runs through the layout gate rather than the suite.
 mutate 's/\.ptl\{fill:var\(--muted\);font-size:12px/.ptl{fill:var(--muted);font-size:9px/' index.html
-report "a label back below the type floor" "belowFloor=1" "$(run_layout)"; restore
+# EXPECTED STRING IS THE SHAPE, NOT THE COUNT. The first version said
+# "belowFloor=1" -- a guess at output never read, and wrong: two tick labels
+# render ($10 and $100), so the real count is 2. The row matched nothing and
+# reported SUSPECT THE FIXTURE, which is the machinery working.
+#
+# "belowFloor=2" would be right today and rot the moment the plot fixture's
+# price span changes how many ticks render -- D19, and exactly how row 55 died.
+# The "under 12px" line prints ONLY on a violation, so it is failure-specific
+# and independent of how many labels happen to be under the floor.
+report "a label back below the type floor" "under 12px" "$(run_layout)"; restore
 
 # --- 70. the summon control stops working ------------------------------------
 # THE CONTROL'S OWN CONTROL. R6's absence gate asserts no list renders by

@@ -217,6 +217,22 @@ Restore with **`git show HEAD:<file> > <file>`**, which writes the blob verbatim
 
 It is now fatal: the pass ends with a loud block and `exit 1`. **Controlled in both directions before it was trusted** — an impossible pattern exits 1 naming the row; a healthy row still exits 0. The second half is not a formality: a guard that failed everything would be worse than the silent pass it replaced, because it trains the reader to ignore the result. That is the want-list's own noise argument (D15, amended) pointed at the harness.
 
+### A gate can catch the right defect and be unable to name it
+
+The type-floor gate caught a 9px label exactly as designed — right count, right verdict, `LAYOUT GATE: FAIL`. Its diagnostic read:
+
+```
+under 12px: [object SVGAnimatedString]=9px:$10
+```
+
+On an SVG element, `className` is an `SVGAnimatedString` **object**, not a string, so `(e.className || e.tagName)` stringifies to that. The gate written for **D17** — *a slice's own chrome is sized last and smallest* — caught SVG chrome and could not say **which** element, which is the one case it exists for. Use `getAttribute('class')`, which works for both HTML and SVG.
+
+**How it surfaced, and this is the transferable part.** `report()` prints one line per row and discards the rest of the output. So a row can fail for the right reason while its diagnostic is gibberish, and nothing says so. It was found by **planting the defect and reading the gate's own output directly**, rather than trusting that a failing gate explains itself.
+
+**A verdict is not a diagnosis.** When a gate is new, run its defect once by hand and *read what it prints* — not whether it printed. The verdict tells you the gate fired; only the diagnostic tells you whether the next person will be able to act on it.
+
+**The same run caught the other half:** the row's expected string was a guess at output nobody had read (`belowFloor=1`, actually 2), and the harness answered `NOTHING NAMED MATCHED -- SUSPECT THE FIXTURE` rather than banking it. Prefer a failure-specific *shape* over a count — a count is a value the product can legitimately change, and that is how row 55 rotted.
+
 ## Environment
 
 - **Scope.** Browser profiles and defect-pass backups live under `tests/.tmp/` (gitignored), never `%TEMP%`. This repo's sessions stay inside their own directory.

@@ -262,7 +262,16 @@ $install = @'
       var px = parseFloat(window.getComputedStyle(e).fontSize);
       if (!(px > 0)) return;
       if (seen.indexOf(px) < 0) seen.push(px);
-      if (px < 12) under.push((e.className || e.tagName) + '=' + px + 'px:' + t.slice(0, 24));
+      // getAttribute, NOT .className. On an SVG element className is an
+      // SVGAnimatedString OBJECT, so the diagnostic read
+      // "[object SVGAnimatedString]=9px:$10" -- it caught the right elements and
+      // could not name them. For the one class of element this gate exists for
+      // (D17: a slice's own chrome, sized last and smallest), the diagnostic was
+      // useless exactly where it mattered. Found by planting the defect and
+      // READING the output rather than trusting that a failure would explain
+      // itself.
+      if (px < 12) under.push(((e.getAttribute && e.getAttribute('class')) || e.tagName) +
+                              '=' + px + 'px:' + t.slice(0, 24));
     });
     return { found: true, sizes: seen.sort(function(a,b){return a-b;}).join(','),
              under: under.slice(0, 6).join(' | '), underCount: under.length };
