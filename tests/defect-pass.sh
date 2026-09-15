@@ -751,6 +751,41 @@ report "an unknown listing type absorbed" "CQ12 GATE" "$(run_dl)"; restore
 mutate "s/from: 'conditionId'/from: 'conditionCode'/" app.js
 report "a field consumed but never declared" "CQ11 GATE" "$(run_dl)"; restore
 
+# --- 67. the permanent list returns ------------------------------------------
+# R6's central move: the plot IS the list, and 84 rows do not sit under it by
+# default. A fold was not enough -- it kept the wall of text and closed a drawer
+# over it. This makes the list unconditional again, which is the exact state the
+# slice removed, and nothing errors: the surface simply fills up.
+mutate 's/\(LIST_SHOWN \? `<div class="cmplist">/(true ? `<div class="cmplist">/' app.js
+report "the permanent list returns" "R6 GATE" "$(run_dl)"; restore
+
+# --- 68. the affordance goes back into the paragraph -------------------------
+# It WAS the last clause of a four-sentence paragraph about ratio spacing, and it
+# was found by accident. An instruction buried in provenance text reads as
+# provenance -- HT-D53's cut applied to itself. Deleting the element restores
+# exactly that, and the tap still works, so nothing fails except findability.
+mutate 's/    `<div class="plottap">Tap any mark to see that sale<\/div>` \+\n//' app.js
+report "the tap affordance buried again" "R6 GATE" "$(run_dl)"; restore
+
+# --- 69. a label back below the floor ----------------------------------------
+# D17: a slice's own chrome is sized last and smallest, because its author reads
+# it at desk distance on a large screen. The axis ticks were 9px -- the smallest
+# text in the app, on the surface built to be readable. This puts them back.
+# Caught only by a gate that measures COMPUTED sizes on the shipped page, which
+# is why it runs through the layout gate rather than the suite.
+mutate 's/\.ptl\{fill:var\(--muted\);font-size:12px/.ptl{fill:var(--muted);font-size:9px/' index.html
+report "a label back below the type floor" "belowFloor=1" "$(run_layout)"; restore
+
+# --- 70. the summon control stops working ------------------------------------
+# THE CONTROL'S OWN CONTROL. R6's absence gate asserts no list renders by
+# default, and an absence gate is unfalsifiable on its own -- it would pass just
+# as happily against a renderer that had simply broken. The paired assertion is
+# that SUMMONING produces the rows. This breaks exactly that: the flag flips,
+# nothing repaints, and the list can never be produced. The absence assertion
+# still passes; only its control fails, which is the point.
+mutate 's/function compsListToggle\(\) \{ LIST_SHOWN = !LIST_SHOWN; renderComps\(\);/function compsListToggle() { LIST_SHOWN = !LIST_SHOWN;/' app.js
+report "summoning stops producing the list" "R6 GATE" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
   printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"

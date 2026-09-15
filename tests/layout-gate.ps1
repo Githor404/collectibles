@@ -199,10 +199,18 @@ $install = @'
     // Opened rather than un-folded, because the property is about what the
     // reader sees WHEN THEY OPEN IT. A fold does not make a layout defect
     // acceptable; it just postpones it.
-    Array.prototype.forEach.call(document.querySelectorAll('#compsBox details.cited'),
-      function (d) { d.open = true; });
+    // R6: THE LIST IS SUMMONED NOW, NOT FOLDED. Opening a <details> no longer
+    // reveals it -- there is no details around it to open -- so this asks for
+    // the rows the way a person does. The property being measured is unchanged:
+    // when the rows ARE on screen, their three fields occupy disjoint
+    // rectangles. A fold never made a layout defect acceptable, and neither
+    // does a summon; it only postpones when you see it.
+    //
+    // Guarded rather than toggled blindly: __g.comps runs once per viewport, and
+    // an unguarded flip would hide the list on every second call.
+    if (!CT.compsListShown()) CT.compsListToggle();
     var row = document.querySelector('#compsBox .cmplist .cmprow');
-    if (!row) return { found:false, why:'no .cmplist .cmprow rendered (fold opened first)' };
+    if (!row) return { found:false, why:'no .cmplist .cmprow rendered (list summoned first)' };
     var p = row.querySelector('.cmpprice'), m = row.querySelector('.cmpmeta'), t = row.querySelector('.cmptitle');
     if (!p || !m || !t) return { found:false, why:'a field is not its own element: price=' + !!p + ' date=' + !!m + ' title=' + !!t };
     var R = function(e){ var b=e.getBoundingClientRect();

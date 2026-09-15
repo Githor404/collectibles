@@ -1990,12 +1990,11 @@ function renderComps() {
     citeBlock('Why it cannot tell them apart',
       `<span class="fine">eBay's search results carry no grade and no certification field, so the seller's own words are the only grade there is. ` +
       `Three books at an identical “Pre-Owned / 3000” sold for $9, $29.99 and $89 — a 10× spread at one condition code, measured rather than argued (D7).</span>`) +
-    // FOLDED: the full list. It is the provenance of every mark -- and every
-    // mark's title is one tap away on the plot, while the nearest comps stay
-    // visible beside the ask. The wall of text was the problem; the words were
-    // never the problem, so they stay reachable rather than being removed (D10).
-    citeBlock(`All ${n} sales, with the seller's own words`,
-      `<div class="cmplist">${compsListHTML(sorted)}</div>`) +
+    // SUMMONED, not folded (R6). A fold kept the wall of text and closed a
+    // drawer over it; the plot is the list now, and the words are one explicit,
+    // scope-naming action away. D10's floor holds: scanning titles stays
+    // possible, it just stops being the default.
+    compsListBlockHTML(sorted, n) +
     compsFootHTML() + `</div>`);
 }
 // FOUND BY THE LAYOUT GATE, and it was a product defect rather than a test gap:
@@ -2024,6 +2023,37 @@ function compsListHTML(sorted) {
   });
   if (!placed) out.push(mk);
   return out.join('');
+}
+
+// ---- R6: SURFACE ON DEMAND, not fold ---------------------------------------
+// R5 folded the 84-row list behind a toggle, which kept the wall of text and
+// merely closed a drawer over it. The better rule: THE PLOT IS THE LIST, and
+// rows surface when something makes them relevant -- a tap, and later a filter.
+//
+// D7 AND D10 SET THE FLOOR THIS CANNOT GO BELOW: the seller's own words are the
+// only grade signal this tier has, so scanning titles must remain POSSIBLE.
+// Summoned, not sitting there by default -- removing them would be the opposite
+// error from the one being fixed.
+//
+// Three paths to the words now, none of them permanent: a tap gives one sale,
+// R3's nearest comps sit beside the ask unfolded, and this lists the whole set
+// on an explicit action that NAMES ITS SCOPE. "List all N sales" rather than a
+// bare "show" -- once filters land it becomes the current selection, and a
+// control that hides how much it is about to show is the thing being removed.
+//
+// LIST_SHOWN IS DELIBERATELY NOT RESET between lookups. The list always renders
+// from COMPS.rows, so a stale `true` shows THIS book's sales, never the previous
+// one's -- there is no wrong-data risk to guard. Resetting it would mean the
+// four-call-site bookkeeping that compsPick avoided by keying on object identity.
+let LIST_SHOWN = false;
+function compsListShown() { return LIST_SHOWN; }
+function compsListToggle() { LIST_SHOWN = !LIST_SHOWN; renderComps(); return { ok: true, shown: LIST_SHOWN }; }
+function compsListBlockHTML(sorted, n) {
+  return `<div class="cmpsummon">` +
+    `<button type="button" class="btn" onclick="compsListToggle()">` +
+    esc(LIST_SHOWN ? 'Hide the list' : 'List all ' + n + ' sales') + `</button>` +
+    (LIST_SHOWN ? `<div class="cmplist">${compsListHTML(sorted)}</div>` : '') +
+    `</div>`;
 }
 // THREE FIELDS, THREE ELEMENTS, and the source order matches the visual order:
 // price and date on the first line, the seller's title on its own line beneath.
@@ -2451,7 +2481,7 @@ function renderAskLive() {
 // WHY A NOTICE WORKS WITH NO WORKER: there is no app-controlled cache, so a load
 // fetches current bytes and the notice fires on it. The worker is what would
 // CREATE the stale-shell problem it then solves.
-const APP_VERSION = '0.4.0';
+const APP_VERSION = '0.5.0';
 const VERSION_KEY = 'collectibles-version';   // PFX1: every storage key is prefixed
 
 // One line per release, newest LAST. The newest entry's `v` must equal
@@ -2470,6 +2500,7 @@ const VERSION_LOG = [
   { v: '0.2.0', d: '2026-09-14', note: 'A want list. Type the books you are hunting into Settings, one per line, and the draft tells you when the book in your hand is one of them. Matching forgives spelling and format — "The Amazing Spider-Man #129" and "Amazing Spider-Man 129" are the same want — but the issue must match, because a different issue is a different book. It is a prompt to look, never a claim, and nothing is recorded before you confirm the reading. This is also the first thing the app saves to your device besides your keys, so the storage line in Settings now matters to more than a capture.' },
   { v: '0.3.0', d: '2026-09-14', note: 'Sold comps are now drawn, not just listed. Every sale is one mark, spaced by price — and spaced by RATIO rather than difference, because grade bands multiply: $9 to $29 is the same step as $90 to $290. Clusters with gaps between them are different markets, and the gaps are the grade boundaries this data refuses to state; your eye finds them, the app does not guess at them. Mark shapes show how each sale closed — auction, Buy It Now, or a type the provider did not state — and a ring means a best offer was accepted. Tap any mark for the seller\'s own words. Nothing is fitted, smoothed or averaged: 98 sales are enough to SEE the shape and not enough to characterise it. The full list and the explanations now fold away, so the numbers stop competing with the prose for the same screen.' },
   { v: '0.4.0', d: '2026-09-15', note: 'Bigger, clearer type. The app declared a readable 16px base and then opted out of it almost everywhere — eleven different text sizes, eight of them smaller than that base, and the very smallest were the plot’s own axis labels. There are now four sizes and a floor: nothing is smaller than 12px. Two numbers moved up to where they belong — the count of sales above and below your price, which is the whole answer this app exists to give, and the line stating how many sales and over what window. Form fields are 16px, which also stops the phone zooming in every time you tap one. And the plot now says “Tap any mark to see that sale” in its own line under the marks, instead of hiding that at the end of a paragraph about spacing.' },
+  { v: '0.5.0', d: '2026-09-15', note: 'The list of every sale has stopped sitting under the plot. The plot IS the list now: tap a mark for that sale, and the nearest sales to your price stay beside it as before. When you do want to read all of them, the button says how many it is about to show — “List all 84 sales” — and you can put it away again. Nothing was removed: the sellers’ own words are still the only grade signal there is, so they stay one tap away rather than filling the screen by default.' },
 ];
 
 // Numeric per segment, so 0.2.0 < 0.10.0 -- a string compare gets that backwards
@@ -2727,6 +2758,8 @@ window.CT = {
   compsDefaultQuery, compsQuery, compsSetQuery, compsResetQuery, compsBody, compsBound,
   parseComps, compsFilter, compsBodyIsClean, compsLookup, compsClear, renderComps, compsPing,
   compsRowHTML, compsShowDropped, compsMoney, compsDate, compsListHTML, __setComps,
+  // R6 -- the list is summoned, never permanent
+  compsListShown, compsListToggle, compsListBlockHTML,
   // R5 -- the distribution, drawn. Pure emitters, so the markup is gateable
   // without a surface; the tap repaints in place.
   PLOT_W, PLOT_H, PLOT_MAX_STACK, compsScale, compsTicks, compsMarks, compsMarkSVG,

@@ -1471,6 +1471,42 @@ Asked for, and the answer is yes — but into two rather than three.
 - **CQ7's sweep and `akPrices` repointed, not weakened** — coverage must not shrink silently.
 - Existing layout gate claims repointed rather than relaxed.
 
+## R6 — the legibility half — **BUILT AND GATED**, v0.4.0 and v0.5.0 (2026-09-15)
+
+Type first, as ruled. Assertions **431 → 473**; the layout gate gained a type dimension and a slack measurement.
+
+### What shipped
+
+**The type scale.** Eleven distinct sizes to **four plus one glyph** — 18 data / 16 base and controls / 14 reading / 12 floor, with 24px reserved for the close icon. The page already declared `16px/1.5` and opted out of it almost everywhere: eight of eleven sat below that base. Collapse and *assignment* are different jobs, and the uniform map only did the first, so two things were moved afterwards: the sold-below/above count (R3's entire output, sized like a note) and the count-and-window line (gated as meaning-bearing).
+
+**The tap affordance**, in its own element beneath the marks. Gated on **rendered output, never source** — the comment explaining the move quotes the old sentence, so a source scan would match prose *about* the text. That is the census's citation-versus-quotation limit reappearing in a different file.
+
+**Surface on demand.** No permanent list. The plot is the list; rows arrive by tap, by the nearest-comps rows beside the ask, or by an explicit control that **names its scope** — "List all 84 sales" rather than a bare "show".
+
+### Three measurements, two of which changed what got built
+
+**1. The slack number overturned my own framing.** I named the type/layout conflict as *larger type makes the draft taller, threatening in-view-without-scrolling*. Measured: −186px at 360×690, −118px at 390×745, −30px at 1200×900. **The draft already exceeded the modal body at every width and the gate passed anyway** — HT-D51's architecture, a footer pinned outside a scrolling body, with `bodyScrolls` deliberately excluded from the success verdict. So the legibility half had **no vertical budget to defend**, which is the opposite of how it was about to be designed. The binding constraints were horizontal all along.
+
+**2. `<small>` renders at a size that appears nowhere in the stylesheet.** The type-floor gate failed on its first run and named two elements at **10px**: bare `<small>` applies the UA's `font-size: smaller`, about 0.83× its parent. No `font-size` declaration exists for them, so no grep of the stylesheet could ever have found them. This is why the gate measures **computed** sizes on the shipped page — a reason written into its comment before it paid. Fixed at the cause (`small{font-size:inherit}`), which also covers the settings panel and the identity draft, both outside that gate's selector scope.
+
+**3. 16px on form controls is behavioural.** iOS zooms the viewport when focusing an input below 16px, so at the previous 15px the app zoomed on every field focus — the ask price, the query box, the want list. A live defect nobody had named, closed as a side effect.
+
+### The five repointed sites, and one that was owed
+
+Removing the list took the substrate out from under `akPrices`, CQ7's extraction, AK5's DOM-order sequence, AK6's sweep and the layout gate's `.cmplist .cmprow` measurement. Each block now **summons the list itself** rather than inheriting a state — CQ7's negatives (`/\bvalue\b/`, no-heading) got *stronger* for it, since they now scan the list's markup too. The R6 absence gate **establishes** the state it measures rather than depending on file order, because an assertion that passes or fails according to which block ran before it is not measuring the app.
+
+**AK6's plot sweep was identified in R5 and never written**, which is a different fact about the record from "newly discovered". R5's own notes say `akPrices` reads `.cmpprice` spans, that marks do not have them, and that the sweep's coverage *"would silently shrink to exclude the surface where prices are now drawn"* — and then the AK5 repoint and the fold gates were written and this was not. `PL7` gated that marks *carry* `data-p`, so the property was never unguarded; what was missing was AK6's own claim reaching them. R6 made it sharper rather than softer, because the plot is now the primary surface. Written, with a paired assertion that the ask is **not** among the marks — if it ever became one, the sweep would start treating the user's figure as a sale.
+
+### NOT YET DEMONSTRATED (HT-D60 Clause 1)
+
+Rows **67–70** are written and **have not been run**: the permanent list returning, the affordance buried back in the paragraph, `.ptl` back to 9px (through the layout gate, since only a computed-size measurement catches it), and — the one that matters most — **`compsListToggle` ceasing to repaint**, which leaves the absence assertion passing while its control fails. An absence gate is unfalsifiable alone; that row is what proves the pair is real.
+
+### What this does not cover (Clause 2)
+
+- **The type floor reports SVG text at its UNSCALED computed size.** `.ptl` reads 12px whatever the viewBox scale, so a future narrowing of the plot would not be caught. Today the plot scales up at all measured widths, so rendered size is ≥12 — true in fact, not proven by this gate.
+- **The floor gate's selector set covers the main surfaces, not the settings panel.** The `<small>` fix is broader than the gate that found it.
+- **Nothing here reads the surface as a person does.** That 36 of 46 declarations now sit in the bottom two tiers is a fact about the stylesheet; whether the hierarchy *reads* at arm's length is a claim only a device pass can settle.
+
 ### Assertion delta: 416 → 431 (+15), re-pinned in this commit
 
 13 W assertions + the 2 SH1 shipped-shell checks. `APP_VERSION` moved to **0.2.0** with a dated `VERSION_LOG` entry — the shell changed, and `check-version.sh` demanding that bump is D14's machinery working rather than misfiring.

@@ -1804,6 +1804,16 @@ window.setLS({});
   res(document.getElementById('compsBox').innerHTML === '',
       'CQ7: with no lookup run, the comps surface is EMPTY -- it never speculates');
   CT.__setComps(CT.compsFilter(p5.rows).kept, CT.compsFilter(p5.rows).dropped, 'Amazing Spider-Man 151');
+  // R6: the list is SUMMONED now, so this block asks for it before capturing the
+  // surface. Every claim below keeps its substrate -- the ascending order that
+  // detects a group, the ladder gate, both scatter endpoints as sales, and
+  // "CGC READY" verbatim (D10's adversarial case). Unsummoned they would each
+  // pass vacuously against a shorter string, which is the coverage-shrinks-
+  // silently failure this repo has now hit three times.
+  //
+  // The NEGATIVE assertions get STRONGER rather than weaker: /\bvalue\b/ and the
+  // no-heading check now scan the list's markup too.
+  if (!CT.compsListShown()) CT.compsListToggle();
   var c7 = document.getElementById('compsBox').innerHTML;
   res(/\bvalue\b/i.test(c7) === false,
       'CQ7 GATE (D8): the word "value" appears NOWHERE on the comps surface -- a comp is a sale, not a valuation');
@@ -1855,6 +1865,10 @@ window.setLS({});
       'which is exactly the string a title-parsing split would have mis-grouped as slabbed');
   res(c7.indexOf('1 lot') >= 0 && c7.indexOf('1 reprint') >= 0,
       'CQ7: what the filter hid is COUNTED ON THE SURFACE -- a filter the user cannot see is one they cannot correct');
+  // Hand the state back. This block summoned the list for its own assertions;
+  // leaving it open would make every later block inherit a surface it did not
+  // ask for, which is how a fixture starts supplying what the app omits.
+  if (CT.compsListShown()) CT.compsListToggle();
 
   // ---- CQ10: three fields, laid out, and a date that reads one way ----------
   // REPORTED FROM THE FIRST LIVE DEVICE PASS (2026-09-13), verbatim:
@@ -1963,6 +1977,12 @@ window.setLS({});
       'AK4 GATE: the nearest comps carry the seller titles VERBATIM -- they are the only grade signal this tier has (D10)');
 
   // The marker is placed BY VALUE: before the first sale that beat the ask.
+  // R6: the list is summoned now, and this sequence IS the list -- the ask
+  // rendered in price order among the sales. Asking for it keeps the claim
+  // whole; without the summon the sequence would simply be shorter and the
+  // assertion would have to be narrowed to whatever survived, which is
+  // weakening a gate and calling it a repoint.
+  if (!CT.compsListShown()) CT.compsListToggle();
   var mkPos = akPrices(document.getElementById('compsBox').innerHTML);
   res(mkPos.join(',') === '9,16.21,25,25,25,25,30,40,52.46,145',
       'AK5 GATE (Fork E): the ask renders INTO the scatter at its position -- after every sale below it, before the first one above',
@@ -1997,16 +2017,71 @@ window.setLS({});
       'R5 GATE (HT-D53): the raw-vs-slab statement is on the surface and NOT inside a fold -- anything that changes what a number MEANS stays visible');
   res(r5box.indexOf('sold · last 90 days') >= 0 && r5folded.indexOf('sold · last 90 days') < 0,
       'R5 GATE (HT-D53): and so do the count and the window -- CQ7 gates that they are PRESENT, this gates that folding did not swallow them');
-  res(r5folded.indexOf('no grade and no certification field') >= 0 && r5folded.indexOf('cmplist') >= 0,
-      'R5 GATE (HT-D53): while the PROVENANCE -- why it cannot tell, and all the sales -- IS folded. The cut goes where the sentence changes job, and the wall of text was the problem rather than the words');
+  res(r5folded.indexOf('no grade and no certification field') >= 0,
+      'R5 GATE (HT-D53): while the PROVENANCE -- why it cannot tell -- IS folded. The cut goes where the sentence changes job');
+
+  // ---- R6: SURFACE ON DEMAND, not fold --------------------------------------
+  // R5 folded 84 rows behind a toggle, which kept the wall of text and closed a
+  // drawer over it. The plot is the list now; rows surface when something makes
+  // them relevant.
+  // STATE-INDEPENDENT, not order-dependent. AK5 above summons the list so its
+  // sequence keeps its substrate, so this block cannot assume the default -- it
+  // ESTABLISHES the state it measures. Depending on file order would make this
+  // gate pass or fail according to which assertion ran before it, which is not a
+  // property of the app at all.
+  if (CT.compsListShown()) CT.compsListToggle();
+  var r6def = document.getElementById('compsBox').innerHTML;
+  res(r6def.indexOf('cmplist') < 0,
+      'R6 GATE: no full list renders BY DEFAULT -- a fold is not the same as not being there, and the wall of text was the problem');
+  // THE CONTROL. An absence gate is unfalsifiable without one: the assertion
+  // above would pass just as happily against a renderer that had simply broken.
+  CT.compsListToggle();
+  var r6sum = document.getElementById('compsBox').innerHTML;
+  res(r6sum.indexOf('cmplist') >= 0,
+      'R6 GATE: and SUMMONING produces it -- the control that makes the absence above evidence rather than a record of a broken renderer');
+  res(r6sum.indexOf('staple detached') >= 0,
+      'R6 GATE (D7/D10): with the seller\'s own WORDS intact -- they are the only grade signal this tier has, so scanning them must stay POSSIBLE. Summoned is not the same as removed, and removing them would be the opposite error from the one being fixed');
+  res(r6sum.indexOf('List all') < 0 && r6sum.indexOf('Hide the list') >= 0,
+      'R6: and the control NAMES ITS STATE -- a button that hides how much it is about to show is the thing being removed here');
+  CT.compsListToggle();
+  res(document.getElementById('compsBox').innerHTML.indexOf('cmplist') < 0,
+      'R6: hiding it again returns the surface to the plot -- the toggle is symmetric, so the default is a state rather than an accident of first render');
 
   // CQ7 EXTENDED, and swept across BOTH containers: the scatter and the
   // nearest-comps lists both render prices, and CQ7 only ever read the first.
+  //
+  // R6: summoned, because this block owns its precondition. The R6 gate above
+  // leaves the list hidden, and an unsummoned sweep would read only the
+  // nearest-comps rows in #askBox -- passing over a fraction of the surface it
+  // claims to cover, while still reporting green.
+  if (!CT.compsListShown()) CT.compsListToggle();
   var src = akRows.map(function (r) { return r.soldPrice; });
   var stray = akPrices(akBoth()).filter(function (p) { return src.indexOf(p) < 0 && p !== 30; });
   res(stray.length === 0,
       'AK6 GATE (CQ7 extended): every price on the surface is one something ACTUALLY SOLD FOR, or the single user ask -- swept across the scatter AND the nearest lists',
       stray.join(','));
+  // THE HALF THAT WAS IDENTIFIED IN R5 AND NEVER WRITTEN, which is a different
+  // fact about the record from "newly discovered". R5's notes say akPrices reads
+  // .cmpprice spans, that plot marks do not have them, and that this sweep's
+  // coverage "would silently shrink to exclude the surface where prices are now
+  // drawn". Then the AK5 repoint and the fold gates were written and this was
+  // not. PL7 gates that marks CARRY data-p, so the property was never unguarded
+  // -- what was missing is AK6's own claim reaching them.
+  //
+  // R6 makes it sharper rather than softer: the plot is now the PRIMARY surface,
+  // so a sweep that covers everything except the plot covers almost nothing.
+  var akMarkP = (akBoth().match(/data-p="[0-9.]+"/g) || [])
+    .map(function (s) { return Number(s.replace(/[^0-9.]/g, '')); });
+  var strayMark = akMarkP.filter(function (p) { return src.indexOf(p) < 0; });
+  res(akMarkP.length > 0 && strayMark.length === 0,
+      'AK6 GATE (CQ7 extended to the PLOT): every price drawn as a MARK is one something actually sold for -- akPrices reads .cmpprice spans, which marks do not have, so without this the sweep passes while covering the one surface prices are now drawn on',
+      'marks=' + akMarkP.length + ' stray=' + strayMark.join(','));
+  // The ask is a RULE, not a mark, and carries no data-p -- so no exception is
+  // needed above. That is worth asserting rather than assuming: if the ask ever
+  // became a mark, the sweep would start treating the user's own figure as a
+  // sale, which is exactly the conflation AK6 exists to refuse.
+  res(akMarkP.indexOf(30) < 0,
+      'AK6 GATE: and the ask is NOT among the marks -- it is a rule, so a price that is not a sale can never enter the sweep as one');
   res((akBoth().match(/askmark/g) || []).length === 1 &&
       akBoth().indexOf('YOUR ASK') >= 0,
       'AK6 GATE: and the one exception is LABELLED as the user\'s -- exactly one marker, named, so it cannot be read as a sale');
