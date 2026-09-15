@@ -1690,7 +1690,19 @@ The served `app.js` now reports `APP_VERSION = '0.6.0'`.
 
 ### The gate, and what it deliberately does NOT assert
 
-`DROP1`, four assertions on the **shipped shell**, measuring a **rendered rectangle** rather than the attribute — `hasAttribute('hidden')` was `true` for the entire time the defect was live, so the attribute was never the thing in doubt. Clause 4 is asserted first (the disclosure holds every dropped row, so a zero height is about hiding rather than about emptiness), then zero height by default, then a **paired control** that taps it open, then symmetry on closing. Defect row 78 removes the rule and must fail.
+`DROP1`, four assertions on the **shipped shell**, measuring a **rendered rectangle** rather than the attribute — `hasAttribute('hidden')` was `true` for the entire time the defect was live, so the attribute was never the thing in doubt. Clause 4 is asserted first (the disclosure holds every dropped row, so a zero height is about hiding rather than about emptiness), then zero height by default, then a **paired control** that taps it open, then symmetry on closing. Assertions **491 → 495**, re-pinned in the same commit.
+
+### DEMONSTRATED — row 78, seen to fail (HT-D60 Clause 1)
+
+Run on a tree committed first at `e3d517d`. Zero rotted mutations; all four mutated files restored identical to their pre-run copies.
+
+| row | planted defect | verdict | first named failure |
+|---|---|---|---|
+| 78 | the `[hidden]` rule deleted — the defect exactly as it shipped | `GATE: FAIL` | `DROP1 GATE: the dropped-listings disclosure has ZERO RENDERED HEIGHT by default …` |
+
+**This is the first row whose defect is planted in the STYLESHEET rather than in `app.js`**, and that is the whole reason the gate measures geometry. The mutation removes one CSS rule; the markup is **byte-identical** either way — `<span class="cmpdrop" hidden>` is emitted in both builds, carrying all its rows. Every assertion this repo writes against `innerHTML` would have passed against the broken build, because at the markup level nothing is wrong. Only a rendered rectangle can tell the difference between an attribute that is set and an attribute that is **honoured**.
+
+**It also closes a question the suite could not answer.** The full run relays summary lines rather than every `PASS`, so `DROP1` produced no visible output and its execution was inferred from the count moving 491 → 495. Row 78 names the assertion's own text in its failure line, which is independent proof that the assertion exists, runs, and can fail — the difference between a gate believed to be working and one seen to work.
 
 ### The gate that looked THROUGH it — recorded as its own finding (D24)
 
