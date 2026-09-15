@@ -1518,6 +1518,42 @@ Second, planting it revealed the gate's diagnostic read `[object SVGAnimatedStri
 
 **Row 69's `WEAK-MATCH` label is legitimate and was predicted.** It reports through the layout gate, whose output lines are script-style and carry none of the `FAIL -` / `NOT MEASURABLE` markers `report()`'s second strict arm matches. The line genuinely does not identify itself as a failure — the same category as the two `check-refs` rows that stay weak-labelled by design.
 
+## C1 — Response replay, for testing only — PRE-REGISTERED (2026-09-15)
+
+**Why it exists.** A comps lookup costs about **$0.40** and returns the same 84 rows every time. Checking a layout change should not cost money, and the subscriber has exceeded their Apify credits — so the alternative to replay is not "pay per check", it is **cannot check at all**.
+
+**C — not R.** This is **test-phase machinery**, numbered apart from the R-series deliberately. It is **not a product feature and not an offline mode**, and the naming is the first fence against it becoming one.
+
+### Ruled in advance
+
+1. **A replayed response MUST SAY SO, with the date it was captured.** Those 84 sales are a **90-day window that keeps moving**; a saved response goes stale while looking identical to a live one. Same reasoning that already puts the count and the window on the surface — anything that changes what a number *means* is stated where the number is.
+2. **Test-phase machinery, recorded as such so it does not grow.** No offline mode, no caching layer, no "use last result if the call fails". Replay happens **only when explicitly armed**, never as a fallback.
+
+### The seam, and why the surfaces are untouched
+
+`compsLookup` calls `egress('comps', …)` and hands `r.raw` to `parseComps`. **Replay substitutes the raw string and nothing else.** The parser, the filter, the plot, the ask comparison and the summon all operate on parsed rows and cannot tell the difference — which is the property that makes this safe, and it is worth asserting rather than assuming.
+
+### Forks, with the lean each is being built to
+
+- **Capture path — PASTE FIRST, not capture-after-lookup.** Intercepting a future successful call is unusable for the person who needs this: no credits means no future call to intercept. Apify's console keeps the dataset from runs already paid for, so pasting that JSON costs nothing. Capture-after-lookup can ride along as a convenience where a call does happen.
+- **Storage — outside the state object**, one prefixed key, mirroring D1's treatment of credentials. It is not the subscriber's data; it must never enter an export, and `exportJSON` must be unable to carry it **by construction** rather than by a filter.
+- **Arming — explicit only.** A saved response present is *not* a reason to replay. Silent substitution of a live call is the failure mode that would make every later measurement untrustworthy.
+- **The notice — on the comps surface**, where the count and the window already are, carrying the capture date.
+- **The cost line — must not claim a charge.** `compsFootHTML` says "about $0.40 for this lookup"; on a replay that is false, and a false charge statement is the conflation brief rule 7 refuses, pointed at the user's own money.
+
+### The byproduct, which is worth more than the money
+
+A real **84-sale response is a far better fixture** than the seeded four-row ones. It exercises modes, ties, the D11 truncation line, and the `listingType` enum **including values nobody mapped** — all things that have only ever appeared in the wild. R6's remaining work (the type scale under real density, and the two-view plot) should be built against it, and the `listingType` census that was ruled to come free from a device pass arrives with it.
+
+### Gate obligations
+
+- A replayed surface **says so, with the capture date** — planted control: remove the notice and it must fail.
+- The saved response **never enters an export**, asserted the way K1 asserts it of credentials.
+- **Replay and live produce identical parsed rows** from identical raw — the property that lets every downstream surface stay untouched.
+- **Arming is explicit**: a saved response alone does not cause a replay.
+- **The cost line does not claim a charge** on a replayed lookup.
+- The storage key is **prefixed** (PFX1 already sweeps this).
+
 ### What this does not cover (Clause 2)
 
 - **The type floor reports SVG text at its UNSCALED computed size.** `.ptl` reads 12px whatever the viewBox scale, so a future narrowing of the plot would not be caught. Today the plot scales up at all measured widths, so rendered size is ≥12 — true in fact, not proven by this gate.
@@ -1554,3 +1590,58 @@ Tree clean afterwards; all four mutated files restored identical to their pre-ru
 | `app.js` | `ea70d2d2d1aaabde` | `0bb0109f83992d76` |
 
 Verified on the **first** poll (~15s), against the procedure and URL recorded earlier in this file rather than re-derived from the remote. The build line served to a device now reads `collectibles v0.2.0`, and anyone arriving from 0.1.0 sees the update notice once — the first time that path has run against a real previous version rather than a synthetic one.
+
+## C1 — Response replay, for testing only — **BUILT AND GATED**, v0.6.0 (2026-09-15)
+
+Assertions **473 → 491 (+18)**, re-pinned in this commit. `APP_VERSION` moved to **0.6.0** with a dated `VERSION_LOG` entry; the shell gained a Settings card, so `check-version` demanded the bump. Ruled as a binding contract in **D21**, because the fences are individually reasonable to remove.
+
+### The rulings, and where each is enforced
+
+| ruled | enforced by |
+|---|---|
+| A replayed response **says so, with its capture date** | `RP1 GATE`: the notice carries the **stored** date, and **not today's** — the clock is pinned to 2026-08-20 while the run happens on 2026-09-15 |
+| …on **both** render paths | a second `RP1 GATE` on the below-three branch, which is a separate early return in `renderComps` |
+| **Arming is explicit** | `RP1 GATE`: saved-but-unarmed, the lookup still calls the provider |
+| **Replay and live produce identical rows** | `RP1 GATE`: `deepEqual` over kept **and** dropped, from one raw string down both paths |
+| **The cost line claims no charge** | `RP1 GATE`, paired with a live control asserting the charge line is still there |
+| **Never enters an export** | `RP1 GATE (K1 shape)`: absent from `exportJSON` and from the state object, **present in its own key** — the positive control that makes the absence evidence |
+| The key is **prefixed** | `RP1 GATE (D1/PFX1)` |
+
+### The live lookup is the control for every replay claim
+
+Each "the replay says so" is paired with the same read against a **live** lookup driven through the scripted transport. An absence gate alone passes just as happily over a renderer that has simply broken — R6's row 70 is the demonstration of that, and this block is built to its shape from the start rather than after a row proved the need.
+
+### Labelled RP1, not C1 — the harness already owned the name
+
+The vision-contract block has used `C1:` since the port. A grep for "the C1 block" returned **thirteen assertions, none of them these** — the collision misled a search on its first use, mine. The slice stays **C1** in this record; its assertions are **RP1**. Renamed with a marker-scoped `perl -pi`, verified surgical: 18 `RP1` labels, the 6 original `C1` labels intact, all 11 `C1_` variables untouched, and **0 CRLF lines before and after** — checked because a mutation tool touched the file, which is the circumstance that once killed seven rows.
+
+### Three findings the build produced
+
+**1. A step inherits whatever the step before it left.** The block's first run threw `Cannot read properties of null (reading 'rows')` and took **PFX1, ID11 and ID13 down with it** — the count *fell* to 466. Cause: steps registered earlier install **synthetic vision contracts**, so the paste never parsed, `captureAccept()` produced nothing, `compsLookup` returned early on *"Confirm a book first"*, and `COMPS` stayed null. CQ1 uses the identical three lines and is fine because it sits in the **synchronous** section downstream of `setVisionContract`. Fixed by restoring the shipped contract explicitly — and, separately, by stating the precondition as **its own assertion** plus an unconditional state check, so a recurrence **names its cause** instead of taking eight assertions with it.
+
+**2. `PFX1` is a `step()`, not synchronous — so "already swept" was a claim about the sweep, not the arrangement.** The pre-registration said the prefix obligation needed nothing new because *"PFX1 already sweeps this"*. PFX1 reads `__keysEverWritten` **when it runs**, and steps run in registration order; a C1 block registered after it would have written the replay key **after** the sweep read the dictionary, leaving the one key C1 adds uncovered while the suite stayed green. The block is registered **before** PFX1 deliberately, the placement is commented as load-bearing, and RP1 asserts the sweep actually saw the key rather than trusting that it did.
+
+**3. The em-dash trap did not fire, because the patterns avoid it.** Every defect row matches a **shape** — an indentation, a condition, a function signature — and none matches the prose containing `—`. Row 55's death by pinned literal is the precedent.
+
+### NOT YET DEMONSTRATED — rows 71–77 pre-registered, the pass not yet run
+
+Seven rows are written against the properties above. **They are not evidence until each has been run and seen to fail** (HT-D60 Clause 1), and this section will be updated with the verdicts and the first named failure for each.
+
+| row | planted defect | the property it should break |
+|---|---|---|
+| 71 | replay notice deleted (main branch) | the surface says so |
+| 72 | replay notice deleted (thin branch) | …on the below-three path too |
+| 73 | the notice reads the **clock** instead of the record | the date is the **captured** one |
+| 74 | `replayArmed()` drops `REPLAY_ARMED` | arming is explicit |
+| 75 | the cost line always claims $0.40 | no false charge |
+| 76 | `exportJSON` appends the saved raw | it never enters an export |
+| 77 | replay returns a **truncated** response | replay and live are identical |
+
+**Row 73 is the weighted one.** A notice that reads the clock still renders, still says REPLAYED, still looks entirely correct — and is wrong about the single fact it exists to carry. It is the only row here whose defect is invisible on the surface it corrupts.
+
+### What this does not cover (Clause 2)
+
+- **The 84-sale fixture does not exist yet.** Every RP1 assertion runs against the **8-row** probe fixture. The byproduct this slice was partly built for — a real response exercising modes, ties, the D11 truncation line and unmapped `listingType` values — arrives only when a real response is pasted in.
+- **No gate proves the Settings card is reachable on a device.** The card's elements are asserted through the harness and the shipped-shell census; whether a thumb can find and use it is a device-pass claim.
+- **The layout gate does not measure the replay card.** It is settings-panel chrome, and the floor gate's selector set already excludes that panel — a limitation R6 recorded and this slice inherits rather than closes.
+- **Nothing here gates that replay stays test machinery.** D21's fences are gated individually (arming, the notice, the export, the cost line); "does not grow into an offline mode" is a property of future commits, which no assertion can hold.

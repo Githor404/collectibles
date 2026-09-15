@@ -1364,6 +1364,158 @@ window.setLS({});
     });
   });
 
+  // ==========================================================================
+  // C1 -- RESPONSE REPLAY, TEST MACHINERY (ruled 2026-09-15)
+  //
+  // A lookup costs ~$0.40 and returns the same rows every time; with credits
+  // exhausted the alternative to replay is not "pay per check", it is CANNOT
+  // CHECK AT ALL. Two rulings are gated here: a replayed surface SAYS SO with
+  // the date it was captured, and ARMING IS EXPLICIT.
+  //
+  // REGISTERED BEFORE PFX1 DELIBERATELY, and the placement is load-bearing.
+  // PFX1 is a step() rather than synchronous, so it sweeps only what was
+  // written before it RUNS -- and this block writes the replay key. Registered
+  // after PFX1 the suite would stay green while the one key C1 adds escaped the
+  // sweep meant to cover it. The pre-registration said "PFX1 already sweeps
+  // this": true of the sweep, and not yet true of the arrangement.
+  //
+  // THE LIVE PATH IS THE CONTROL (HT-D60 Clause 4). Every "the replay says so"
+  // below is paired with the same read against a LIVE lookup, because an
+  // absence gate passes just as happily over a renderer that had simply broken.
+  // ==========================================================================
+  step(function () {
+    // NOT today. A notice that printed Date.now() rather than the stored capture
+    // date would satisfy a today-shaped assertion while being wrong about the
+    // only fact it exists to carry.
+    var C1_AT = '2026-08-20T10:00:00Z', C1_DAY = '2026-08-20';
+    var C1_CANARY = 'AMAZING SPIDER-MAN 151 VG- complete';
+    window.fetch = SCRIPTED_FETCH;
+    FETCHES = []; FETCH_SCRIPT = [];
+    setLS({}); CT.boot(); CT.Store.forceWriteFailure(false);
+    CT.credSave('comps', 'apify', CTOKEN); CT.paceReset();
+    // THE SHIPPED CONTRACT, RESTORED EXPLICITLY. Steps registered earlier install
+    // SYNTHETIC vision contracts, and openCaptureResult parses against whichever
+    // is current -- so without this the paste below does not parse, captureAccept
+    // produces nothing, compsLookup returns early on "Confirm a book first" and
+    // COMPS stays null. That is precisely how this block failed the first time it
+    // ran. CQ1 uses these same three lines and is fine, because it sits in the
+    // SYNCHRONOUS section downstream of setVisionContract; a step inherits
+    // whatever the step before it left behind, which is not the same guarantee.
+    CT.setVisionContract(CT.IDENTITY_CONTRACT);
+    CT.captureDiscard(); CT.clearConfirmed();
+    CT.openCaptureResult('{"title":"Amazing Spider-Man","issue":"151","markers":[]}');
+    CT.captureAccept();
+    res(!!CT.confirmedIdentity() && CT.compsQuery().length > 0,
+        'RP1 PRECONDITION: a confirmed identity and a query exist BEFORE the lookup -- compsLookup returns early without one. Stated as its own assertion so the failure NAMES ITS CAUSE, rather than surfacing as a null dereference eight assertions downstream that also takes PFX1, ID11 and ID13 with it',
+        'confirmed=' + !!CT.confirmedIdentity() + ' query=' + CT.compsQuery());
+
+    // ---- LIVE: the control half ---------------------------------------------
+    FETCH_SCRIPT.push({ status: 200, body: COMPROWS });
+    return CT.compsLookup().then(function (liveR) {
+      var liveState = CT.compsState();
+      // UNCONDITIONAL, so the pinned count cannot move with the outcome, and the
+      // early return below keeps one failure from becoming nine.
+      res(!!liveState,
+          'RP1: the live lookup left a comps state to read -- an early return reports here instead of throwing inside the promise, where the harness loses every step that follows',
+          JSON.stringify(liveR));
+      if (!liveState) return;
+      var liveRows = JSON.parse(JSON.stringify(liveState.rows));
+      var liveDrop = JSON.parse(JSON.stringify(liveState.dropped));
+      var liveBox = document.getElementById('compsBox').innerHTML;
+      res(liveR.ok === true && liveRows.length === 6 && liveDrop.length === 2 && FETCHES.length === 1,
+          'RP1 CONTROL: the live path ran for real -- one transport call, six kept, two dropped. Every replay assertion below is evidence only because this establishes what a LIVE lookup produces',
+          'ok=' + liveR.ok + ' kept=' + liveRows.length + ' dropped=' + liveDrop.length + ' calls=' + FETCHES.length);
+      res(liveBox.indexOf('REPLAYED') < 0 && liveBox.indexOf('replaynote') < 0 && liveState.replay === null,
+          'RP1 GATE: a LIVE surface carries no replay notice and no replay marker -- the planted control, without which "the replay says so" is unfalsifiable');
+      res(liveBox.indexOf('for this lookup') >= 0 && liveBox.indexOf('no charge') < 0,
+          'RP1 CONTROL: and a live lookup still states the charge -- the cost line has two branches and this is the one that bills');
+
+      // ---- SAVED, AND DELIBERATELY NOT ARMED --------------------------------
+      CT.setClock(function () { return Date.parse(C1_AT); });
+      var sv = CT.replaySave(COMPROWS, CT.compsQuery());
+      CT.setClock(null);
+      res(sv.ok === true && sv.rows === 8,
+          'RP1: a response saves, and reports the row count the PARSER found -- eight parsed, before the client-side filter takes two',
+          'ok=' + sv.ok + ' rows=' + sv.rows);
+      var bad = CT.replaySave('not a response', 'q');
+      res(bad.ok === false && bad.error === CT.parseComps('not a response').error &&
+          String(__ls._get(CT.REPLAY_KEY) || '').indexOf(C1_CANARY) >= 0,
+          'RP1 GATE: a paste that is not a comps response is refused with THE PARSER\'S OWN message, and the good response already saved SURVIVES the refusal -- parsed before stored, so what is in the key is always something parseComps accepted',
+          bad.error);
+      res(CT.REPLAY_KEY.indexOf('collectibles-') === 0 && window.__keysEverWritten[CT.REPLAY_KEY] === true,
+          'RP1 GATE (D1/PFX1): the replay key is PREFIXED and the whole-run sweep actually SAW it -- this block is registered before PFX1 so that the sweep covers it rather than merely claiming to',
+          CT.REPLAY_KEY);
+      var expC1 = CT.exportJSON();
+      res(expC1.indexOf(C1_CANARY) < 0 && expC1.indexOf('replay') < 0 &&
+          JSON.stringify(CT.state()).indexOf(C1_CANARY) < 0 &&
+          String(__ls._get(CT.REPLAY_KEY) || '').indexOf(C1_CANARY) >= 0,
+          'RP1 GATE (K1 shape): the saved response is ABSENT from the export and from the state object, while PRESENT in its own key -- it is not the subscriber\'s data, and exportJSON serialises APP_STATE, so holding it outside makes this true by construction rather than by a filter someone must remember',
+          'inExport=' + (expC1.indexOf(C1_CANARY) >= 0) + ' inKey=' + (String(__ls._get(CT.REPLAY_KEY) || '').indexOf(C1_CANARY) >= 0));
+
+      var unarmedBefore = FETCHES.length;
+      CT.paceReset();
+      FETCH_SCRIPT.push({ status: 200, body: COMPROWS });
+      return CT.compsLookup().then(function () {
+        res(FETCHES.length === unarmedBefore + 1 && CT.compsState().replay === null,
+            'RP1 GATE (ruled): a SAVED response alone does not replay -- unarmed, the lookup still calls the provider and still costs money. A testing aid that fires without being asked is the silent fallback this is numbered apart to avoid',
+            'calls=' + (FETCHES.length - unarmedBefore) + ' replay=' + JSON.stringify(CT.compsState().replay));
+
+        // ---- ARMED: the replay itself ---------------------------------------
+        CT.replaySetArmed(true);
+        var armedBefore = FETCHES.length;
+        return CT.compsLookup().then(function () {
+          var repState = CT.compsState();
+          var repBox = document.getElementById('compsBox').innerHTML;
+          var note = (repBox.match(/<div class="note warnline replaynote">[\s\S]*?<\/div>/) || [''])[0];
+          res(FETCHES.length === armedBefore && repState.replay !== null,
+              'RP1 GATE: an armed lookup makes NO transport call at all -- not a cached response to a call that happened, no call. That is the whole claim, and the money is the reason C1 exists',
+              'calls=' + (FETCHES.length - armedBefore));
+          res(deepEqual(repState.rows, liveRows) && deepEqual(repState.dropped, liveDrop) &&
+              liveRows.length === 6 && liveDrop.length === 2,
+              'RP1 GATE (ruled): replay and live produce IDENTICAL parsed rows AND identical drops from identical raw -- the substitution swaps the raw string and nothing else, so the parser, the filter and every surface downstream cannot tell the difference. Non-vacuous: the comparison is over six kept and two dropped, not two empty lists',
+              'rows=' + repState.rows.length + '/' + liveRows.length + ' dropped=' + repState.dropped.length + '/' + liveDrop.length);
+          res(note.indexOf('REPLAYED') >= 0 && note.indexOf(C1_DAY) >= 0 && note.indexOf(CT.todayKey()) < 0,
+              'RP1 GATE (ruled): the replayed surface SAYS SO, with THE DATE IT WAS CAPTURED -- and the date is the stored one, not today. A notice printing Date.now() would carry the one fact it exists to carry and carry it wrong',
+              'note=' + note.replace(/<[^>]+>/g, '').slice(0, 120) + ' today=' + CT.todayKey());
+          res(note.indexOf('90-day window') >= 0 && note.indexOf('moved') >= 0,
+              'RP1 GATE: and it states WHY the date matters -- those sales were a 90-day window on that date and the window has moved. The date alone is a timestamp; this is what makes it a warning');
+          res(repBox.indexOf('no charge') >= 0 && repBox.indexOf('for this lookup') < 0,
+              'RP1 GATE (ruled): the cost line does NOT claim a charge on a replayed lookup -- telling the subscriber they were billed $0.40 for a call that never happened is a false statement about their own money');
+
+          // ---- THE THIN BRANCH, which is a SECOND render path ----------------
+          // renderComps returns early below COMPS_MIN_SHOWN, so the notice is
+          // emitted twice in the source. An assertion covering one branch leaves
+          // the other free to drop it, and staleness matters MORE here: "too few
+          // sales" on a window that has moved is a different claim.
+          var THIN = JSON.stringify([
+            { itemId: 't1', title: 'Amazing Spider-Man 151 VG', condition: 'Pre-Owned', conditionId: 3000,
+              endedAt: '2026-09-02T11:00:00Z', soldPrice: 12, soldCurrency: 'USD', listingType: 'buy_it_now', isBestOfferAccepted: false }
+          ]);
+          CT.setClock(function () { return Date.parse(C1_AT); });
+          CT.replaySave(THIN, CT.compsQuery());
+          CT.setClock(null);
+          CT.replaySetArmed(true);
+          return CT.compsLookup().then(function () {
+            var thinBox = document.getElementById('compsBox').innerHTML;
+            res(thinBox.indexOf('Too few recent sales') >= 0 && thinBox.indexOf('REPLAYED') >= 0 &&
+                thinBox.indexOf(C1_DAY) >= 0,
+                'RP1 GATE: the BELOW-THREE branch says so too -- it is a second early return in renderComps, and a thin replayed result is still a replay',
+                'thin=' + (thinBox.indexOf('Too few recent sales') >= 0) + ' said=' + (thinBox.indexOf('REPLAYED') >= 0));
+
+            CT.replayClear();
+            res(CT.replayArmed() === false && CT.replayRead() === null,
+                'RP1: forgetting the saved response DISARMS as well as clearing it -- an arm pointing at nothing is a state that can only confuse');
+            res(CT.replaySetArmed(true).armed === false,
+                'RP1 GATE: arming with nothing saved is REFUSED rather than recorded -- armed means armed AND present, so the flag can never promise a replay that cannot happen');
+
+            CT.compsClear(); CT.clearConfirmed(); CT.captureDiscard();
+            CT.credClear('comps'); FETCHES = []; FETCH_SCRIPT = [];
+          });
+        });
+      });
+    });
+  });
+
   // ---- PFX: the storage prefix, swept over the WHOLE run (D1) ---------------
   step(function () {
     var keys = Object.keys(window.__keysEverWritten).filter(function (k) { return k !== '__ct_probe__'; });

@@ -156,6 +156,11 @@
   .cmplist .cmprow:first-child{border-top:none}
   /* R6: the summon. The button names how much it is about to show, because a
      control that hides its own scope is the thing being removed here. */
+  /* C1: a replayed response must be unmistakable. It carries .warnline's
+     treatment because it changes what every number below it MEANS -- the same
+     reason the raw-vs-slab statement and the window sit where the numbers are,
+     not in a footnote. */
+  .replaynote{font-weight:700;letter-spacing:.01em}
   .cmpsummon{margin-top:14px}
   .cmpsummon .cmplist{margin-top:10px}
   .cmpprice{font-weight:800;font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -337,6 +342,21 @@
         <textarea id="wantsBox" placeholder="One per line — e.g. Amazing Spider-Man #129" oninput="wantsSave(this.value)" aria-label="Want list"></textarea>
         <div id="wantsReport"></div>
         <div class="note">Photograph a box and the draft says which of these you were already looking for. Matching forgives spelling and format — “The Amazing Spider-Man #129” and “Amazing Spider-Man 129” are the same want — but the issue must match, because a different issue is a different book. This version matches exact issues only.</div>
+      </div>
+      <!-- C1: TEST MACHINERY, and the card says so where someone would look.
+           Not a product feature and not an offline mode: there is no "use the
+           last result if the call fails" path, because that is how a testing aid
+           becomes a silent fallback nobody remembers is there. -->
+      <div class="card" data-setting="replay">
+        <h2>Response replay <small>— testing only</small></h2>
+        <textarea id="replayBox" placeholder="Paste the dataset JSON from an Apify run you have already paid for — the array of sold listings."></textarea>
+        <button class="btn" onclick="replaySaveFromBox()">Save this response</button>
+        <button class="btn" onclick="replayForget()">Forget it</button>
+        <label for="replayArm" style="margin-top:12px">
+          <input type="checkbox" id="replayArm" onchange="replayArmFromBox(this.checked)"> Replay instead of calling
+        </label>
+        <div id="replayReport"></div>
+        <div class="note">A lookup costs about $0.40 and returns the same rows every time, so checking a layout change should not cost money. A replayed result <b>says so on the comps surface, with the date it was captured</b> — those sales were a 90-day window on that date, and the window has moved since. Arming resets when you reload, so a saved response can never quietly replace a live call.</div>
       </div>
       <div class="card" data-setting="storage">
         <h2>Storage</h2>

@@ -795,6 +795,52 @@ report "a label back below the type floor" "under 12px" "$(run_layout)"; restore
 mutate 's/function compsListToggle\(\) \{ LIST_SHOWN = !LIST_SHOWN; renderComps\(\);/function compsListToggle() { LIST_SHOWN = !LIST_SHOWN;/' app.js
 report "summoning stops producing the list" "R6 GATE" "$(run_dl)"; restore
 
+# ---- C1 / RP1: response replay, TEST MACHINERY ----------------------------
+# The two rulings these rows exist to enforce: a replayed response MUST SAY SO
+# with the date it was captured, and ARMING IS EXPLICIT. Every mutation below is
+# a plausible edit -- a line deleted, a condition simplified, a date taken from
+# the clock instead of the record. A defect nobody working on this file could
+# credibly write proves nothing about the gate that catches it.
+#
+# LABELLED RP1, NOT C1. The vision-contract block already owns the label "C1" in
+# the harness, and a grep for "the C1 block" returned thirteen assertions, none
+# of them these. The slice is still C1 in GATES.md; the assertions are RP1.
+
+# THE NOTICE, on each of renderComps' TWO early returns. One row per branch,
+# because a single row would leave whichever branch it did not touch free to
+# drop the notice while the pass still read green.
+mutate 's/\n    replayNoticeHTML\(\) \+/\n/' app.js
+report "replay notice deleted (main branch)" "RP1 GATE" "$(run_dl)"; restore
+
+mutate 's/\n      replayNoticeHTML\(\) \+/\n/' app.js
+report "replay notice deleted (thin branch)" "RP1 GATE" "$(run_dl)"; restore
+
+# THE DATE ITSELF, and this is the row the "not today" clause was written for.
+# A notice reading the clock still SAYS it is a replay, still renders, still
+# looks right -- and is wrong about the one fact it exists to carry.
+mutate 's/const d = String\(COMPS\.replay\.at \|\| \x27\x27\)\.slice\(0, 10\);/const d = new Date(nowMs()).toISOString().slice(0, 10);/' app.js
+report "notice prints TODAY, not the capture date" "RP1 GATE" "$(run_dl)"; restore
+
+# ARMING. The whole of the second ruling: a saved response present is not a
+# reason to replay. This is the silent-substitution failure, and it is the one
+# that would make every measurement taken afterwards untrustworthy.
+mutate 's/function replayArmed\(\) \{ return REPLAY_ARMED \&\& !!replayRead\(\); \}/function replayArmed() { return !!replayRead(); }/' app.js
+report "arming becomes implicit (saved = armed)" "RP1 GATE" "$(run_dl)"; restore
+
+# THE COST LINE, claiming a charge for a call that never happened.
+mutate 's/\(COMPS\.replay \? `no charge/(false ? `no charge/' app.js
+report "replayed lookup claims the $0.40 charge" "RP1 GATE" "$(run_dl)"; restore
+
+# THE EXPORT, carrying what is not the subscriber's data (K1's property).
+mutate 's/function exportJSON\(\) \{ return JSON\.stringify\(APP_STATE, null, 2\); \}/function exportJSON() { return JSON.stringify(APP_STATE, null, 2) + String(Store.readRaw(REPLAY_KEY) || \x27\x27); }/' app.js
+report "saved response leaks into the export" "RP1 GATE (K1 shape)" "$(run_dl)"; restore
+
+# DIVERGENCE. The claim that makes every downstream surface safe is that replay
+# substitutes the raw string AND NOTHING ELSE. This breaks exactly that, and
+# nothing else about the app changes: the plot still draws, the ask still counts.
+mutate 's/\? Promise\.resolve\(\{ transport: true, httpOk: true, status: 200, raw: saved\.raw \}\)/? Promise.resolve({ transport: true, httpOk: true, status: 200, raw: JSON.stringify(JSON.parse(saved.raw).slice(0, 3)) })/' app.js
+report "replay returns a TRUNCATED response" "RP1 GATE (ruled)" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
   printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"

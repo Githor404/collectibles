@@ -273,6 +273,38 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 
 **What was removed, and what was not.** The prices Settings card is gone; the prices **role keeps every piece of its machinery**, which the gates still exercise — pacing at 1 call/s, redaction of an echoing provider, and the `auth: 'none'` proof that the metering server of D1 is a table edit. **The capability is intact; only the invitation is gone.**
 
+## D21 — Test machinery is numbered apart, armed explicitly, and says so on the surface (2026-09-15)
+
+**Ruled with the slice it governs (C1, response replay).** A comps lookup costs about **$0.40** and returns the same sales every time; with the subscriber's Apify credits exhausted, the alternative to replaying a saved response is not "pay per check", it is **cannot check at all**. That makes the capability necessary. It also makes it dangerous, because everything a testing aid needs in order to be useful is also what it would need in order to quietly become a product feature.
+
+**The rule, in four parts. Each one is a fence, and each is gated.**
+
+1. **Numbered apart.** Test-phase machinery takes a **C-series** number, never an R. The R-series is what the product does; C is what the workshop needs. A reader scanning `GATES.md` must be able to tell which of the two a slice is **without reading it**.
+2. **Armed explicitly, and never persistently.** A saved response present is **not** a reason to replay. The arm lives **in memory only**, so it cannot outlive a reload — a persisted arm would replay silently in a later session and make **every measurement taken afterwards untrustworthy while nothing looked wrong**. One click per session is the price of that guarantee, and it is cheap.
+3. **Never a fallback.** There is no "use the last result if the call fails" path, and there must not be one. That single line is how a testing aid becomes a cache, then an offline mode, then a behaviour nobody remembers is there. **The absence is the feature.**
+4. **It says so, where the numbers are.** A replayed surface states that it is replayed **and the date it was captured**, because those sales were a moving 90-day window on that date. Same reasoning that already puts the count and the window beside the prices: anything that changes what a number *means* is stated where the number is, never in a footnote. Its **cost line must not claim a charge** — telling the subscriber they were billed for a call that never happened is brief rule 7's conflation aimed at their own money.
+
+**And it is held outside the state object**, like a credential (D1). It is not the subscriber's data, so `exportJSON` — which serialises `APP_STATE` — must be **unable** to carry it. By construction, not by a filter someone has to remember.
+
+**Why this is a decision and not a comment in the file.** The fences are individually reasonable to remove. Each one, taken alone, looks like a small convenience: *persist the arm so you don't have to click*; *fall back on the saved copy when the network is down*; *drop the banner, it's noisy*. Ruled together and gated, removing one becomes a decision against a record rather than a tidy-up. **The naming is the first fence; the gates are the rest.**
+
+## D20 — Say what was DONE; mark intent as intent (governance, 2026-09-15)
+
+**Where it happened.** A turn ended with *"I'm doing this as one coherent repointing pass rather than piecemeal"* — and no work was performed. The sentence describes a pass in progress. None had started. The subscriber read the report as work underway and **held a queued slice back waiting for it**, so the cost of the ambiguity landed on them rather than on me.
+
+**The mechanism, which is the generalisable part.** The writer always knows which half of a report is finished and which is intended. **The reader cannot tell them apart**, because completed and planned work are described in the same register — the same verbs, the same confidence, the same level of detail. A plan written fluently is indistinguishable from a result. Nothing in the text marks the boundary, so the reader supplies the more natural reading, which is that it happened.
+
+**This repo already draws exactly this line everywhere else.** A gate is *designed, not demonstrated* until it has been run against its defect and seen to fail; `GATES.md` carries "NOT YET DEMONSTRATED" sections precisely so a reader cannot mistake an intention for evidence. D20 is that discipline applied to prose about one's own work rather than to gates.
+
+**The rule.** Report in two registers, and keep them apart:
+
+- **Past tense for what was done**, and only for what was actually run, edited or measured.
+- **"Next I will…" for intent**, in a sentence that cannot be read as a report.
+
+Never narrate a plan in the present progressive — *"I'm doing X"*, *"taking these together"* — at the end of a turn that does not contain X. If a turn ends without the work, the honest line is **"next I will"**, or better, the work.
+
+**The cheap test:** if a sentence would need a tense change to remain true after the tool calls it describes, it is intent and must be marked as such.
+
 ## D19 — An unmeasured quantifier is an argument, not a description (governance, 2026-09-15)
 
 **Where it happened.** Asked whether R6 should split, I wrote that removing the permanent comps list would mean repointing the gates "a lot of gates are asserted against" — and used that to argue for a particular shape of split. Measured: **five sites.** Three in the harness, two in the layout gate.

@@ -1511,6 +1511,35 @@ function renderWantFlag() {
   const el = document.getElementById('wantFlag');
   if (el) el.innerHTML = wantFlagHTML(identityValue());
 }
+// C1's surface. Test machinery, and the card says so where someone would look.
+function replaySaveFromBox() {
+  const box = document.getElementById('replayBox');
+  const r = replaySave(box ? box.value : '', compsQuery());
+  renderReplayCard(r);
+  return r;
+}
+function replayArmFromBox(on) { const r = replaySetArmed(on); renderReplayCard(); return r; }
+function replayForget() { replayClear(); const b = document.getElementById('replayBox'); if (b) b.value = ''; renderReplayCard(); return { ok: true }; }
+function renderReplayCard(last) {
+  const rep = document.getElementById('replayReport');
+  const arm = document.getElementById('replayArm');
+  const saved = replayRead();
+  if (arm) { arm.checked = replayArmed(); arm.disabled = !saved; }
+  if (!rep) return;
+  const bits = [];
+  if (last && last.error) bits.push('<span class="idna">' + esc(last.error) + '</span>');
+  if (saved) {
+    bits.push(esc(saved.rows + ' listing' + (saved.rows === 1 ? '' : 's') +
+      ' saved ' + String(saved.at).slice(0, 10) +
+      (saved.query ? ' for “' + saved.query + '”' : '')));
+    bits.push(replayArmed()
+      ? '<b>ARMED</b> — the next lookup will replay this instead of calling.'
+      : 'Not armed. Lookups call the provider and cost money.');
+  } else {
+    bits.push('Nothing saved. Paste a response above.');
+  }
+  rep.innerHTML = `<div class="note">${bits.join('<br>')}</div>`;
+}
 function renderWantsCard() {
   const box = document.getElementById('wantsBox');
   const rep = document.getElementById('wantsReport');
@@ -1869,6 +1898,68 @@ function compsPing() {
   });
 }
 
+// ---- C1: RESPONSE REPLAY, FOR TESTING ONLY ---------------------------------
+// A lookup costs about $0.40 and returns the same rows every time. Checking a
+// layout change should not cost money -- and with credits exhausted the
+// alternative to replay is not "pay per check", it is CANNOT CHECK AT ALL.
+//
+// C, NOT R. This is test-phase machinery, numbered apart from the feature series
+// deliberately. NOT a product feature, NOT an offline mode, NOT a cache: there is
+// no "use the last result if the call fails" path, because that is how a testing
+// aid becomes a silent fallback nobody remembers is there.
+//
+// IN MEMORY ONLY (REPLAY_ARMED). A persisted arm could outlive a reload and
+// replay silently in a later session, which would make every measurement taken
+// afterwards untrustworthy without anything looking wrong. One click per session
+// is the price of that guarantee.
+//
+// OUTSIDE THE STATE OBJECT, like a credential (D1). It is not the subscriber's
+// data and must never enter an export -- and exportJSON serialises APP_STATE, so
+// holding it elsewhere makes that impossible BY CONSTRUCTION rather than by a
+// filter someone has to remember.
+const REPLAY_KEY = 'collectibles-replay';   // PFX1: every storage key is prefixed
+let REPLAY_ARMED = false;
+
+function replayRead() {
+  let raw = null;
+  try { raw = Store.readRaw(REPLAY_KEY); } catch (e) {}
+  if (!raw) return null;
+  try {
+    const o = JSON.parse(raw);
+    if (!o || typeof o !== 'object' || typeof o.raw !== 'string' || !o.raw) return null;
+    return { at: String(o.at || ''), query: String(o.query || ''), raw: o.raw, rows: num(o.rows) };
+  } catch (e) { return null; }
+}
+// PARSED BEFORE IT IS STORED, so a paste that is not a comps response is refused
+// with the PARSER'S OWN message rather than accepted and discovered later. What
+// is in the key is therefore always something parseComps has already accepted.
+function replaySave(text, query) {
+  const body = String(text == null ? '' : text).trim();
+  if (!body) return { ok: false, error: 'Nothing to save.' };
+  const parsed = parseComps(body);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  const rec = { at: new Date(nowMs()).toISOString(), query: String(query || ''),
+                raw: body, rows: parsed.rows.length };
+  const wrote = Store.writeAux(REPLAY_KEY, JSON.stringify(rec));
+  return { ok: !!wrote, rows: parsed.rows.length, at: rec.at,
+           error: wrote ? '' : 'Storage refused the write — nothing was saved.' };
+}
+function replayClear() { Store.writeAux(REPLAY_KEY, ''); REPLAY_ARMED = false; return { ok: true }; }
+// Armed AND present. A saved response on its own is never a reason to replay.
+function replayArmed() { return REPLAY_ARMED && !!replayRead(); }
+function replaySetArmed(on) { REPLAY_ARMED = !!on && !!replayRead(); return { ok: true, armed: REPLAY_ARMED }; }
+// RULED: a replayed response MUST SAY SO, with the date it was captured. Those
+// sales were a 90-day window on that date and the window has moved since, so a
+// surface identical either way would eventually mislead. Same reasoning that
+// already puts the count and the window where the numbers are.
+function replayNoticeHTML() {
+  if (!COMPS || !COMPS.replay) return '';
+  const d = String(COMPS.replay.at || '').slice(0, 10);
+  return `<div class="note warnline replaynote">REPLAYED — a saved response from ` +
+    `${esc(d || 'an unrecorded date')}, not looked up just now. Those sales were a ` +
+    `${esc(String(COMPS_WINDOW_DAYS))}-day window on that date, and the window has moved since.</div>`;
+}
+
 function compsLookup() {
   const cf = confirmedIdentity();
   if (!cf) return Promise.resolve({ ok: false, error: 'Confirm a book first.' });
@@ -1878,10 +1969,19 @@ function compsLookup() {
   const bound = compsBound(body);
   COMPS = { phase: 'loading', query: q, bound: bound, rows: [], dropped: [], error: '', at: '' };
   renderComps();
-  return egress('comps', {
-    path: '/acts/' + PROVIDERS.apify.actor + '/run-sync-get-dataset-items',
-    json: body, budget: COMPS_BUDGET_MS,
-  }).then(function (r) {
+  // C1: THE ONLY LINE THAT DIFFERS. A replay substitutes the RAW STRING and
+  // nothing else, so the branch below is not merely equivalent to the live
+  // path -- it IS the live path, the same statements on the same object. The
+  // parser, the filter, the plot, the ask comparison and the summon all operate
+  // on parsed rows and cannot tell the difference, which is what makes this safe.
+  const saved = replayArmed() ? replayRead() : null;
+  const call = saved
+    ? Promise.resolve({ transport: true, httpOk: true, status: 200, raw: saved.raw })
+    : egress('comps', {
+        path: '/acts/' + PROVIDERS.apify.actor + '/run-sync-get-dataset-items',
+        json: body, budget: COMPS_BUDGET_MS,
+      });
+  return call.then(function (r) {
     const fail = function (msg) {
       COMPS = { phase: 'error', query: q, bound: bound, rows: [], dropped: [], error: msg, at: '' };
       renderComps();
@@ -1895,7 +1995,9 @@ function compsLookup() {
     if (!parsed.ok) return fail(parsed.error);
     const split = compsFilter(parsed.rows);
     COMPS = { phase: 'done', query: q, bound: bound, rows: split.kept, dropped: split.dropped,
-              error: '', at: new Date(nowMs()).toISOString(), returned: parsed.rows.length };
+              error: '', at: new Date(nowMs()).toISOString(), returned: parsed.rows.length,
+              // C1: how every surface knows. Null on a live lookup.
+              replay: saved ? { at: saved.at } : null };
     renderComps(); renderAsk();   // the ask inputs appear WITH the comps they need
     return { ok: true, kept: split.kept.length, dropped: split.dropped.length };
   });
@@ -1970,6 +2072,9 @@ function renderComps() {
   // though it were a finding.
   if (n < COMPS_MIN_SHOWN)
     return void (el.innerHTML = `<div class="comps">${head}` +
+      // A thin REPLAYED result is still a replay, and staleness matters more
+      // here, not less: "too few sales" on a moved window is a different claim.
+      replayNoticeHTML() +
       `<div class="note warnline">Too few recent sales to compare — ${n === 0 ? 'none' : 'only ' + n} in the last ${esc(win)}. ` +
       `That is not a low price or a high one; it is no answer. Try a broader search, or decide without this.</div>` +
       (n ? sorted.map(compsRowHTML).join('') : '') +
@@ -1979,6 +2084,7 @@ function renderComps() {
   // that changes what a number MEANS is not foldable -- the count and the window
   // ride in `head` (CQ7 gates both), and the raw/slab statement is here.
   return void (el.innerHTML = `<div class="comps">${head}` +
+    replayNoticeHTML() +
     // D10, stated WHERE THE NUMBERS ARE and not in a footnote. This sentence
     // changes what every price means, so it cannot be one tap away.
     `<div class="note warnline">These are mixed: this lookup cannot tell a raw copy from a graded slab. ` +
@@ -2298,7 +2404,11 @@ function compsFootHTML() {
         `<span class="cmpdrop" hidden>${d.map(function (x) { return `<div class="cmprow"><span class="cmptitle">${esc(x.title)}</span><span class="cmpmeta">${esc(x.why)}</span></div>`; }).join('')}</span></div>`
       : '') +
     `<div class="note">eBay sold listings via Apify · searched “${esc(COMPS.query)}” · ` +
-    `about ${esc(compsMoney(COMPS.bound.usd))} for this lookup. No average, no estimate — these are the sales.` +
+    // C1: a replay costs nothing, and saying it cost $0.40 would be a false
+    // statement about the subscriber's own money -- brief rule 7's conflation
+    // pointed at the wrong target.
+    (COMPS.replay ? `no charge — replayed from a saved response. ` : `about ${esc(compsMoney(COMPS.bound.usd))} for this lookup. `) +
+    `No average, no estimate — these are the sales.` +
     (cenBits.length ? `<br><span class="fine">Listing types as the provider sent them: ${esc(cenBits.join(', '))}.</span>` : '') +
     `</div>`;
 }
@@ -2481,7 +2591,7 @@ function renderAskLive() {
 // WHY A NOTICE WORKS WITH NO WORKER: there is no app-controlled cache, so a load
 // fetches current bytes and the notice fires on it. The worker is what would
 // CREATE the stale-shell problem it then solves.
-const APP_VERSION = '0.5.0';
+const APP_VERSION = '0.6.0';
 const VERSION_KEY = 'collectibles-version';   // PFX1: every storage key is prefixed
 
 // One line per release, newest LAST. The newest entry's `v` must equal
@@ -2501,6 +2611,7 @@ const VERSION_LOG = [
   { v: '0.3.0', d: '2026-09-14', note: 'Sold comps are now drawn, not just listed. Every sale is one mark, spaced by price — and spaced by RATIO rather than difference, because grade bands multiply: $9 to $29 is the same step as $90 to $290. Clusters with gaps between them are different markets, and the gaps are the grade boundaries this data refuses to state; your eye finds them, the app does not guess at them. Mark shapes show how each sale closed — auction, Buy It Now, or a type the provider did not state — and a ring means a best offer was accepted. Tap any mark for the seller\'s own words. Nothing is fitted, smoothed or averaged: 98 sales are enough to SEE the shape and not enough to characterise it. The full list and the explanations now fold away, so the numbers stop competing with the prose for the same screen.' },
   { v: '0.4.0', d: '2026-09-15', note: 'Bigger, clearer type. The app declared a readable 16px base and then opted out of it almost everywhere — eleven different text sizes, eight of them smaller than that base, and the very smallest were the plot’s own axis labels. There are now four sizes and a floor: nothing is smaller than 12px. Two numbers moved up to where they belong — the count of sales above and below your price, which is the whole answer this app exists to give, and the line stating how many sales and over what window. Form fields are 16px, which also stops the phone zooming in every time you tap one. And the plot now says “Tap any mark to see that sale” in its own line under the marks, instead of hiding that at the end of a paragraph about spacing.' },
   { v: '0.5.0', d: '2026-09-15', note: 'The list of every sale has stopped sitting under the plot. The plot IS the list now: tap a mark for that sale, and the nearest sales to your price stay beside it as before. When you do want to read all of them, the button says how many it is about to show — “List all 84 sales” — and you can put it away again. Nothing was removed: the sellers’ own words are still the only grade signal there is, so they stay one tap away rather than filling the screen by default.' },
+  { v: '0.6.0', d: '2026-09-15', note: 'A way to save one sold-comps response and replay it instead of calling the provider. This is TEST MACHINERY rather than an offline mode, and it is built to stay that way: a lookup costs about $0.40 and returns the same sales every time, so checking a layout change should not cost money. It replays ONLY when you arm it, and arming lasts one session — a saved response sitting in Settings is never on its own a reason to skip a call, because a testing aid that fires without being asked would make every measurement taken afterwards untrustworthy while nothing looked wrong. A replayed result SAYS SO where the numbers are, with the date it was captured, because those sales were a 90-day window on that date and the window has moved since. The cost line reads “no charge” rather than billing you for a call that never happened, and the saved response is kept outside your data, so an export cannot carry it.' },
 ];
 
 // Numeric per segment, so 0.2.0 < 0.10.0 -- a string compare gets that backwards
@@ -2696,6 +2807,7 @@ function refresh() {
   renderAsk();
   renderBuildLine();
   renderWantsCard();
+  renderReplayCard();
   renderCaptureBtn(); renderCaptureOutcome();
 }
 function openSettings() {
@@ -2760,6 +2872,10 @@ window.CT = {
   compsRowHTML, compsShowDropped, compsMoney, compsDate, compsListHTML, __setComps,
   // R6 -- the list is summoned, never permanent
   compsListShown, compsListToggle, compsListBlockHTML,
+  // C1 -- response replay, TEST MACHINERY. Held outside the state object so an
+  // export cannot carry it, and armed in memory so it cannot outlive a reload.
+  REPLAY_KEY, replayRead, replaySave, replayClear, replayArmed, replaySetArmed,
+  replayNoticeHTML, renderReplayCard, replaySaveFromBox, replayArmFromBox, replayForget,
   // R5 -- the distribution, drawn. Pure emitters, so the markup is gateable
   // without a surface; the tap repaints in place.
   PLOT_W, PLOT_H, PLOT_MAX_STACK, compsScale, compsTicks, compsMarks, compsMarkSVG,
