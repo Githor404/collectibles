@@ -273,6 +273,31 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 
 **What was removed, and what was not.** The prices Settings card is gone; the prices **role keeps every piece of its machinery**, which the gates still exercise — pacing at 1 call/s, redaction of an echoing provider, and the `auth: 'none'` proof that the metering server of D1 is a table edit. **The capability is intact; only the invitation is gone.**
 
+## D23 — A coverage claim can be true of the mechanism and false of the arrangement (governance, 2026-09-15)
+
+**Where it happened.** C1's pre-registration listed six gate obligations and dismissed one of them in parentheses: *"The storage key is **prefixed** (PFX1 already sweeps this)."* Every word about PFX1 was true — it sweeps **every** storage key written in the whole run and fails on any that is not prefixed. What the sentence never asked is **when PFX1 runs**. It is a `step()`, not synchronous, and steps execute in registration order: it reads `__keysEverWritten` **at the moment it runs**. A C1 block registered after it would have written the replay key *after* the sweep had already read the dictionary. The suite would have stayed green while the one key C1 adds went uncovered by the sweep cited to cover it.
+
+**The mechanism, which is the generalisable part.** A coverage claim has **two halves**: does the instrument look for *this class of thing*, and does it look at a **time and place where this instance exists**. The first half is a property of the instrument, and reading the instrument answers it. The second is a property of the **arrangement** — ordering, scope, timing, lifetime — and it is **invisible in the instrument's own source**. Citing the instrument answers only the first half in a sentence that sounds like it answered both. Nothing about PFX1 was wrong; the question was never about PFX1.
+
+**Family: D19.** There, a quantifier was doing argumentative work it had not earned because it was unmeasured. Here the claim *was* checked — against the wrong half. **D19 says measure before you argue; this says make sure you measured the half the argument rests on.** It is also HT-D60 Clause 4 wearing different clothes: an instrument that cannot exhibit the failure, because of *when* it looks rather than *what* it looks for.
+
+**The rule.** When a gate obligation is dismissed because an existing gate already covers it, state **where and when that gate runs relative to the thing it is claimed to cover** — and then **assert the coverage rather than inferring it**. C1's block is registered **before** PFX1 deliberately, the placement carries a comment saying it is load-bearing, and `RP1` asserts that the sweep **actually saw** the key rather than trusting that it would.
+
+**The cheap test:** *would this still be true if the new code ran later?* If the answer depends on ordering, the claim is about the arrangement, and the arrangement is where it has to be checked.
+
+## D22 — Shared mutable state between steps means one failure can masquerade as several (2026-09-15)
+
+**Where it happened.** C1's harness block ran as a `step()` and assumed the shipped vision contract. Steps registered earlier install **synthetic** contracts, and nothing restores the shipped one. So `openCaptureResult` parsed against whatever happened to be current, `captureAccept()` produced nothing, `compsLookup` returned early on *"Confirm a book first"*, `COMPS` stayed `null`, and reading `.rows` threw **inside a promise**. The harness's own design then did what it is written to do: the steps after an async throw do not run. **PFX1, ID11 and ID13 never executed.** The reported count *fell*, 473 → 466 — eight assertions lost, six of them belonging to blocks with nothing whatsoever to do with replay.
+
+**The mechanism.** Steps share one app instance. A step that mutates state and does not restore it hands the next step a different starting position, so a failure **appears where it lands, not where it was caused**. An async throw makes this much worse than a wrong verdict: it converts one defect into an **arbitrary number of missing assertions**, and a suite reporting "eight fewer assertions" is reporting a symptom whose cause is one line three blocks earlier. The same failure in the synchronous section would have cost exactly one assertion.
+
+**Two rules, and the second is the one that generalises furthest.**
+
+1. **A step ESTABLISHES the state it depends on; it never inherits it.** This is already the rule R6's absence gate follows — it establishes the state it measures rather than depending on file order, *because an assertion that passes or fails according to which block ran before it is not measuring the app*. D22 says the same thing about **preconditions** rather than about subjects.
+2. **A precondition gets its own assertion, before the work that needs it.** A precondition that fails silently into a crash is strictly worse than one that fails loudly as itself: the crash names a null dereference eight assertions downstream, while the assertion **names the cause**. Paired with an **unconditional** state check and an early return, so one failure stays one failure and the pinned count cannot move with the outcome.
+
+**Why the count mattered more than the failure.** A red assertion is a defect to fix. A **falling count** is a defect that has silently taken evidence with it — and this repo pins the count precisely because a silently reduced one reads almost exactly like a clean run. That pin is what turned an eight-assertion loss into something visible in one line.
+
 ## D21 — Test machinery is numbered apart, armed explicitly, and says so on the surface (2026-09-15)
 
 **Ruled with the slice it governs (C1, response replay).** A comps lookup costs about **$0.40** and returns the same sales every time; with the subscriber's Apify credits exhausted, the alternative to replaying a saved response is not "pay per check", it is **cannot check at all**. That makes the capability necessary. It also makes it dangerous, because everything a testing aid needs in order to be useful is also what it would need in order to quietly become a product feature.
