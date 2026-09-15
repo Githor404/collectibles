@@ -1623,21 +1623,29 @@ The vision-contract block has used `C1:` since the port. A grep for "the C1 bloc
 
 **3. The em-dash trap did not fire, because the patterns avoid it.** Every defect row matches a **shape** — an indentation, a condition, a function signature — and none matches the prose containing `—`. Row 55's death by pinned literal is the precedent.
 
-### NOT YET DEMONSTRATED — rows 71–77 pre-registered, the pass not yet run
+### DEMONSTRATED — rows 71–77, each seen to fail (HT-D60 Clause 1)
 
-Seven rows are written against the properties above. **They are not evidence until each has been run and seen to fail** (HT-D60 Clause 1), and this section will be updated with the verdicts and the first named failure for each.
+Run on trees committed first at `aa67e0e`, and re-run at `d3a4a4c` after the reporting fix below. **Zero rotted mutations**; all four mutated files restored identical to their pre-run copies.
 
-| row | planted defect | the property it should break |
-|---|---|---|
-| 71 | replay notice deleted (main branch) | the surface says so |
-| 72 | replay notice deleted (thin branch) | …on the below-three path too |
-| 73 | the notice reads the **clock** instead of the record | the date is the **captured** one |
-| 74 | `replayArmed()` drops `REPLAY_ARMED` | arming is explicit |
-| 75 | the cost line always claims $0.40 | no false charge |
-| 76 | `exportJSON` appends the saved raw | it never enters an export |
-| 77 | replay returns a **truncated** response | replay and live are identical |
+| row | planted defect | verdict | first named failure |
+|---|---|---|---|
+| 71 | replay notice deleted (**main** branch) | `GATE: FAIL` | `RP1 GATE (ruled): the replayed surface SAYS SO, with THE DATE IT WAS CAPTURED …` |
+| 72 | replay notice deleted (**thin** branch) | `GATE: FAIL` | `RP1 GATE: the BELOW-THREE branch says so too …` |
+| 73 | the notice reads the **clock**, not the record | `GATE: FAIL` | `RP1 GATE (ruled): the replayed surface SAYS SO, with THE DATE IT WAS CAPTURED …` |
+| 74 | `replayArmed()` drops `REPLAY_ARMED` | `GATE: FAIL` | `RP1 GATE (ruled): a SAVED response alone does not replay …` |
+| 75 | the cost line always claims $0.40 | `GATE: FAIL` | `RP1 GATE (ruled): the cost line does NOT claim a charge on a replayed lookup …` |
+| 76 | `exportJSON` appends the saved raw | `GATE: FAIL` | `RP1 GATE (K1 shape): the saved response is ABSENT from the export …` |
+| 77 | replay returns a **truncated** response | `GATE: FAIL` | `RP1 GATE (ruled): replay and live produce IDENTICAL parsed rows …` |
 
-**Row 73 is the weighted one.** A notice that reads the clock still renders, still says REPLAYED, still looks entirely correct — and is wrong about the single fact it exists to carry. It is the only row here whose defect is invisible on the surface it corrupts.
+**Row 73 is the weighted one.** A notice that reads the clock still renders, still says `REPLAYED`, still looks entirely correct — and is wrong about the single fact it exists to carry. It is the only row here whose defect is **invisible on the surface it corrupts**, which is why the assertion pins a capture date of 2026-08-20 against a run on 2026-09-15 rather than merely checking that *a* date appears.
+
+**Rows 71 and 73 name the same assertion, and that is the point rather than a redundancy.** One deletes the notice; the other leaves it in place and falsifies its content. That the same assertion catches both is what makes its two clauses — *it says so* and *the date is the stored one* — independently load-bearing. **Row 72 proves the second branch is not covered by the first**: `renderComps` has two early returns, and deleting the notice from one leaves the other green.
+
+### The pass found two defects in its own instrument, both mine
+
+**1. `report()` takes an ERE, not a literal.** Rows 76 and 77 first reported `NOTHING NAMED MATCHED -- SUSPECT THE FIXTURE` while their gates were failing exactly as intended. The pattern is interpolated into `grep -E "^FAIL +.*(${pat})"`, so `RP1 GATE (K1 shape)` is a regex whose parentheses form a capture group — it matches the text `RP1 GATE K1 shape`, which no assertion contains. The five rows that worked happened to use a paren-free pattern. **This is row 69's lesson in a new costume**: the gate failed, my description of *how* it would fail did not match, and the harness refused to call that evidence. Repointed to paren-free substrings **specific to each row's own assertion**, so a row names its own defect rather than whichever `RP1` failure prints first.
+
+**2. A row label silently interpolated.** Row 75 printed `replayed lookup claims the tests/defect-pass.sh.40 charge` — `"$0.40"` inside a double-quoted argument expanded `$0` to the script's own name. The verdict was unaffected; **the record would not have been**, and a table of planted defects whose names are wrong is worse than no table. Escaped.
 
 ### What this does not cover (Clause 2)
 
