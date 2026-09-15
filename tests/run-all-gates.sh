@@ -36,7 +36,22 @@ PASSED=""
 DL_OUT=$(bash "$DIR/run-data-layer.sh" 2>&1)
 DL_RC=$?
 DL_VERDICT=$(printf '%s\n' "$DL_OUT" | grep -oE 'GATE: (PASS|FAIL)' | tail -1)
-printf '%s\n' "$DL_OUT" | grep -E 'gate-script census|residue|egress:|refs:|assertions:|SUMMARY' || true
+# WHAT GETS RELAYED, and why this is no longer a hand-kept list of names.
+#
+# check-version was added to run-data-layer.sh in the version slice and NOT
+# added here, so its OK line never reached this console -- for three slices.
+# Enforcement was intact the whole time (the failure branch below greps
+# 'FAIL -', which its failure message matches), but a check whose SUCCESSFUL
+# operation is invisible here is one you cannot confirm RAN from the suite's own
+# output. Delete its call site and this console prints identically and still says
+# SUITE: PASS -- which is, verbatim, the hazard tabulated at the top of this
+# file. The runner written to prevent silent skips had acquired one.
+#
+# So the pattern now matches the SHAPE the static checks print -- "<name>: OK"
+# or "<name>: FAIL" -- instead of enumerating their names. A check added later
+# surfaces without anyone remembering this line. Same move as deriving a comp row
+# from COMP_FIELDS rather than keeping a declaration and its consumer in step.
+printf '%s\n' "$DL_OUT" | grep -E 'gate-script census|residue|^[a-z][a-z-]*: (OK|FAIL)|assertions:|SUMMARY' || true
 if [ -z "$DL_VERDICT" ]; then
   echo "  data-layer          : FAIL - produced NO VERDICT (rc=$DL_RC)"
   printf '%s\n' "$DL_OUT" | tail -5 | sed 's/^/      /'
