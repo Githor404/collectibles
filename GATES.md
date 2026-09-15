@@ -1386,6 +1386,75 @@ Run on a tree committed first at `9494ce1`.
 - **The plot is gated at four viewports against four seeded rows.** The device pass ran 98. Stacking, column collisions and the D11 overflow line are exercised by fixtures, not yet by a real distribution.
 - **No gate reads the picture as a human does.** Every assertion here is geometric or structural; that the modes are *legible* is a claim only a device pass can settle.
 
+## R6 — The optics pass — PRE-REGISTERED, A SPLIT PROPOSED, FORKS OPEN (2026-09-15; NOT built)
+
+R5 made the distribution correct. It still reads like a test harness: small type, a permanent 84-row list behind a toggle, the plot's own affordance buried in a paragraph about log spacing, and the whole range crushed into one screen-width.
+
+### The type problem, measured before proposing a scale
+
+**`body` declares `font:16px/1.5` — and almost nothing uses it.** Eleven distinct sizes are in play (9, 11, 11.5, 12, 12.5, 13, 14, 15, 16, 17, 24), **eight of them below the declared base**, and only three declarations meet or exceed it — `.top h1`, `.idhead`, `.idq`, two of which are the identity draft's headings. That is why the draft reads comfortably and nothing else does: the page states a readable default and then opts out of it nearly everywhere.
+
+**The two smallest declarations on the surface are R5's own**: `.ptl` (axis tick labels) and `.askrulel` ("YOUR ASK"), both **9px**. The labelling on the thing this slice exists to make readable is the least readable text in the app.
+
+### RECOMMENDED: split into two slices
+
+Asked for, and the answer is yes — but into two rather than three.
+
+**The legibility half.** Type scale, the tap affordance, and surface-on-demand. One theme, and one repointing pass over the gates that read the list. **Type goes first, and the ordering is load-bearing**: a readable scale is the *constraint* that makes a scrollable detail plot necessary. Building the two-view geometry at today's sizes and then enlarging type means tuning the plot twice.
+
+**The navigation half.** The two-view plot and the highlight filters. Filters were ruled to apply to *both views simultaneously*, so building them against a one-view plot and retrofitting is wasted work. This is also the half that reshapes the layout gate's central claim, which deserves to be legible in a single commit.
+
+**Neither half is named as a slice here, deliberately.** The first draft of this entry gave each one a suffixed slice identifier, and the cross-reference census refused both — they resolved to no heading. Its own remedy offers two routes, *"repoint the citation, or add the heading"*, and **they are not equivalent**: adding headings would write a split into the record's structure because it was *proposed*, before it was *ruled*. A ruling on a fork is not a go-ahead on a slice, and a heading is the record asserting a slice exists. Identifiers follow the ruling, so these stay descriptive until there is one.
+
+*(The identifiers are described rather than spelled, because the census cannot tell a citation from a quotation of one — a limit this file already records from the Fork G episode, and the third time prose ABOUT a citation has read to the scanner as a citation. Describing them keeps the census strict, which is worth more than the two characters.)*
+
+**Item 2 is cheaper than it first appears, which is what makes this a two-way split rather than three.** Removing the permanent list sounds like a broad repointing job; measured, the harness has **three** real dependencies — CQ7's price extraction, `akPrices`, and the R5 fold gate — plus **two** `.cmplist .cmprow` sites in the layout gate. Five sites. The remaining references are comments or a CSS-existence check that survives untouched.
+
+### Ruled in advance — not forks
+
+- **Highlight, never filter out.** Tapping "title mentions CGC" dims the others and leaves them in place. The finding is that slabbed sales sit above $200 while the raw mass sits at $20–60, and that is *only* visible with both on screen — D10's refusal to split into groups, applied to selection.
+- **Label the button for what it does.** "title mentions CGC", never "slabbed". D10's adversarial case is live: *"CGC READY"* sits on raw books. The app reports a string match; the human reads the titles and decides.
+- **Buttons derive from the response.** A category with no matches does not render — an empty filter cannot narrow, which is D5's shape.
+- **Overview plus scrollable detail**, neither replacing the other.
+- **Scanning titles must remain possible** (D7/D10: the seller's words are the only grade signal there is) — summoned, not sitting there by default.
+
+### Findings that change the slice's shape
+
+**1. The R5 fold gate inverts.** It currently asserts that `cmplist` is *inside* a fold. With no permanent list, that assertion has no subject. It becomes an **absence** gate — "no permanent full list renders" — and an absence gate is unfalsifiable without a **planted control** that puts one back and must fail.
+
+**2. CQ7's sweep and `akPrices` would silently shrink.** Both read `<span class="cmpprice">` off the surface. Remove the permanent list and they keep passing while covering only the tap-detail row and the nearest-comps rows. **A gate whose coverage shrinks while still passing** is the failure R5 hit twice — in AK6's sweep and in the layout gate's second comps site. Repointing is required, not optional.
+
+**3. Dimming looks like it contradicts PL6, and the carve-out belongs in the record.** PL6 ruled *"ties stack, never opacity — opacity makes two sales look like one darker sale, which invents a reading."* Dimming **is** opacity. The distinction: PL6 forbids opacity as an encoding of **density**, where overlapping marks blend and two read as one. Dimming is a uniform **selection state** on marks that remain individually positioned and non-overlapping. Nothing blends. The gate that keeps this honest is the one already specified — every mark present before a filter is present after it — plus a floor on the dim, so both populations stay countable.
+
+**4. The type/layout conflict is not evenly distributed.** The layout gate requires the identity question and both actions in view **unscrolled** at 360×690, and larger type makes the draft taller — that is where a genuine conflict would appear, and its *magnitude* is a number (today's vertical slack) that the build should **measure first** rather than argue about now. The sharper conflict is on the plot: 12px tick labels inside a 320-unit viewBox will collide. **The two-view design resolves it rather than requiring a retreat** — the overview is a *locator*, not a reading surface, so its labels may stay small, while the detail plot's meet the floor.
+
+### Forks — the legibility half
+
+- **The base scale.** Lean: keep `16px/1.5` as the stated base and collapse eleven sizes to about five — data above base, structure at base, provenance below, with a **floor of 12px** and nothing beneath it except the overview's ticks (see above). The two 9px declarations go.
+- **What replaces the folded list as the summon path.** Lean: two paths already exist — a tap gives one sale, and R3's nearest-comps rows stay visible beside the ask. the legibility half adds a third, explicit and honest about scope: an action that lists *the current selection* ("list these N sales"), never the whole set by default. Once filters exist that becomes "title mentions CGC → list these".
+- **Whether any layout claim genuinely conflicts.** Named above; the magnitude is the build's first measurement.
+
+### Forks — the navigation half
+
+- **How the dimmed state renders** without losing mark shape or the ask marker. Lean: opacity on fill/stroke only, shape and position untouched, a floor so dimmed marks stay countable, and **the ask rule exempt entirely** — it is not a sale, belongs to no title category, and is the reference the whole comparison hangs on.
+- **Whether multiple filters combine, and how.** Lean: **OR**, multi-select, tapping an active button turns it off. AND would shrink the highlighted set toward nothing, which is filtering by another name and contradicts the highlight ruling.
+- **Is the overview tappable at all, or purely a locator?** Lean: **tappable as a locator, never as a selector** — a tap scrolls the detail to that region. At overview scale a thumb covers many marks, so selection would be ambiguous and would sometimes report a sale the user did not mean; and one gesture carrying two meanings is worse than one meaning. Precise selection belongs to the detail plot.
+- **What "the ask marker agrees between views" means as a gate.** Lean: **geometric, not numeric** — the same relationship to its neighbours in each view (strictly between the highest sale below and the lowest above), which is how AK5 was already repointed. Equal pixel positions across two different scales would be the wrong claim.
+
+### Gate obligations
+
+- No permanent full list on the surface — **with a planted control** that renders one and must fail.
+- The tap affordance renders **outside** the provenance paragraph.
+- Highlight **dims rather than removes**: every mark present before a filter is present after it, with a planted control where a filter removes marks and must fail.
+- Buttons derive from the response; an unmatched category does not render.
+- Labels read "title mentions X".
+- The **overview** is fully in view without scrolling at four viewports.
+- The **detail** scrolls horizontally only, with no vertical overflow.
+- The ask marker agrees between views.
+- The type scale is asserted at 360px.
+- **CQ7's sweep and `akPrices` repointed, not weakened** — coverage must not shrink silently.
+- Existing layout gate claims repointed rather than relaxed.
+
 ### Assertion delta: 416 → 431 (+15), re-pinned in this commit
 
 13 W assertions + the 2 SH1 shipped-shell checks. `APP_VERSION` moved to **0.2.0** with a dated `VERSION_LOG` entry — the shell changed, and `check-version.sh` demanding that bump is D14's machinery working rather than misfiring.
