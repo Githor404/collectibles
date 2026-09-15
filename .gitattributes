@@ -11,3 +11,11 @@
 *.md   text eol=lf
 # Binary assets -- never apply text/EOL conversion.
 *.png binary
+# Fixtures are DATA THE GATES PARSE, and they fall through the rule above because
+# it lists source extensions. A real 100-row response landed in tests/fixtures/ on
+# 2026-09-15 and git immediately warned "LF will be replaced by CRLF the next time
+# Git touches it" -- the same trap as the seven dead defect rows, aimed this time
+# at a file the harness reads. Nothing was broken when it was spotted (working copy
+# and blob were both LF); the trap springs on the next checkout. A guard that
+# covers the files you happened to think of is not a guard.
+*.json text eol=lf
