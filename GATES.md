@@ -1704,6 +1704,21 @@ Run on a tree committed first at `e3d517d`. Zero rotted mutations; all four muta
 
 **It also closes a question the suite could not answer.** The full run relays summary lines rather than every `PASS`, so `DROP1` produced no visible output and its execution was inferred from the count moving 491 → 495. Row 78 names the assertion's own text in its failure line, which is independent proof that the assertion exists, runs, and can fail — the difference between a gate believed to be working and one seen to work.
 
+### Deployed and verified (`4a2594c`, v0.7.0)
+
+| file | before (v0.6.0) | after (v0.7.0) |
+|---|---|---|
+| `index.html` | `86b880846b344f6c` | `1c7d9e18860063af` |
+| `app.js` | `525bc47d18a7988d` | `a19ce13df5969ffc` |
+
+The served `app.js` reports `APP_VERSION = '0.7.0'`, and the `[hidden]` rule is present on the **served** `index.html` — checked with a control (`small{font-size:inherit}`, a rule that was always there, reads 1), so the absence measured before the push was the file genuinely lacking the fix rather than a grep that could not match.
+
+**Three deploys, three different propagation outcomes, and that is the point.** v0.2.0 verified on the **first** poll (~15s). v0.6.0 on the **second**. This one did not match on **either** manual poll and then matched on the **first** poll of a background waiter a couple of minutes later. The "verified on the first poll" line in the v0.2.0 entry has now wrong-footed a reader — me — twice.
+
+**So the rule, stated rather than re-learned: a non-matching early check is a timing fact, not a deploy failure.** The failure signal is a poller that exhausts its window, or a Pages build reporting an error — not one early `curl`. Polling belongs in a background waiter that exits on match and gives up **loudly**, because that is the arrangement in which "still old" and "actually broken" produce different outputs. Two manual checks produce the same output for both, which is D5's shape pointed at a deploy: *not yet* and *never* were indistinguishable.
+
+*(`gh` is not installed on this machine, so the Pages build API — which would report `queued` / `building` / `errored` directly and is the better instrument — was unavailable. Named as a limit rather than assumed away: the byte fingerprint proves what is **served**, and says nothing about **why** it is not served yet.)*
+
 ### The gate that looked THROUGH it — recorded as its own finding (D24)
 
 The layout gate's type-floor selector is `#compsBox *`. **It reached inside the sixteen dropped rows, measured their text, and passed them.** The gate could fail, the fixture could exhibit the defect, and the element was reached — and it still reported health, because it asked a question about the **contents** (font size) while the defect was a property of the **container** (display). A descendant selector takes its subject's visibility as given. That is a new member of the family — not an instrument that cannot fail, not a fixture that cannot reach, but **a gate looking through the thing it should have seen**. Ruled as **D24**.
