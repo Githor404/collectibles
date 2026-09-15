@@ -1263,6 +1263,37 @@ That closes the episode. Four things are worth keeping, in order of how far they
 
 **Also corrected:** the row count reads **61**, not 60. The census grep was anchored `^[a-z]`, which silently dropped `EXIF pin removed` — the same anchor bug `tests/README.md` already records happening three times.
 
+### Assertion delta: 416 → 431 (+15), re-pinned in this commit
+
+13 W assertions + the 2 SH1 shipped-shell checks. `APP_VERSION` moved to **0.2.0** with a dated `VERSION_LOG` entry — the shell changed, and `check-version.sh` demanding that bump is D14's machinery working rather than misfiring.
+
+### DEMONSTRATED — rows 59, 60 and 61, each seen to fail (HT-D60 Clause 1)
+
+Run on a tree committed first at `2f62240`.
+
+| row | planted defect | verdict | first named failure |
+|---|---|---|---|
+| 59 | match on the **raw typed line** instead of the normalised title | `GATE: FAIL` | `W4 GATE (D15): a reading matches a want TYPED DIFFERENTLY …` |
+| 60 | the **issue test dropped** from `wantMatch` | `GATE: FAIL` | `W5 GATE (D15 amended): a DIFFERENT ISSUE IS A DIFFERENT BOOK …` |
+| 61 | `renderWantFlag();` removed from `identitySetField` | `GATE: FAIL` | `W9 GATE (D15/D16): correcting the issue REMOVES the flag …` |
+
+**Row 59 is the weighted one**, by D15's own asymmetry: a want that should fire and does not is the error the feature exists to prevent — the walked-past book. It removes generosity about *format*, which is the only generosity D15 grants, and nothing errors; the flag simply never appears. A false positive costs a two-second look; this costs the book.
+
+**Row 61 is D16's shape in the newest code**, and the worst version of it: with that one call removed the flag is **correct when first painted and stale for every correction after**, which is right often enough to be believed. The dry-run confirmed it spares `wantsSave`'s own `renderWantFlag()` call — the check that mattered, since `renderWantFlag` has two call sites and only one is the seam.
+
+**All three came back UNLABELLED**, which was the second thing being watched: they match `res()` `FAIL` lines, so the second strict arm added to `report()` in the same commit had to leave them alone. Sharpening the label did not blunt it.
+
+Tree clean afterwards; all four mutated files restored identical to their pre-run copies.
+
+### Deployed and verified (2f62240, v0.2.0)
+
+| file | before | after |
+|---|---|---|
+| `index.html` | `c7965be5c83d2e6e` | `b4485f2b07af8b28` |
+| `app.js` | `ea70d2d2d1aaabde` | `0bb0109f83992d76` |
+
+Verified on the **first** poll (~15s), against the procedure and URL recorded earlier in this file rather than re-derived from the remote. The build line served to a device now reads `collectibles v0.2.0`, and anyone arriving from 0.1.0 sees the update notice once — the first time that path has run against a real previous version rather than a synthetic one.
+
 ## R5 — The distribution surface — PRE-REGISTERED, FORKS OPEN (2026-09-14; NOT built)
 
 **The problem, measured on a real book.** Amazing Spider-Man #151: 98 sold, 84 rendered after the client-side filter, spanning **$2.00 to $2,300** — a 1000× range presented as a vertical list of 84 rows. The list is *correct*; every row is a real sale and the refusals hold. It is also unreadable, and every explanatory sentence competes with the data for the same screen.
@@ -1518,6 +1549,12 @@ Second, planting it revealed the gate's diagnostic read `[object SVGAnimatedStri
 
 **Row 69's `WEAK-MATCH` label is legitimate and was predicted.** It reports through the layout gate, whose output lines are script-style and carry none of the `FAIL -` / `NOT MEASURABLE` markers `report()`'s second strict arm matches. The line genuinely does not identify itself as a failure — the same category as the two `check-refs` rows that stay weak-labelled by design.
 
+### What this does not cover (Clause 2)
+
+- **The type floor reports SVG text at its UNSCALED computed size.** `.ptl` reads 12px whatever the viewBox scale, so a future narrowing of the plot would not be caught. Today the plot scales up at all measured widths, so rendered size is ≥12 — true in fact, not proven by this gate.
+- **The floor gate's selector set covers the main surfaces, not the settings panel.** The `<small>` fix is broader than the gate that found it.
+- **Nothing here reads the surface as a person does.** That 36 of 46 declarations now sit in the bottom two tiers is a fact about the stylesheet; whether the hierarchy *reads* at arm's length is a claim only a device pass can settle.
+
 ## C1 — Response replay, for testing only — PRE-REGISTERED (2026-09-15)
 
 **Why it exists.** A comps lookup costs about **$0.40** and returns the same 84 rows every time. Checking a layout change should not cost money, and the subscriber has exceeded their Apify credits — so the alternative to replay is not "pay per check", it is **cannot check at all**.
@@ -1553,43 +1590,6 @@ A real **84-sale response is a far better fixture** than the seeded four-row one
 - **Arming is explicit**: a saved response alone does not cause a replay.
 - **The cost line does not claim a charge** on a replayed lookup.
 - The storage key is **prefixed** (PFX1 already sweeps this).
-
-### What this does not cover (Clause 2)
-
-- **The type floor reports SVG text at its UNSCALED computed size.** `.ptl` reads 12px whatever the viewBox scale, so a future narrowing of the plot would not be caught. Today the plot scales up at all measured widths, so rendered size is ≥12 — true in fact, not proven by this gate.
-- **The floor gate's selector set covers the main surfaces, not the settings panel.** The `<small>` fix is broader than the gate that found it.
-- **Nothing here reads the surface as a person does.** That 36 of 46 declarations now sit in the bottom two tiers is a fact about the stylesheet; whether the hierarchy *reads* at arm's length is a claim only a device pass can settle.
-
-### Assertion delta: 416 → 431 (+15), re-pinned in this commit
-
-13 W assertions + the 2 SH1 shipped-shell checks. `APP_VERSION` moved to **0.2.0** with a dated `VERSION_LOG` entry — the shell changed, and `check-version.sh` demanding that bump is D14's machinery working rather than misfiring.
-
-### DEMONSTRATED — rows 59, 60 and 61, each seen to fail (HT-D60 Clause 1)
-
-Run on a tree committed first at `2f62240`.
-
-| row | planted defect | verdict | first named failure |
-|---|---|---|---|
-| 59 | match on the **raw typed line** instead of the normalised title | `GATE: FAIL` | `W4 GATE (D15): a reading matches a want TYPED DIFFERENTLY …` |
-| 60 | the **issue test dropped** from `wantMatch` | `GATE: FAIL` | `W5 GATE (D15 amended): a DIFFERENT ISSUE IS A DIFFERENT BOOK …` |
-| 61 | `renderWantFlag();` removed from `identitySetField` | `GATE: FAIL` | `W9 GATE (D15/D16): correcting the issue REMOVES the flag …` |
-
-**Row 59 is the weighted one**, by D15's own asymmetry: a want that should fire and does not is the error the feature exists to prevent — the walked-past book. It removes generosity about *format*, which is the only generosity D15 grants, and nothing errors; the flag simply never appears. A false positive costs a two-second look; this costs the book.
-
-**Row 61 is D16's shape in the newest code**, and the worst version of it: with that one call removed the flag is **correct when first painted and stale for every correction after**, which is right often enough to be believed. The dry-run confirmed it spares `wantsSave`'s own `renderWantFlag()` call — the check that mattered, since `renderWantFlag` has two call sites and only one is the seam.
-
-**All three came back UNLABELLED**, which was the second thing being watched: they match `res()` `FAIL` lines, so the second strict arm added to `report()` in the same commit had to leave them alone. Sharpening the label did not blunt it.
-
-Tree clean afterwards; all four mutated files restored identical to their pre-run copies.
-
-### Deployed and verified (2f62240, v0.2.0)
-
-| file | before | after |
-|---|---|---|
-| `index.html` | `c7965be5c83d2e6e` | `b4485f2b07af8b28` |
-| `app.js` | `ea70d2d2d1aaabde` | `0bb0109f83992d76` |
-
-Verified on the **first** poll (~15s), against the procedure and URL recorded earlier in this file rather than re-derived from the remote. The build line served to a device now reads `collectibles v0.2.0`, and anyone arriving from 0.1.0 sees the update notice once — the first time that path has run against a real previous version rather than a synthetic one.
 
 ## C1 — Response replay, for testing only — **BUILT AND GATED**, v0.6.0 (2026-09-15)
 
