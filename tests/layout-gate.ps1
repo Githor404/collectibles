@@ -233,6 +233,32 @@ $install = @'
   // The seed carries listingType, which the older fixtures do not. Without it
   // every mark takes the `unstated` path and the shape encoding goes unmeasured
   // at the ONE place that can actually see shapes.
+  // R6: THE TYPE FLOOR, measured on the SHIPPED page rather than read off the
+  // stylesheet. Declared sizes are not rendered sizes -- inheritance, shorthand
+  // and SVG presentation attributes all intervene -- so the claim "nothing below
+  // 12px" is only a claim about what a person sees if it is measured from
+  // getComputedStyle at the width they hold.
+  //
+  // D17 is the failure this guards: a slice's own chrome gets sized last and
+  // smallest, because its author reads it at desk distance on a large screen.
+  // The two smallest declarations in the app were the plot's own axis ticks and
+  // its "YOUR ASK" label, at 9px. Nothing failed; nobody saw.
+  __g.typefloor = function(){
+    var seen = [], under = [];
+    var els = document.querySelectorAll(
+      '#compsBox *, #askBox *, #captureResult *, #confirmedBox *, .about, .card h2, .note, .fine');
+    Array.prototype.forEach.call(els, function (e) {
+      var t = (e.textContent || '').trim();
+      if (!t) return;                       // no text, nothing to read
+      if (e.children.length) return;        // measure LEAVES, not containers
+      var px = parseFloat(window.getComputedStyle(e).fontSize);
+      if (!(px > 0)) return;
+      if (seen.indexOf(px) < 0) seen.push(px);
+      if (px < 12) under.push((e.className || e.tagName) + '=' + px + 'px:' + t.slice(0, 24));
+    });
+    return { found: true, sizes: seen.sort(function(a,b){return a-b;}).join(','),
+             under: under.slice(0, 6).join(' | '), underCount: under.length };
+  };
   __g.plot = function(){
     CT.byokCancel(); CT.byokBusyClear(); CT.captureDiscard(); CT.clearConfirmed();
     CT.__setComps([
@@ -384,6 +410,9 @@ function Measure-Ask {
 }
 function Measure-Plot {
   return (Eval '(function(){ return JSON.stringify(__g.plot()); })()' | ConvertFrom-Json)
+}
+function Measure-TypeFloor {
+  return (Eval '(function(){ return JSON.stringify(__g.typefloor()); })()' | ConvertFrom-Json)
 }
 
 $browser = Find-Browser
@@ -541,7 +570,20 @@ try {
       Write-Host ("  {0,-17} plot    : NOT MEASURABLE -- {1} -> False" -f $name, $P.why)
     }
 
-    if (-not ($sOk -and $fOk -and $pOk -and $cOk -and $aOk -and $plOk)) { $allOk = $false }
+    # R6: the type floor, on the SHIPPED page. Named $tfOk and checked against
+    # every other verdict name in this loop -- $sOk $fOk $pOk $cOk $aOk $plOk --
+    # because shadowing one would drop its case out of the fold while the line
+    # above still printed green. That was a live hazard when the plot verdict
+    # was added ($pOk is PENDING), and it is cheap to re-check.
+    $TF = Measure-TypeFloor
+    $tfOk = $TF.found -and $TF.underCount -eq 0
+    Write-Host ("  {0,-17} type    : sizes={1} belowFloor={2} -> {3}" -f `
+      $name, $TF.sizes, $TF.underCount, $tfOk)
+    if ($TF.underCount -gt 0) {
+      Write-Host ("  {0,-17}           under 12px: {1}" -f $name, $TF.under)
+    }
+
+    if (-not ($sOk -and $fOk -and $pOk -and $cOk -and $aOk -and $plOk -and $tfOk)) { $allOk = $false }
   }
 
   # The identity draft is a fixed set of fields, so the scroll case is made by a

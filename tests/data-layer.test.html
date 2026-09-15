@@ -1752,6 +1752,29 @@ window.setLS({});
   res(CT.compsPlotHTML([]) === '',
       'PL12: and with no sales it emits nothing at all rather than an empty axis');
 
+  // ---- R6: the affordance is findable, which means OUTSIDE the provenance ----
+  // It was the last clause of a four-sentence paragraph about ratio spacing and
+  // was found by accident. An instruction buried in provenance text reads as
+  // provenance -- HT-D53's cut applied to itself.
+  //
+  // ASSERTED ON RENDERED OUTPUT, never on app.js source: the comment explaining
+  // this move quotes the old sentence, so a source scan would match prose ABOUT
+  // the text. That is the census's citation-versus-quotation limit, in a
+  // different file.
+  var tapHTML = CT.compsPlotHTML(plRows);
+  var tapEl = /<div class="plottap">([\s\S]*?)<\/div>/.exec(tapHTML);
+  res(!!tapEl && /tap/i.test(tapEl[1]),
+      'R6 GATE: the tap affordance renders in its OWN element, not as a clause of the spacing paragraph -- a thumb looks where the marks are, and an instruction shelved among provenance is not an instruction',
+      tapEl ? tapEl[1] : '(no .plottap element)');
+  var noteEl = /<div class="note plotnote">([\s\S]*?)<\/div>/.exec(tapHTML);
+  res(!!noteEl && !/tap/i.test(noteEl[1]),
+      'R6 GATE: and the provenance paragraph does NOT contain it -- this is the half that enforces "outside", since an affordance can be added in a new element while a copy stays buried in the old one',
+      noteEl ? noteEl[1].slice(0, 90) : '(no .plotnote element)');
+  // The plot's own element must also exist in the SHIPPED stylesheet -- emitting
+  // a class is not shipping a layout (D16), and this one carries the affordance.
+  res(CT.compsPlotHTML(plRows).indexOf('class="plottap"') >= 0,
+      'R6: the affordance element is emitted by the shipped renderer, so the SH1 CSS census has something to be about');
+
   // The census that makes the ruled enum survey executable. Ruled: take it from
   // the next real lookup, not a paid probe -- which requires the RAW values to
   // reach a surface, since compTypeOf renders "FixedPrice" as "Buy It Now".

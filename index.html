@@ -20,6 +20,34 @@
     }
   }
   *{box-sizing:border-box}
+  /* ---- THE TYPE SCALE (R6, ruled 2026-09-15) -------------------------------
+     FOUR SIZES plus one glyph, down from ELEVEN. The page already declared a
+     readable 16px/1.5 base below and then opted out of it almost everywhere:
+     eight of the eleven sizes sat BELOW the declared base, and the two smallest
+     -- 9px -- were the plot's own axis ticks and its "YOUR ASK" label. The
+     labelling on the surface built to be readable was the least readable text
+     in the app (D17).
+
+       18px  DATA AND THE LEAD QUESTION -- what you act on
+       16px  BASE: body, structure, headings, and every form control
+       14px  READING TEXT -- titles, notes, instructions, the seller's words
+       12px  FLOOR -- provenance, meta, fine print, axis ticks. Nothing below.
+       24px  the close glyph, which is an icon rather than text
+
+     THE FLOOR IS A FLOOR. When a label will not fit at 12px that is a finding
+     about the layout, not a licence to shrink the label -- which is the instinct
+     that produced 9px axis ticks (D17).
+
+     16px ON FORM CONTROLS IS BEHAVIOURAL, not aesthetic: iOS zooms the viewport
+     when focusing an input below 16px. At the previous 15px the app zoomed on
+     every field focus -- the ask price, the query box, the want list. That was a
+     live defect nobody had named, closed here as a side effect.
+
+     VERTICAL FIT IS NOT A CONSTRAINT HERE, and that was measured rather than
+     assumed. The draft already exceeds the modal body at every viewport
+     (-186px at 360x690) and the layout gate passes anyway, because HT-D51 pins
+     the footer OUTSIDE a scrolling body. The binding constraints are horizontal:
+     pageOverflowX, already gated, and the plot's tick labels colliding. */
   body{margin:0;background:var(--bg);color:var(--txt);
     font:16px/1.5 ui-rounded,'SF Pro Rounded',-apple-system,Segoe UI,Roboto,sans-serif;
     padding-bottom:env(safe-area-inset-bottom)}
@@ -32,14 +60,14 @@
   .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
   .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 10px}
   .card h2.sub{margin-top:16px}
-  .pver{font-size:11px;color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0}
+  .pver{font-size:12px;color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0}
   .kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
   .kv:first-child{border-top:none}
   .kv .k{color:var(--muted)}
   .kv .v{text-align:right;word-break:break-word;font-weight:600}
   /* HT-D46: a test outcome must be DISTINCT at a glance -- a failure once painted
      in the same muted grey as the help text beneath it. */
-  .byoks{font-size:12.5px;margin-top:10px;line-height:1.4;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .byoks{font-size:14px;margin-top:10px;line-height:1.4;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
   .byoks.byokok{color:var(--good)}
   .byoks.byokbad{color:var(--bad)}
   .byoks.byoktesting{color:var(--muted)}
@@ -59,22 +87,33 @@
   .btnrow .btn{flex:0 0 auto}
   .caprow{display:flex;gap:8px}
   .caprow .btn{flex:1;width:auto}   /* HT-D58: take-or-choose, two equal targets */
-  .linklike{background:none;border:none;color:var(--accent);font-weight:700;font-size:13px;padding:0;width:auto;cursor:pointer}
-  label{display:block;font-size:11px;color:var(--muted);margin:6px 0 3px}
-  input,select{width:100%;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--txt);font-size:15px}
+  .linklike{background:none;border:none;color:var(--accent);font-weight:700;font-size:14px;padding:0;width:auto;cursor:pointer}
+  /* BROWSER-SUPPLIED SIZES ARE STILL SIZES (R6). Bare <small> applies the UA's
+     `font-size: smaller` -- about 0.83x its parent -- so the hints inside labels
+     rendered at ~10px, BELOW the floor, from a size that appears nowhere in this
+     stylesheet. A grep for `font-size:` could never have found them.
+     Found by the type-floor gate on its first run, which measures COMPUTED sizes
+     on the shipped page precisely because declared sizes are not rendered ones.
+     Fixed at the cause rather than at the two instances the gate reached: this
+     also covers the <small> hints in the identity draft and the settings panel,
+     which are outside that gate's selector scope. Classed smalls (.pver, .fine,
+     .idna) still win on specificity and keep their declared size. */
+  small{font-size:inherit}
+  label{display:block;font-size:12px;color:var(--muted);margin:6px 0 3px}
+  input,select{width:100%;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--txt);font-size:16px}
   .row{display:flex;gap:8px}.row>div{flex:1;min-width:0}
   details>summary{cursor:pointer;color:var(--accent);font-weight:700;font-size:14px;list-style:none}
   details>summary::-webkit-details-marker{display:none}
   .ireport{font-size:12px;color:var(--muted);padding:5px 0;line-height:1.4}
   .ireport.bad{color:var(--bad)}
-  .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--good);color:#fff;padding:11px 18px;border-radius:22px;font-weight:800;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:23;max-width:90%;text-align:center}
+  .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--good);color:#fff;padding:11px 18px;border-radius:22px;font-weight:800;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:23;max-width:90%;text-align:center}
   .toast.show{opacity:1}
-  .about{font-size:11px;color:var(--muted);text-align:center;padding:16px 6px;line-height:1.6}
+  .about{font-size:12px;color:var(--muted);text-align:center;padding:16px 6px;line-height:1.6}
   /* HT-D53: provenance is auditable, not content. Safety text never goes in here. */
   .cited{margin-top:8px}
-  .cited>summary{color:var(--muted);font-size:11.5px;font-weight:600;padding:4px 0;min-height:24px}
+  .cited>summary{color:var(--muted);font-size:12px;font-weight:600;padding:4px 0;min-height:24px}
   .citebody{margin-top:2px;border-left:2px solid var(--line);padding-left:8px}
-  .fine{display:block;color:var(--muted);font-size:11px;line-height:1.45}
+  .fine{display:block;color:var(--muted);font-size:12px;line-height:1.45}
   .scrim{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:17}
   .panel{position:fixed;inset:0;z-index:18;background:var(--bg);display:flex;flex-direction:column}
   .panel .wrap{overflow-y:auto;flex:1 1 auto;width:100%;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
@@ -92,13 +131,13 @@
   .ofoot{flex:0 0 auto;border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));
     display:flex;gap:8px;background:var(--panel);width:100%;max-width:480px;margin:0 auto;box-sizing:border-box}
   .ofoot .btn{flex:1 1 0;min-height:46px}
-  .omsg{font-size:15px;line-height:1.5}
+  .omsg{font-size:16px;line-height:1.5}
   .omsg.obad{color:var(--bad)}
-  .opend{display:flex;align-items:center;gap:10px;font-size:15px;line-height:1.5}
-  .osub{color:var(--muted);font-size:12.5px;line-height:1.45;margin-top:10px}
+  .opend{display:flex;align-items:center;gap:10px;font-size:16px;line-height:1.5}
+  .osub{color:var(--muted);font-size:14px;line-height:1.45;margin-top:10px}
   /* HT-D65: the timing breakdown. Monospace, small, and SELECTABLE -- it exists to
      be read off a phone and pasted into a bug report. */
-  .otrace{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;
+  .otrace{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.5;
     color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:8px;
     padding:6px 8px;margin:6px 0;user-select:text;-webkit-user-select:text;word-break:break-word}
   .cresult{margin-top:6px}
@@ -109,12 +148,15 @@
      the seller's free text and the only grade signal there is (D10), so it takes
      its own line rather than competing with the structured fields. */
   .comps{margin-top:10px}
-  .cmphead{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;margin:2px 0 6px}
+  /* The count and the window are gated as meaning-bearing (CQ7/CQ8) -- they
+     change what every price below them means -- so they read as a finding
+     rather than as provenance at the floor. */
+  .cmphead{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:800;margin:2px 0 8px}
   .cmprow{display:grid;grid-template-columns:auto 1fr;column-gap:10px;row-gap:3px;padding:10px 0;border-top:1px solid var(--line)}
   .cmplist .cmprow:first-child{border-top:none}
-  .cmpprice{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums;white-space:nowrap}
-  .cmpmeta{justify-self:end;align-self:center;color:var(--muted);font-size:11.5px;text-align:right}
-  .cmptitle{grid-column:1 / -1;font-size:12.5px;line-height:1.45;word-break:break-word}
+  .cmpprice{font-weight:800;font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .cmpmeta{justify-self:end;align-self:center;color:var(--muted);font-size:12px;text-align:right}
+  .cmptitle{grid-column:1 / -1;font-size:14px;line-height:1.45;word-break:break-word}
   .cmpdrop{display:block;margin-top:6px;opacity:.72}
   /* R5: the distribution. One mark is one sale -- shapes carry the listing type
      and a ring carries best-offer-accepted, because those two fields are
@@ -124,7 +166,7 @@
   .cmpplot{margin-top:10px}
   .plotsvg{display:block;width:100%;height:auto;overflow:visible}
   .paxis,.pt{stroke:var(--line);stroke-width:1}
-  .ptl{fill:var(--muted);font-size:9px;font-variant-numeric:tabular-nums}
+  .ptl{fill:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
   .pm{cursor:pointer}
   .pm circle,.pm rect,.pm path{fill:var(--txt);opacity:.66}
   .pm:hover circle,.pm:hover rect,.pm:hover path,.pm:focus circle,.pm:focus rect,.pm:focus path{opacity:1}
@@ -132,30 +174,40 @@
   /* The ask is the one line here that is NOT a sale, so it is drawn unlike
      everything else and named on the plot (AK6's property, in the plot). */
   .askrule{stroke:var(--accent);stroke-width:1.5;stroke-dasharray:3 2}
-  .askrulel{fill:var(--accent);font-size:9px;font-weight:800;letter-spacing:.04em}
+  .askrulel{fill:var(--accent);font-size:12px;font-weight:800;letter-spacing:.04em}
   .plotkey{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:8px;
-    font-size:11px;color:var(--muted)}
+    font-size:12px;color:var(--muted)}
   .pk{width:9px;height:9px;display:inline-block;background:var(--txt);opacity:.66;margin-right:2px}
   .pk-auction{border-radius:50%}
   .pk-unstated{transform:rotate(45deg)}
   .pk-bo{background:none;border:1px solid var(--txt);border-radius:50%;opacity:.55}
+  /* THE AFFORDANCE, AT THE POINT OF USE (R6). It was the last clause of a
+     four-sentence paragraph about ratio spacing, and was found by accident --
+     an instruction buried in provenance text reads as provenance, which is the
+     fold rule applied to itself. It now sits directly beneath the marks, ahead
+     of the legend, where a thumb already is. */
+  .plottap{margin-top:10px;font-size:14px;color:var(--accent);font-weight:700}
   .plotnote{margin-top:8px}
   .cmppick{border-top:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
   /* R3: the ask, and the comparison it makes. The marker is the one number here
      that is not a sale, so it is visually unmistakable -- accent-bordered, with
      its own label. A reader must never mistake it for a comp. */
   .askbox{margin:12px 0 4px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
-  .askcount{margin-top:12px;font-size:14px;line-height:1.5}
+  /* THE DATA TIER. "8 sold below · 76 sold above" is R3's entire output -- the
+     comparison the product exists to serve -- and the uniform collapse left it
+     sized like a note. Collapsing eleven sizes to five and ASSIGNING each thing
+     to the right tier are two different jobs; the map did the first. */
+  .askcount{margin-top:12px;font-size:18px;line-height:1.45}
   .askcount b{font-variant-numeric:tabular-nums}
   .asknear{margin-top:10px}
-  .asknearh{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;margin-bottom:2px}
+  .asknearh{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;margin-bottom:2px}
   .askrow{border-left:3px solid var(--accent);padding-left:8px;background:color-mix(in srgb,var(--accent) 8%,transparent)}
   .askmark{color:var(--accent);font-weight:800;letter-spacing:.04em}
   /* R1: the identity draft. The QUESTION leads -- it is what this slice is about,
      so it sits above every control and carries the weight (D2, HT-R30's rule). */
-  .idq{font-size:17px;font-weight:800;line-height:1.3}
+  .idq{font-size:18px;font-weight:800;line-height:1.3}
   .idhead{font-size:16px;font-weight:700;margin-top:8px;line-height:1.3}
-  .idsub{font-size:13px;color:var(--muted);margin-top:2px}
+  .idsub{font-size:14px;color:var(--muted);margin-top:2px}
   .idrefused{margin-top:10px;padding:8px 10px;border:1px solid var(--warn);border-radius:10px;
     color:var(--warn);font-size:12px;line-height:1.45}
   .idfields{margin-top:12px}
@@ -163,19 +215,19 @@
   .idrow label{display:block}
   .idna{color:var(--warn)}
   .idmissing input{border-style:dashed}
-  .idmarklabel{font-size:11px;color:var(--muted);margin:12px 0 4px}
+  .idmarklabel{font-size:12px;color:var(--muted);margin:12px 0 4px}
   .idchips{display:flex;flex-wrap:wrap;gap:6px}
   .idchip{width:auto;padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:var(--bg);
-    color:var(--muted);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+    color:var(--muted);font:inherit;font-size:14px;font-weight:700;cursor:pointer}
   .idchip.on{background:var(--accent);border-color:var(--accent);color:#fff}
-  .idqueryrow{margin-top:14px;font-size:12.5px;color:var(--muted);word-break:break-word}
+  .idqueryrow{margin-top:14px;font-size:14px;color:var(--muted);word-break:break-word}
   .idqueryrow span{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--txt)}
   /* R1: the confirmed identity, and the honest dead end under it. */
   .confirmed{border:1px solid var(--accent);border-radius:12px;padding:12px;margin-bottom:12px}
-  .cfhead{font-size:15px;font-weight:800;line-height:1.3}
-  .cfsub{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .cfhead{font-size:16px;font-weight:800;line-height:1.3}
+  .cfsub{font-size:14px;color:var(--muted);margin-top:2px}
   .cfq{display:flex;gap:8px;align-items:center}
-  .cfq input{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+  .cfq input{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px}
   .cfq .btn{flex:0 0 auto}
   .confirmed .btn{margin-top:10px}
   /* D15: the want-list flag. A PROMPT TO LOOK, never a claim -- so it is marked
@@ -183,7 +235,7 @@
      the app is asserting. Emitting a class is not shipping a layout (the comps
      row shipped with class names and no stylesheet once already). */
   .wantflag{margin-top:10px;padding:8px 10px;border:1px solid var(--accent);border-radius:10px;
-    background:color-mix(in srgb,var(--accent) 8%,transparent);font-size:12.5px;line-height:1.45}
+    background:color-mix(in srgb,var(--accent) 8%,transparent);font-size:14px;line-height:1.45}
   .wantwarn{color:var(--warn)}
   /* D14: version legibility. The notice is the ONLY surface here that appears
      unbidden, so it is accent-bordered and sits ABOVE the card it interrupts --
@@ -191,8 +243,8 @@
      emits .vnhead and .vnrow; the comps row shipped with class names and NO
      stylesheet once already, and that is what merged the year and the date. */
   .vnotice{border:1px solid var(--accent)}
-  .vnhead{font-size:15px;font-weight:800;line-height:1.3}
-  .vnrow{font-size:12.5px;line-height:1.5;margin-top:8px;word-break:break-word}
+  .vnhead{font-size:16px;font-weight:800;line-height:1.3}
+  .vnrow{font-size:14px;line-height:1.5;margin-top:8px;word-break:break-word}
   .vnotice .btn{margin-top:12px}
   /* The build line is the opposite kind of thing: reference information, muted,
      inside .about and nowhere else (ruled 2026-09-14). */

@@ -2172,14 +2172,22 @@ function compsPlotHTML(sorted) {
     `role="img" aria-label="Every sale, one mark each, spaced by price on a ratio scale">` +
     `<line class="paxis" x1="10" y1="${PLOT_BASE + 4}" x2="${PLOT_W - 10}" y2="${PLOT_BASE + 4}"/>` +
     ticks + askRule + mk.marks.map(compsMarkSVG).join('') + `</svg>` +
+    // R6: THE AFFORDANCE COMES FIRST, AND ALONE. It used to be the last clause
+    // of the paragraph below -- "...Ticks are dollars. One mark is one sale; tap
+    // a mark for the seller's own words." -- and was found by accident. An
+    // instruction buried in provenance text reads as provenance, which is the
+    // fold rule (HT-D53) applied to itself: the cut goes where the sentence
+    // changes job, and this sentence does a different job from the three before
+    // it. It sits where a thumb already is, directly under the marks.
+    `<div class="plottap">Tap any mark to see that sale</div>` +
     `<div class="plotkey">` +
     `<span class="pk pk-auction"></span>auction` +
     `<span class="pk pk-bin"></span>Buy It Now` +
     `<span class="pk pk-unstated"></span>type not stated` +
     `<span class="pk pk-bo"></span>best offer accepted` +
     `</div>` +
-    `<div class="note plotnote">Spaced by <b>ratio, not difference</b> — $9 to $29 is the same step as $90 to $290, ` +
-    `because grade bands multiply. Ticks are dollars. One mark is one sale; tap a mark for the seller's own words.</div>` +
+    `<div class="note plotnote">One mark is one sale. Spaced by <b>ratio, not difference</b> — ` +
+    `$9 to $29 is the same step as $90 to $290, because grade bands multiply. Ticks are dollars.</div>` +
     cut + `<div id="compsPick"></div></div>`;
 }
 
@@ -2443,7 +2451,7 @@ function renderAskLive() {
 // WHY A NOTICE WORKS WITH NO WORKER: there is no app-controlled cache, so a load
 // fetches current bytes and the notice fires on it. The worker is what would
 // CREATE the stale-shell problem it then solves.
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.4.0';
 const VERSION_KEY = 'collectibles-version';   // PFX1: every storage key is prefixed
 
 // One line per release, newest LAST. The newest entry's `v` must equal
@@ -2461,6 +2469,7 @@ const VERSION_LOG = [
   { v: '0.1.0', d: '2026-09-14', note: 'Version numbers. The app now says which build it is running, and tells you what changed when a new one arrives. Identification, sold comps and the asking-price comparison all shipped before this, unversioned; nothing about them changes here.' },
   { v: '0.2.0', d: '2026-09-14', note: 'A want list. Type the books you are hunting into Settings, one per line, and the draft tells you when the book in your hand is one of them. Matching forgives spelling and format — "The Amazing Spider-Man #129" and "Amazing Spider-Man 129" are the same want — but the issue must match, because a different issue is a different book. It is a prompt to look, never a claim, and nothing is recorded before you confirm the reading. This is also the first thing the app saves to your device besides your keys, so the storage line in Settings now matters to more than a capture.' },
   { v: '0.3.0', d: '2026-09-14', note: 'Sold comps are now drawn, not just listed. Every sale is one mark, spaced by price — and spaced by RATIO rather than difference, because grade bands multiply: $9 to $29 is the same step as $90 to $290. Clusters with gaps between them are different markets, and the gaps are the grade boundaries this data refuses to state; your eye finds them, the app does not guess at them. Mark shapes show how each sale closed — auction, Buy It Now, or a type the provider did not state — and a ring means a best offer was accepted. Tap any mark for the seller\'s own words. Nothing is fitted, smoothed or averaged: 98 sales are enough to SEE the shape and not enough to characterise it. The full list and the explanations now fold away, so the numbers stop competing with the prose for the same screen.' },
+  { v: '0.4.0', d: '2026-09-15', note: 'Bigger, clearer type. The app declared a readable 16px base and then opted out of it almost everywhere — eleven different text sizes, eight of them smaller than that base, and the very smallest were the plot’s own axis labels. There are now four sizes and a floor: nothing is smaller than 12px. Two numbers moved up to where they belong — the count of sales above and below your price, which is the whole answer this app exists to give, and the line stating how many sales and over what window. Form fields are 16px, which also stops the phone zooming in every time you tap one. And the plot now says “Tap any mark to see that sale” in its own line under the marks, instead of hiding that at the end of a paragraph about spacing.' },
 ];
 
 // Numeric per segment, so 0.2.0 < 0.10.0 -- a string compare gets that backwards
