@@ -829,17 +829,26 @@ report "arming becomes implicit (saved = armed)" "RP1 GATE" "$(run_dl)"; restore
 
 # THE COST LINE, claiming a charge for a call that never happened.
 mutate 's/\(COMPS\.replay \? `no charge/(false ? `no charge/' app.js
-report "replayed lookup claims the $0.40 charge" "RP1 GATE" "$(run_dl)"; restore
+report "replayed lookup claims the \$0.40 charge" "RP1 GATE" "$(run_dl)"; restore
 
 # THE EXPORT, carrying what is not the subscriber's data (K1's property).
+#
+# THE PATTERN CARRIES NO PARENTHESES, and that is not a style choice. report()
+# interpolates it into `grep -E "^FAIL +.*(${pat})"`, so the argument is an ERE,
+# not a literal: "RP1 GATE (K1 shape)" matches the text `RP1 GATE K1 shape`,
+# which no assertion contains. This row and the next both reported
+# `NOTHING NAMED MATCHED -- SUSPECT THE FIXTURE` on their first run while the
+# gate was failing exactly as intended. Match a paren-free substring that is
+# SPECIFIC to this row's own assertion, so the row names its own defect rather
+# than whichever RP1 failure happens to print first.
 mutate 's/function exportJSON\(\) \{ return JSON\.stringify\(APP_STATE, null, 2\); \}/function exportJSON() { return JSON.stringify(APP_STATE, null, 2) + String(Store.readRaw(REPLAY_KEY) || \x27\x27); }/' app.js
-report "saved response leaks into the export" "RP1 GATE (K1 shape)" "$(run_dl)"; restore
+report "saved response leaks into the export" "K1 shape" "$(run_dl)"; restore
 
 # DIVERGENCE. The claim that makes every downstream surface safe is that replay
 # substitutes the raw string AND NOTHING ELSE. This breaks exactly that, and
 # nothing else about the app changes: the plot still draws, the ask still counts.
 mutate 's/\? Promise\.resolve\(\{ transport: true, httpOk: true, status: 200, raw: saved\.raw \}\)/? Promise.resolve({ transport: true, httpOk: true, status: 200, raw: JSON.stringify(JSON.parse(saved.raw).slice(0, 3)) })/' app.js
-report "replay returns a TRUNCATED response" "RP1 GATE (ruled)" "$(run_dl)"; restore
+report "replay returns a TRUNCATED response" "IDENTICAL parsed rows" "$(run_dl)"; restore
 
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
