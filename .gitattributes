@@ -19,3 +19,12 @@
 # and blob were both LF); the trap springs on the next checkout. A guard that
 # covers the files you happened to think of is not a guard.
 *.json text eol=lf
+# AND THE GUARD FILES THEMSELVES, which have no extension and so fall through
+# every rule above. Git warned about this file on the very commit that pinned
+# *.json -- and here the failure mode is worse than a mangled fixture: git reads
+# attributes line by line, so a CRLF working copy can parse the value as
+# "eol=lf\r" and silently disable EVERY pin in this file, including the one that
+# would have prevented it. A guard that fails open is worse than no guard,
+# because nothing announces it.
+.gitattributes text eol=lf
+.gitignore     text eol=lf
