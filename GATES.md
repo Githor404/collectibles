@@ -1653,3 +1653,18 @@ Run on trees committed first at `aa67e0e`, and re-run at `d3a4a4c` after the rep
 - **No gate proves the Settings card is reachable on a device.** The card's elements are asserted through the harness and the shipped-shell census; whether a thumb can find and use it is a device-pass claim.
 - **The layout gate does not measure the replay card.** It is settings-panel chrome, and the floor gate's selector set already excludes that panel — a limitation R6 recorded and this slice inherits rather than closes.
 - **Nothing here gates that replay stays test machinery.** D21's fences are gated individually (arming, the notice, the export, the cost line); "does not grow into an offline mode" is a property of future commits, which no assertion can hold.
+
+### Deployed and verified (`1e5d6fb`, v0.6.0)
+
+| file | before (v0.5.0) | after (v0.6.0) |
+|---|---|---|
+| `index.html` | `a6fae7b796a224de` | `86b880846b344f6c` |
+| `app.js` | `154030007cfa579e` | `525bc47d18a7988d` |
+
+The served `app.js` now reports `APP_VERSION = '0.6.0'`.
+
+**Verified on the SECOND poll, not the first — recorded because the entry above says "on the first poll (~15s)".** The check run immediately after the push still served v0.5.0 on both files. A reader with only the earlier entry could read one non-matching immediate check as a failed deploy and start investigating a problem that does not exist. **Pages propagation is not instant, and "not yet" is not "wrong".**
+
+**The before-fingerprints matched the v0.5.0 pair already recorded in this file, byte for byte.** That was not assumed — they were measured against the live site before the push, and the agreement independently confirms that the deploy target and procedure recorded here are still correct rather than re-derived. This is the thing the procedure was written down to stop, and the first time it has paid.
+
+**The push itself was verified by comparing `origin/main` to local `HEAD`, never by the push command's exit code** — a push silently failed to land in this repo once, and the exit code said nothing about it.
