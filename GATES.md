@@ -1428,6 +1428,22 @@ Asked for, and the answer is yes — but into two rather than three.
 
 **4. The type/layout conflict is not evenly distributed.** The layout gate requires the identity question and both actions in view **unscrolled** at 360×690, and larger type makes the draft taller — that is where a genuine conflict would appear, and its *magnitude* is a number (today's vertical slack) that the build should **measure first** rather than argue about now. The sharper conflict is on the plot: 12px tick labels inside a 320-unit viewBox will collide. **The two-view design resolves it rather than requiring a retreat** — the overview is a *locator*, not a reading surface, so its labels may stay small, while the detail plot's meet the floor.
 
+**MEASURED 2026-09-15, and the vertical half of the finding above is WRONG.** Ruled: report the number rather than design around an estimate. The number:
+
+| viewport | body | content | **slack** |
+|---|---|---|---|
+| 360×690 | 522px | 708px | **−186px** |
+| 390×745 | 572px | 690px | **−118px** |
+| 1200×900 | 660px | 690px | **−30px** |
+
+**The draft already exceeds the modal body at every width, and the gate passes anyway.** That is not a defect — it is HT-D51's architecture doing its job: a footer pinned *outside* a scrolling body. `$sOk` composes `lead.inView`, both actions in view, `pageScrollY = 0` and no horizontal overflow, and **excludes `bodyScrolls` deliberately**. The identity question is in view because it sits at the top of the scroll container; the actions are in view because they never move. The 360×520 case *requires* `bodyScrolls = True` for the same reason.
+
+**So "larger type threatens in-view-without-scrolling" was a misreading of the claim.** Type growth makes an already-scrolling body scroll further — a usability cost, and a real one at −186px, but not a gate failure and not a fitting problem.
+
+**The binding constraints are horizontal, not vertical:** `pageOverflowX`, already gated at four viewports, and the plot's tick labels colliding inside a 320-unit viewBox. The legibility half is redirected accordingly — it has **no vertical budget to defend**, which is the opposite of how it was about to be designed.
+
+**Recorded because the estimate would have shaped the slice.** A vertical budget would have been protected, sizes would have been held down to defend it, and the defence would have been of a constraint that does not bind. One measurement, taken before any design decision, cost a single gate run.
+
 ### Forks — the legibility half
 
 - **The base scale.** Lean: keep `16px/1.5` as the stated base and collapse eleven sizes to about five — data above base, structure at base, provenance below, with a **floor of 12px** and nothing beneath it except the overview's ticks (see above). The two 9px declarations go.

@@ -273,6 +273,38 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 
 **What was removed, and what was not.** The prices Settings card is gone; the prices **role keeps every piece of its machinery**, which the gates still exercise — pacing at 1 call/s, redaction of an echoing provider, and the `auth: 'none'` proof that the metering server of D1 is a table edit. **The capability is intact; only the invitation is gone.**
 
+## D19 — An unmeasured quantifier is an argument, not a description (governance, 2026-09-15)
+
+**Where it happened.** Asked whether R6 should split, I wrote that removing the permanent comps list would mean repointing the gates "a lot of gates are asserted against" — and used that to argue for a particular shape of split. Measured: **five sites.** Three in the harness, two in the layout gate.
+
+**The claim had been doing argumentative work it hadn't earned.** It was not wrong so much as *unweighed*: "a lot" was chosen to convey difficulty, and difficulty was the premise of the recommendation. Had the number been five all along, the recommendation might still have been right — but it would have had to be argued on something else.
+
+**The rule.** A quantity that appears in a recommendation is part of the argument, so it is measured before the recommendation is made, not after it is questioned. Words like *a lot*, *most*, *scattered throughout*, *everywhere* are **claims about counts**, and this repo already treats an unverified count as a defect everywhere else: the assertion pin, the gate-script census, the egress census, the `MK_IDS` control. The same standard applies to prose.
+
+**And it is cheap.** The measurement that corrected this was one `grep`. The asymmetry — seconds to count, and a recommendation shaped by the answer — is the whole argument for counting first.
+
+## D18 — The cross-reference census also stops the record's structure being written by proposals (governance, 2026-09-15)
+
+**Where it happened.** R6's pre-registration proposed splitting the slice in two and gave each half a suffixed slice identifier. `check-refs.sh` refused both: they resolved to no heading. Its own message offers two remedies — *"repoint the citation, or add the heading."*
+
+**They are not equivalent, and that is the entry.** Adding the headings would have satisfied the gate in seconds. It would also have written a **proposed** split into the record's structure before it was **ruled**. A heading in `GATES.md` is the record asserting that a slice exists; creating one because I had suggested it would make the record describe my proposal rather than the subscriber's decision.
+
+**So the census does more than resolve identifiers.** It is the mechanism that keeps the record's shape downstream of rulings. An identifier that resolves to nothing is usually a typo — but sometimes it is a thing that does not exist yet *because nobody has decided it should*, and the census cannot tell those apart. **The author can, and must.** Identifiers follow the ruling.
+
+**A limit, recorded twice now and hit a third time here.** The census cannot distinguish a citation from a **quotation** of one, so the sentence *explaining* the repoint tripped the same gate. Fixed by describing the identifiers rather than spelling them — which keeps the census strict. Weakening the scan to allow quoted forms would trade a real guarantee for two characters of convenience.
+
+## D17 — A slice's own chrome is sized last and smallest (2026-09-15)
+
+**Measured, not impressionistic.** The comps surface exists to make a price distribution readable. The two smallest text declarations in the entire app are **its own**: the plot's axis tick labels and the "YOUR ASK" rule label, both **9px**, against a `body` that declares `16px/1.5`. Eleven distinct sizes are in play and eight sit below the declared base.
+
+**The mechanism, which is the generalisable part.** The author reads their own chrome **at desk distance on a large screen**, while writing it, dozens of times — and at that distance 9px is legible. It is the one surface whose legibility is never tested by its author under the conditions it ships into. Every *other* surface gets read on the device eventually, because using the product means reading it; the labelling on a chart is read by the person who built the chart, who already knows what it says.
+
+**So it is sized last, and sized to fit rather than to be read.** Axis labels, legends, units, affordance hints and provenance lines are the parts that lose when space is tight, and they lose silently, because nothing fails.
+
+**The rule.** When a slice adds chrome — labels, legends, keys, hints — its type is set **from the scale**, not from the space remaining. If it will not fit at the scale's floor, that is a finding about the layout, not a licence to shrink the label. **The instinct to shrink a label to make it fit is the instinct that produced 9px axis ticks on a surface whose entire purpose is legibility.**
+
+**Corollary, and it is why R6 exists at all:** a device pass reads the *data*. It does not necessarily read the *chrome*, because the person holding the phone already knows what the axis says. Chrome legibility needs its own look, deliberately, at arm's length.
+
 ## D16 — An assertion against a constructed element proves the function, never the shipped page (governance, 2026-09-14)
 
 **Two instances in two consecutive slices. That makes it a pattern, not an incident.**

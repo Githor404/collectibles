@@ -127,6 +127,19 @@ $install = @'
       // has no wants, so wantFlagHTML returned '' and the gate proved the draft
       // fits WITHOUT the thing that was just added to it.
       wantFlag: __g.rect('#captureResult .wantflag'),
+      // R6: THE VERTICAL SLACK. The named conflict is that a larger type scale
+      // makes the draft taller while this gate requires the identity question
+      // and BOTH actions in view with the page unscrolled. That conflict is a
+      // NUMBER, not an argument -- how many pixels the draft can absorb before
+      // the body scrolls -- and it is measured before the scale is designed
+      // rather than estimated around.
+      //
+      // Reported, deliberately NOT folded into the verdict: it is a measurement,
+      // not yet a threshold, and turning it into a pass/fail before knowing its
+      // value would be designing around an estimate by another route.
+      bodyH:    body ? Math.round(body.clientHeight) : -1,
+      contentH: body ? Math.round(body.scrollHeight) : -1,
+      slack:    body ? Math.round(body.clientHeight - body.scrollHeight) : -1,
       primary:__g.rect('#outcomeFoot .btn:nth-of-type(1)'),
       second: __g.rect('#outcomeFoot .btn:nth-of-type(2)'),
       nActions: document.querySelectorAll('#outcomeFoot .btn').length,
@@ -453,6 +466,11 @@ try {
            $S.captureSurfaceClean -and (-not $S.pageOverflowX) -and $S.pageScrollY -eq 0
     Write-Host ("  {0,-17} success : question={1} confirm={2}({3}px) discard={4} field={5} oneState={6} wantFlag={7} -> {8}" -f `
       $name, $S.lead.inView, $S.primary.inView, $S.primary.h, $S.second.inView, $S.firstField.found, $S.captureSurfaceClean, $S.wantFlag.inView, $sOk)
+    # R6's first measurement, reported on its own line so it is read rather than
+    # buried in the verdict line's tail. Positive slack = pixels of type growth
+    # the draft can absorb before it scrolls.
+    Write-Host ("  {0,-17} typeroom: body={1}px content={2}px SLACK={3}px  (not a verdict -- the number the type scale is designed against)" -f `
+      $name, $S.bodyH, $S.contentH, $S.slack)
 
     $F = Measure-Fail
     $fOk = $F.state -eq 'error' -and $F.shown -and $F.primary.inView -and $F.second.inView -and
