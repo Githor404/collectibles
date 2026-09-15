@@ -99,6 +99,19 @@
      which are outside that gate's selector scope. Classed smalls (.pver, .fine,
      .idna) still win on specificity and keep their declared size. */
   small{font-size:inherit}
+  /* AND [hidden] MUST ACTUALLY HIDE. `.cmpdrop{display:block}` below was written
+     as "how the dropped-listings disclosure looks WHEN SHOWN" -- and an author
+     `display` declaration beats the UA's [hidden]{display:none} outright, so the
+     attribute was inert from R2b until 2026-09-15. On the seeded 8-row fixture
+     two dropped rows are ~160px and nobody saw it. On the FIRST REAL response it
+     was 1332px: 69% of the comps surface, with the plot squeezed to 14% of its
+     own panel. The toggle lied in both directions -- "show what was hidden"
+     relabelled itself to "hide" and moved nothing, because there was nothing
+     hidden to move.
+     Fixed structurally rather than by deleting that one `display:block`, so the
+     next element that uses `hidden` is protected too. Same shape as the rule
+     above: fix the cause, not the instance the gate happened to reach. */
+  [hidden]{display:none!important}
   label{display:block;font-size:12px;color:var(--muted);margin:6px 0 3px}
   input,select{width:100%;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--txt);font-size:16px}
   .row{display:flex;gap:8px}.row>div{flex:1;min-width:0}

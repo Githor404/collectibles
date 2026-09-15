@@ -273,6 +273,24 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 
 **What was removed, and what was not.** The prices Settings card is gone; the prices **role keeps every piece of its machinery**, which the gates still exercise — pacing at 1 call/s, redaction of an echoing provider, and the `auth: 'none'` proof that the metering server of D1 is a table edit. **The capability is intact; only the invitation is gone.**
 
+## D24 — A selector that reaches an element's CONTENTS proves nothing about the element (governance, 2026-09-15)
+
+**Where it happened.** `.cmpdrop{display:block}` overrode the UA's `[hidden]{display:none}`, so the dropped-listings disclosure was open on the page from R2b until 2026-09-15 — **1332px, 69% of the comps surface** on the first real response, under a button that relabelled itself and moved nothing. The layout gate's type-floor selector is `#compsBox *`. **It reached inside those sixteen rows, measured their text, and passed them** — every one met the 12px floor. The gate inspected the defect's own contents and reported health.
+
+**Why this is a new failure mode rather than an instance of an old one.** This repo already records three:
+
+- **An instrument that cannot fail** (`grep -c $'\r'` reporting every line as CRLF). Not this: the selector worked perfectly.
+- **A fixture that cannot exhibit the failure** (HT-D60 Clause 4). Not this: the rows were right there, rendered, measurable.
+- **An assertion against a constructed element rather than the shipped page** (D16). Not this: it was the shipped page.
+
+The selector **could** fail, the fixture **could** exhibit it, and the element **was** reached. It passed anyway, because the question it asked — *how big is this text* — is a property of the **contents**, while the defect was a property of the **container**. A descendant selector silently takes its subject's existence and visibility as **given**. It is a gate looking *through* the thing it should have seen.
+
+**The rule.** Before a gate asserts anything about what an element holds, it must establish **that the element should be on the screen at all** — presence, display, geometry. A `#thing *` selector inherits `#thing`'s visibility as an assumption, and an assumption inside a gate is exactly what a gate is for removing. Where an element's whole purpose is to be *conditionally* present, the condition is the assertion: `DROP1` measures a **rendered rectangle**, not `hasAttribute('hidden')` — which was `true` for the entire four slices the defect was live.
+
+**The cheap test:** *if this element should not have been on screen at all, would my selector have told me?* If it only reads descendants, the answer is no, and it will keep saying so in green.
+
+**Family: D5.** A filter that does not filter looks exactly like success. A container that does not contain looks exactly like a container.
+
 ## D23 — A coverage claim can be true of the mechanism and false of the arrangement (governance, 2026-09-15)
 
 **Where it happened.** C1's pre-registration listed six gate obligations and dismissed one of them in parentheses: *"The storage key is **prefixed** (PFX1 already sweeps this)."* Every word about PFX1 was true — it sweeps **every** storage key written in the whole run and fails on any that is not prefixed. What the sentence never asked is **when PFX1 runs**. It is a `step()`, not synchronous, and steps execute in registration order: it reads `__keysEverWritten` **at the moment it runs**. A C1 block registered after it would have written the replay key *after* the sweep had already read the dictionary. The suite would have stayed green while the one key C1 adds went uncovered by the sweep cited to cover it.

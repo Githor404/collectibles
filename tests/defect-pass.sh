@@ -850,6 +850,14 @@ report "saved response leaks into the export" "K1 shape" "$(run_dl)"; restore
 mutate 's/\? Promise\.resolve\(\{ transport: true, httpOk: true, status: 200, raw: saved\.raw \}\)/? Promise.resolve({ transport: true, httpOk: true, status: 200, raw: JSON.stringify(JSON.parse(saved.raw).slice(0, 3)) })/' app.js
 report "replay returns a TRUNCATED response" "IDENTICAL parsed rows" "$(run_dl)"; restore
 
+# ---- DROP1: the structural fix that makes `hidden` mean something -----------
+# Removing this one rule restores the defect exactly as it shipped: the
+# attribute stays set, .cmpdrop{display:block} wins again, and the disclosure is
+# open while claiming to be closed. Pattern is PAREN-FREE -- report() greps with
+# -E, which is what silently blanked rows 76 and 77.
+mutate 's/\[hidden\]\{display:none!important\}//' index.html
+report "hidden stops hiding (the shipped defect)" "ZERO RENDERED HEIGHT" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
   printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"

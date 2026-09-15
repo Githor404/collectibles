@@ -1668,3 +1668,55 @@ The served `app.js` now reports `APP_VERSION = '0.6.0'`.
 **The before-fingerprints matched the v0.5.0 pair already recorded in this file, byte for byte.** That was not assumed — they were measured against the live site before the push, and the agreement independently confirms that the deploy target and procedure recorded here are still correct rather than re-derived. This is the thing the procedure was written down to stop, and the first time it has paid.
 
 **The push itself was verified by comparing `origin/main` to local `HEAD`, never by the push command's exit code** — a push silently failed to land in this repo once, and the exit code said nothing about it.
+
+## The dropped-listings disclosure was never hidden — FOUND BY THE FIRST REAL FIXTURE, FIXED, v0.7.0 (2026-09-15)
+
+`index.html` carried `.cmpdrop{display:block;margin-top:6px;opacity:.72}`, written as *how the disclosure looks when shown*. An author `display` declaration beats the UA's `[hidden]{display:none}` outright, so the `hidden` attribute at `app.js:2404` was **inert from R2b onward**, and `box.hidden = !box.hidden` toggled a value nothing honoured.
+
+### Measured, at 360px, with the real 100-row response
+
+| comps surface | height | plot's share |
+|---|---|---|
+| as shipped | **1933px** | 14% |
+| with `[hidden]` honoured | **595px** | 45% |
+
+**1338px — 69% of the surface — was the disclosure that is supposed to be closed.** The button read *"show what was hidden"*, and tapping it relabelled itself to *"hide"* while nothing moved, because nothing was hidden to move. It lied in both directions. With the fix, the same tap correctly opens 1332px.
+
+**Why four slices missed it.** On the seeded 8-row fixture, two dropped rows are ~160px — a strip below the fold of anyone's attention. The defect's size is a function of the drop count, and no fixture before this one had more than two. R6's *"surface on demand, no wall of text"* was true of the list and false of the drops, and the wall was never removed; it moved into a block labelled hidden.
+
+### Fixed structurally, not at the instance
+
+`[hidden]{display:none!important}` sits beside `small{font-size:inherit}` — the same shape of repair, and for the same reason. Deleting the one `display:block` would close this instance and leave the next element that uses `hidden` exposed to an author rule nobody thought about.
+
+### The gate, and what it deliberately does NOT assert
+
+`DROP1`, four assertions on the **shipped shell**, measuring a **rendered rectangle** rather than the attribute — `hasAttribute('hidden')` was `true` for the entire time the defect was live, so the attribute was never the thing in doubt. Clause 4 is asserted first (the disclosure holds every dropped row, so a zero height is about hiding rather than about emptiness), then zero height by default, then a **paired control** that taps it open, then symmetry on closing. Defect row 78 removes the rule and must fail.
+
+### The gate that looked THROUGH it — recorded as its own finding (D24)
+
+The layout gate's type-floor selector is `#compsBox *`. **It reached inside the sixteen dropped rows, measured their text, and passed them.** The gate could fail, the fixture could exhibit the defect, and the element was reached — and it still reported health, because it asked a question about the **contents** (font size) while the defect was a property of the **container** (display). A descendant selector takes its subject's visibility as given. That is a new member of the family — not an instrument that cannot fail, not a fixture that cannot reach, but **a gate looking through the thing it should have seen**. Ruled as **D24**.
+
+## R6b — the navigation half, RE-RULED: the two-view plot is dropped (2026-09-15)
+
+**R6b is the highlight filters plus the disclosure fix. The two-view plot is dropped entirely, and no replacement justification is offered** — the subscriber's words: *"I'd be inventing a third to save a design I ruled on bad information."*
+
+**Both of its justifications were measured false by the first real fixture.**
+
+| justification | as ruled | measured |
+|---|---|---|
+| **density** — 84 marks need an overview plus a scrollable detail | assumed marks would be hidden | **0 hidden**; deepest column stacks **8** against `PLOT_MAX_STACK=9` |
+| **label legibility** — *"12px tick labels inside a 320-unit viewBox will collide"* (R6 Finding 4) | assumed a crowded axis | **3 labels**, at 76.7 / 166.9 / 257.2, 17–29px wide, ~70px of clear space. `TICK-COLLISIONS=0` |
+
+The scale ticks **once per decade**, and the real data spans 2.85 decades. A crowd was never possible. The density margin is genuinely thin — one more sale at $29.99 fills the stack and the next would vanish — but a two-view plot is not what defends it, and that is a separate question from the one this design claimed to answer.
+
+**What survives untouched**, because none of it depended on the measurements that failed: highlight never filters out; label the button for what it does (*"title mentions CGC"*, never *"slabbed"*); buttons derive from the response so an unmatched category does not render; scanning titles stays possible, summoned rather than default. `best_offer_accepted` maps to `bin` with its own label **and** a synthetic unrecognised value stays in the fixtures, so mapping the real value does not cost the repo its only live specimen of CQ12's unrecognised-value path. CQ5's comment — which claims the arrived contract carries no category, while real data carries `category` and `categoryId` on 100 of 100 rows — is repointed inside R6b.
+
+### The arc, recorded plainly, because it is this session's real result
+
+**The two-view plot was ruled on an assumption, survived a pre-registration, and was killed by the first real fixture.**
+
+It was not a careless ruling. It was reasoned from a genuine problem — 84 rows is a lot — and it was written into the record with forks, leans and gate obligations. Everything about it was disciplined except that **nobody had ever rendered 84 real sales**. Both of its supports turned out to be properties of a fixture that did not exist yet.
+
+**C1 existed to make that fixture cheap.** It was justified as a way to avoid paying $0.40 to re-check a layout, and it was recorded as test machinery so it would not grow into a product feature. What it actually bought was **a measurement that deleted a slice** — and, in the same load, a live defect that had been shipping for four slices and put 69% of a real surface behind a button that did nothing.
+
+**The slice that paid for itself was the one that bought the measurement.** Not the one that built the design.

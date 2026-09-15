@@ -2609,6 +2609,52 @@ window.setLS({});
     });
   });
 
+  // ---- DROP1: "hidden" must ACTUALLY HIDE (found by the first real fixture) --
+  // `.cmpdrop{display:block}` beat the UA's [hidden]{display:none}, so the
+  // dropped-listings disclosure was open from R2b until 2026-09-15 -- 1332px on
+  // a real response, 69% of the comps surface, under a button that relabelled
+  // itself and moved nothing.
+  //
+  // MEASURED ON A RENDERED RECTANGLE, not on the attribute. `hasAttribute
+  // ('hidden')` was TRUE the whole time it was broken; the attribute was never
+  // the thing in doubt. Only geometry can answer "is this on the screen".
+  //
+  // D22: this step ESTABLISHES its own comps state rather than inheriting one.
+  step(function () {
+    var R = window.__W;
+    if (!R) { res(false, 'DROP1: the shipped shell was not available'); return; }
+    var W = R.W, D = R.D;
+    var pd = W.CT.parseComps(COMPROWS);
+    var fd = W.CT.compsFilter(pd.rows);
+    W.CT.__setComps(fd.kept, fd.dropped, 'amazing spider-man 151');
+    var dbox = D.getElementById('compsBox');
+    var drop = dbox.querySelector('.cmpdrop');
+    var h = function (el) { return el ? Math.round(el.getBoundingClientRect().height) : -1; };
+
+    // HT-D60 Clause 4 in one assertion: a height of zero means nothing if the
+    // element is empty, so prove it is carrying every dropped row FIRST.
+    res(!!drop && fd.dropped.length > 0 &&
+        drop.querySelectorAll('.cmprow').length === fd.dropped.length,
+        'DROP1 CLAUSE 4: the disclosure exists and holds EVERY dropped row -- a zero height proves nothing about hiding if nothing was dropped into it',
+        'dropped=' + fd.dropped.length + ' rows=' + (drop ? drop.querySelectorAll('.cmprow').length : 'no .cmpdrop'));
+    res(h(drop) === 0,
+        'DROP1 GATE: the dropped-listings disclosure has ZERO RENDERED HEIGHT by default -- it carried the hidden attribute for four slices while an author display rule overrode it, putting 1332px of supposedly hidden content on the first real surface',
+        h(drop) + 'px');
+
+    // THE CONTROL. An absence gate is unfalsifiable alone: zero height reads
+    // identically against a renderer that emitted nothing at all.
+    var dbtn = drop ? drop.parentElement.querySelector('.linklike') : null;
+    if (dbtn) dbtn.click();
+    res(h(dbox.querySelector('.cmpdrop')) > 0,
+        'DROP1 GATE: and TAPPING IT OPENS IT -- the control that makes the zero above evidence rather than a record of a renderer that produced nothing',
+        h(dbox.querySelector('.cmpdrop')) + 'px');
+    if (dbtn) dbtn.click();
+    res(h(dbox.querySelector('.cmpdrop')) === 0,
+        'DROP1: and closing returns it to zero -- symmetric, so hidden-by-default is a state rather than an accident of first render',
+        h(dbox.querySelector('.cmpdrop')) + 'px');
+    W.CT.compsClear();
+  });
+
   // ---- run ------------------------------------------------------------------
   var seDone = false;
   function finish() {
