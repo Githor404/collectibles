@@ -858,6 +858,29 @@ report "replay returns a TRUNCATED response" "IDENTICAL parsed rows" "$(run_dl)"
 mutate 's/\[hidden\]\{display:none!important\}//' index.html
 report "hidden stops hiding (the shipped defect)" "ZERO RENDERED HEIGHT" "$(run_dl)"; restore
 
+# ---- PL9b: an unrecognised listing type must NAME the value ------------------
+# Mapping best_offer_accepted to bin leaves the real data with ZERO unrecognised
+# marks, so the only remaining specimen is synthetic -- which is exactly why the
+# self-naming property needs a gate rather than a fixture. This silences the
+# label while leaving the shape alone: the diamond still draws, PL8 still passes,
+# and the mark stops saying which value it failed to recognise.
+# PATTERN IS ASCII-ONLY AND ANCHORED ON THE RETURN'S TAIL, for two reasons that
+# both cost a row elsewhere in this file.
+#
+# 1. NO \x{201C}. The label wraps the value in curly quotes, and `perl -0pi`
+#    without -C reads the file as BYTES, where U+201C is the three-byte sequence
+#    E2 80 9C. A \x{201C} in the pattern asks for one character and matches
+#    nothing -- dry-run confirmed. Under the fatal mutate() that is an aborted
+#    pass reported as rotted, not a silent pass, but it is still a dead row.
+# 2. ANCHORED ON `not recognised' };`, not on ` not recognised`. The looser form
+#    works only because a comment forty lines up writes `as "not recognised"`
+#    with a quote before the word rather than a space. Reword that comment and
+#    the mutation retargets the COMMENT, plants nothing meaningful, and still
+#    APPLIES -- so mutate()'s fatal check would not catch it. That is row 55's
+#    rot: matching something incidental rather than the thing meant.
+mutate 's/not recognised\x27 \};/not stated\x27 };/' app.js
+report "unrecognised type stops naming itself" "NAMES THE VALUE" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
   printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"

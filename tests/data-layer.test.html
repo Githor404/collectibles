@@ -1886,6 +1886,35 @@ window.setLS({});
   res(!!boG && boG[0].indexOf('<rect') >= 0 && boG[0].indexOf('pmring') >= 0,
       'PL9 GATE: shape and ring are INDEPENDENT channels -- a Buy It Now that was best-offer-accepted carries BOTH, because the two fields are orthogonal and one channel would lose or double-count it');
 
+  // AN UNRECOGNISED VALUE MUST NAME ITSELF IN THE MARK, not merely take a
+  // different shape. PL8 above asserts a <path> is emitted, which the 'Wat' row
+  // is the only source of -- but that passes just as happily against a build
+  // that drew the diamond and said nothing, and "it says which value it did not
+  // recognise" is the whole of CQ12's D5 claim. CQ12 tests compTypeOf on a
+  // CONSTRUCTED object; this is the same property on the RENDERED surface (D16).
+  //
+  // MATCHED ON SHAPE, NEVER ON THE PUNCTUATED STRING. The label wraps the value
+  // in curly quotes (U+201C/U+201D) and esc() escapes only & < > " ' -- so they
+  // pass through untouched and an indexOf on the full phrase would fail for a
+  // reason that has nothing to do with the property being tested. That is row
+  // 69's defect, avoided rather than rediscovered.
+  // SELECTED BY PRICE, NOT BY CLASS, and the first version of this got it wrong
+  // in a way that is worth keeping. `pm-unstated` is carried by BOTH unstated
+  // states -- p5 has no listingType at all (ABSENT) and p6 carries 'Wat'
+  // (UNRECOGNISED) -- because CQ12 rules they are identical on the surface and
+  // distinct only in the data. A class selector therefore cannot tell them
+  // apart, and .exec() returned the FIRST in document order, which is the
+  // cheaper sale: $25, the absent one. It failed honestly here; had 'Wat' been
+  // the cheaper row it would have PASSED while testing the wrong specimen.
+  // data-p exists so a gate can identify a mark, so the mark is addressed by the
+  // price of the sale whose type was unrecognised.
+  var unG = /<g class="pm pm-unstated"[^>]*data-p="145"[^>]*>[\s\S]*?<\/g>/.exec(plHTML);
+  var unT = unG ? (/<title>([\s\S]*?)<\/title>/.exec(unG[0]) || [, ''])[1] : '';
+  res(!!unG && unT.indexOf('listing type') >= 0 && unT.indexOf('Wat') >= 0 &&
+      unT.indexOf('not recognised') >= 0,
+      'PL9b GATE (D5/CQ12, on the SURFACE): an UNRECOGNISED listing type renders a mark that NAMES THE VALUE it could not recognise -- a differently-shaped mark that stays silent is a discriminator that has stopped discriminating, and it looks exactly like one that works. Addressed by data-p, because the ABSENT state wears the same class by design',
+      'title=' + unT);
+
   // D8, and a planted control: a scan that has never been shown to fire proves
   // nothing. The forbidden shapes are curve commands, polylines and any asserted
   // band -- the plot draws sales, ticks and the user's ask, and nothing else.

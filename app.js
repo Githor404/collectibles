@@ -1812,6 +1812,16 @@ const COMP_TYPES = {
   fixedprice:     { kind: 'bin',     label: 'Buy It Now' },
   buyitnow:       { kind: 'bin',     label: 'Buy It Now' },
   storeinventory: { kind: 'bin',     label: 'Buy It Now, shop listing' },
+  // MEASURED, NOT DOCUMENTED. Two real runs (asm151 2026-09-15, action445
+  // 2026-09-14) both carry `best_offer_accepted` as a listingType value, on 16 of
+  // 84 kept rows in the first -- a fifth of a real scatter, which had been
+  // rendering as "not recognised". It IS a Buy It Now; the price was negotiated.
+  //
+  // statesOffer: the value names the offer ITSELF, and isBestOfferAccepted is
+  // true on exactly those rows, so the ring already carries that fact. Without
+  // this flag the mark would read "Buy It Now · best offer accepted · best offer
+  // accepted" -- the same field on two channels, said twice.
+  bestofferaccepted: { kind: 'bin', label: 'Buy It Now', statesOffer: true },
 };
 function compTypeOf(r) {
   const given = (r && r.listingType != null) ? String(r.listingType) : '';
@@ -1820,7 +1830,8 @@ function compTypeOf(r) {
   const hit = COMP_TYPES[key];
   if (!hit) return { kind: 'unstated', stated: true, known: false,
                      label: 'listing type “' + given + '” not recognised' };
-  return { kind: hit.kind, stated: true, known: true, label: hit.label };
+  return { kind: hit.kind, stated: true, known: true, label: hit.label,
+           statesOffer: !!hit.statesOffer };
 }
 
 function parseComps(raw) {
@@ -2273,8 +2284,10 @@ function compsMarkSVG(m) {
       ? `<rect x="${(m.x - 2.6).toFixed(2)}" y="${y - 2.6}" width="5.2" height="5.2"/>`
       : `<path d="M ${x} ${y - 3.4} L ${(m.x + 3.4).toFixed(2)} ${y} L ${x} ${y + 3.4} L ${(m.x - 3.4).toFixed(2)} ${y} Z"/>`);
   const ring = m.r.bestOffer ? `<circle class="pmring" cx="${x}" cy="${y}" r="5.6"/>` : '';
+  // The suffix is suppressed where the listing TYPE already states the offer:
+  // the ring and the type would otherwise report one field twice.
   const lab = compsMoney(m.r.soldPrice, m.r.soldCurrency) + ' · ' + m.t.label +
-              (m.r.bestOffer ? ' · best offer accepted' : '');
+              ((m.r.bestOffer && !m.t.statesOffer) ? ' · best offer accepted' : '');
   return `<g class="pm pm-${esc(m.t.kind)}${m.r.bestOffer ? ' pm-bo' : ''}" data-p="${esc(String(m.r.soldPrice))}" ` +
     `tabindex="0" role="button" onclick="compsPick(${m.i})"><title>${esc(lab)}</title>${shape}${ring}</g>`;
 }
@@ -2591,7 +2604,7 @@ function renderAskLive() {
 // WHY A NOTICE WORKS WITH NO WORKER: there is no app-controlled cache, so a load
 // fetches current bytes and the notice fires on it. The worker is what would
 // CREATE the stale-shell problem it then solves.
-const APP_VERSION = '0.7.0';
+const APP_VERSION = '0.8.0';
 const VERSION_KEY = 'collectibles-version';   // PFX1: every storage key is prefixed
 
 // One line per release, newest LAST. The newest entry's `v` must equal
@@ -2613,6 +2626,7 @@ const VERSION_LOG = [
   { v: '0.5.0', d: '2026-09-15', note: 'The list of every sale has stopped sitting under the plot. The plot IS the list now: tap a mark for that sale, and the nearest sales to your price stay beside it as before. When you do want to read all of them, the button says how many it is about to show — “List all 84 sales” — and you can put it away again. Nothing was removed: the sellers’ own words are still the only grade signal there is, so they stay one tap away rather than filling the screen by default.' },
   { v: '0.6.0', d: '2026-09-15', note: 'A way to save one sold-comps response and replay it instead of calling the provider. This is TEST MACHINERY rather than an offline mode, and it is built to stay that way: a lookup costs about $0.40 and returns the same sales every time, so checking a layout change should not cost money. It replays ONLY when you arm it, and arming lasts one session — a saved response sitting in Settings is never on its own a reason to skip a call, because a testing aid that fires without being asked would make every measurement taken afterwards untrustworthy while nothing looked wrong. A replayed result SAYS SO where the numbers are, with the date it was captured, because those sales were a 90-day window on that date and the window has moved since. The cost line reads “no charge” rather than billing you for a call that never happened, and the saved response is kept outside your data, so an export cannot carry it.' },
   { v: '0.7.0', d: '2026-09-15', note: 'The sales the app filtered out were never actually hidden. One line of styling overrode the mark that closes them, so every excluded listing — lots, reprints, collections — sat open on the page beneath a button offering to show them, and tapping that button changed nothing but its own label. On a real lookup that was 1332 pixels of it: more than two thirds of the whole sold-comps panel, with the chart squeezed into a seventh of the space. It is closed now until you ask for it, the button does what it says in both directions, and the repair is written so that anything else in this app marked hidden stays hidden. Found by loading a real 100-sale response for the first time; on the small test data it was a strip too short to notice.' },
+  { v: '0.8.0', d: '2026-09-15', note: 'Sales that ended in an accepted offer are drawn correctly. eBay reports those as their own listing type, which this app had never seen before and so drew as “type not recognised” — a fifth of the sales on a real lookup, marked as an unknown when the app could in fact tell exactly what they were: a Buy It Now whose price was negotiated. They now draw as Buy It Now with the ring that has always meant an accepted offer, so the shape says how it sold and the ring says how the price was reached, without saying it twice. The listing types the app does not recognise still name themselves on the surface rather than being quietly folded into a default — that is the point of showing them at all, and it is now checked on the drawn mark rather than only in the data underneath.' },
 ];
 
 // Numeric per segment, so 0.2.0 < 0.10.0 -- a string compare gets that backwards
