@@ -1849,7 +1849,11 @@ The plot keeps **every sale, unchanged**; the selection drives the **list**. R6'
 
 ### The vocabulary is derived, and the absentees are the control
 
-Twelve categories declared. On the **real 84**: seven render — CGC 10, letter grade 27, number grade 23, variant 3, key 3, signed 2, damage 2 — and **six do not**: CBCS, PGX, graded/slabbed, newsstand, direct, pence, all **zero**. On `COMPROWS`: four render, **eight** do not.
+Twelve categories declared. **Verified by driving the shipped `compsFilterCats()` over the real fixture**, not by the exploratory census that preceded it: on the **real 84**, seven render — CGC 10, letter grade 27, number grade 23, variant 3, key 3, signed 2, damage 2 — and **five do not**: CBCS, PGX, graded/slabbed, newsstand, pence, all **zero**. On `COMPROWS`: four render, **eight** do not.
+
+**Corrected on the same run that verified it.** This paragraph first read *"six do not"* and listed **`direct`** among them. There is no `direct` category in `COMPS_CATS` — it appeared in the exploratory census and was never declared, so the record was claiming a control that does not exist and miscounting the absentees by one. The seven counts were right, which is the part that could have hidden it: **a table with one wrong cell among eight correct ones reads as verified.** `check-refs` cannot catch this class at all — it resolves identifiers, not assertions about code.
+
+**And the verification itself was owed.** The counts in this table were originally measured with a PowerShell reimplementation of the category patterns, then written down as a property of the shipped vocabulary — while `app.js` carried *different* regexes (`\btapes?d?\b` against the census's `\btape[d]?\b`, and no `/i` on `numgrade`/`pence`). The numbers happen to agree on this data; that was luck, not method, and it is the same D3 divergence that made the drop-reason breakdown wrong earlier in this session.
 
 **The absentees are what make *"buttons derive from the response"* a test rather than a rule** (D5): a button that matches nothing is a control that has stopped controlling, and it looks exactly like one that works.
 
@@ -1876,4 +1880,23 @@ Run on a tree committed first at `29b12ce`. Zero rotted mutations; all four muta
 
 **1. The shape channel is already at the threshold, before anything was dimmed.** `iou_circle_rect` at the **shipped** size is **0.875** — above the 0.85 bar this slice set for indistinguishability. Circle vs square is auction vs Buy It Now, between them **65 of the 84** real marks. Diamond still separates cleanly (0.771 / 0.721). IoU is a proxy and 0.85 was a chosen bar, so this is **a flag for a human eye test, not a proof** — but it sits directly against R5's shape-and-ring ruling and should not wait to be rediscovered.
 
-**2. `mutate()` should count its matches and abort on more than one.** Three misfires of one class say the discipline does not transfer by comment. The mechanism is cheap — count occurrences, refuse on `> 1` — and it converts a **silent** misfire into a loud abort, which is the difference between row 82 today and row 55's year. **Not built here:** it is shared machinery under all 83 rows and does not belong inside a filters commit.
+**2. `mutate()` should count its matches and abort on more than one.** Three misfires of one class say the discipline does not transfer by comment. The mechanism is cheap — count occurrences, refuse on `> 1` — and it converts a **silent** misfire into a loud abort, which is the difference between row 82 today and row 55's year. **Not built here:** it is shared machinery under all 83 rows and does not belong inside a filters commit. **Subsequently ruled and built** — see the `mutate()` occurrence check below.
+
+### Deployed and verified (`4fb325a`, v0.9.0) — and a false failure that was mine
+
+| file | before (v0.8.0) | after (v0.9.0) |
+|---|---|---|
+| `index.html` | `1c7d9e18860063af` | `5bf9cd72baaf969c` |
+| `app.js` | `4b43430ec34058a5` | `e024b3895176288c` |
+
+The served `app.js` reports `APP_VERSION = '0.9.0'`. **Both files changed this version**, so unlike v0.8.0 there is no free unchanged-file control; the substitute is a present/absent pair on the served `index.html` — `.fbtn{` is new in v0.9.0, `small{font-size:inherit}` has been there since v0.4.0. Before-fingerprints were captured **pre-push**, per the rule written after v0.7.0.
+
+**The background poller reported a failure that did not exist, and the cause was its own arithmetic.** It waited on the intended pair and saw `f449862c6bc0e956` / `4091e7fb2b7bbf22` on all thirty polls — a third pair matching **no commit in this repository**. It then exhausted its window and exited 1, which is the loud give-up this record calls the failure signal.
+
+**The deploy had landed the whole time.** The poller captured each response into a shell variable (`APP=$(curl …)`) and hashed `printf '%s' "$APP"`, while the verification path piped `curl` straight into `sha256sum`. **Command substitution strips trailing newlines**, so the two sides of the comparison were computed from different bytes: 171466 → 171465 for `app.js`, 30158 → 30157 for `index.html`. Reproduced deliberately against one saved response, both methods reading the same file: the substitution method returns **exactly** the pair the poller reported.
+
+**And the first explanation I reached for was wrong.** The headers showed `X-Cache: HIT`, `Age: 515`, `Cache-Control: max-age=600`, and a CDN serving stale bytes for 515 of a 600-second TTL is a clean, complete story. It was false. A URL-busted request — a query string the edge cannot collapse — returned the **same ETag, same Age, and the correct bytes**, which exonerates the cache and disproves the account. Two correlated headers, one plausible mechanism, and no measurement separating it from the alternative: the same shape as three other confident readings today.
+
+**The corrected rule, which supersedes the window-sizing one.** A longer poll would not have helped; the digest was constant and wrong from poll 1. **Both sides of a fingerprint comparison must be computed by the same method, and a poller must REUSE the verification path rather than reimplement it.** Where the two sides are computed separately, a mismatch is evidence about the *instrument* before it is evidence about the deploy — and a stable wrong reading that never varies across thirty polls is that signature exactly.
+
+**Fourth propagation claim in four deploys, and the third that was wrong.** v0.7.0's entry said a non-matching early check is a timing fact; v0.8.0's said an early *match* removes the chance to measure the before state; this one says a mismatch may be neither, and may be arithmetic. The pattern across all three is not about Pages at all — it is that **this record keeps theorising about the network from an instrument it has not validated**.
