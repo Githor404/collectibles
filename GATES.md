@@ -1747,3 +1747,62 @@ It was not a careless ruling. It was reasoned from a genuine problem — 84 rows
 **C1 existed to make that fixture cheap.** It was justified as a way to avoid paying $0.40 to re-check a layout, and it was recorded as test machinery so it would not grow into a product feature. What it actually bought was **a measurement that deleted a slice** — and, in the same load, a live defect that had been shipping for four slices and put 69% of a real surface behind a button that did nothing.
 
 **The slice that paid for itself was the one that bought the measurement.** Not the one that built the design.
+
+## R6b, part one — `best_offer_accepted` mapped, and the unrecognised path gated on the surface — **BUILT**, v0.8.0 (2026-09-15)
+
+Assertions **495 → 496**, re-pinned in the same commit.
+
+### What shipped
+
+`COMP_TYPES` gains `bestofferaccepted → { kind: 'bin', statesOffer: true }`. Two real runs carry `best_offer_accepted` as a `listingType` value — **16 of 84 kept rows** in the 100-row run — so a fifth of a real scatter was drawing as *"type not recognised"* when the app could say exactly what those sales were: a Buy It Now whose price was negotiated.
+
+**`statesOffer` exists because the field arrives twice.** `isBestOfferAccepted` is `true` on exactly those 16 rows, so without the flag a mark would read *"Buy It Now · best offer accepted · best offer accepted"* — one fact reported on two channels and said twice. The flag suppresses the suffix where the type already states it.
+
+**The legend needed no new row, and I predicted it would.** I recorded that mapping *"is not label-only, it's a visual change to 19% of the marks, and the plot key needs a fourth row or it will under-describe what's drawn."* It already has four, and they are **orthogonal**: square = Buy It Now, ring = best offer accepted. A mapped row draws square + ring and both channels are already described. That is R5's shape-and-ring decision paying off in a slice it was not written for — the second time today, after `compsPick`'s object identity made filter repaints safe for free.
+
+### Licensed by a cross-run comparison, not by one export
+
+The committed fixture was exported from Apify's **"All fields"** view, which raised the question of whether it carries fields a live call never receives — a fixture supplying what the seam omits, invisible because every gate goes green.
+
+| | run A (`asm151`, 2026-09-15, n=100) | run B (`ACTION COMICS 445`, 2026-09-14, n=3) |
+|---|---|---|
+| key union | **29** | **29** |
+| only in one | *(none)* | *(none)* |
+| distinct item shapes | 2 — 28 keys ×79, 29 ×21 | 2 — 28 keys ×2, 29 ×1 |
+| the varying key | `isBestOfferAccepted` | `isBestOfferAccepted` |
+
+**The runs agree.** And the app narrows nothing: `compsBody` sends no field projection, the call site passes no `query`, and `egress` builds its query string only from `o.query` — so the request URL carries no `fields`/`omit`/`clean` and the app receives whatever the actor wrote. `parseComps` is projection-based besides (it walks `COMP_FIELDS` and reads `o[f.from]`, never enumerating keys), so extra fields cannot reach a parsed row.
+
+**`isBestOfferAccepted` is OPTIONAL, not nullable** — absent from the 28-key shape, present as `true` on the 29-key one. That is a different shape from `category`, which is **present and null** on 100/100 and 3/3, and the distinction matters for anything that enumerates or asserts over keys: a key list cannot tell "carried" from "carried empty".
+
+### PL9b — the half of the ruling that would otherwise have been lost
+
+Mapping the real value leaves the unrecognised path with **zero live instances**, so its only specimen becomes synthetic. That was ruled against directly — *"don't lose the path to gain the label"* — and the existing gate was weaker than it looked: `PL8` asserts only that a `<path>` is emitted, which passes just as happily against a build that drew the diamond and **said nothing**. `CQ12` tests the same property on a **constructed object**, never on a mark (D16's shape).
+
+`PL9b` asserts the rendered mark **names the value it could not recognise**, matched on shape rather than on the punctuated string — the label wraps the value in curly quotes and `esc()` escapes only `& < > " '`, so they pass through and an `indexOf` on the full phrase would fail for a reason unrelated to the property. Row 69's defect, avoided rather than rediscovered.
+
+### DEMONSTRATED — row 79, seen to fail (HT-D60 Clause 1)
+
+Run on a tree committed first at `aa05bff`. Zero rotted mutations; all four mutated files restored identical.
+
+| row | planted defect | verdict | first named failure |
+|---|---|---|---|
+| 79 | the unrecognised label stops naming the value | `GATE: FAIL` | `PL9b GATE (D5/CQ12, on the SURFACE): an UNRECOGNISED listing type renders a mark …` |
+
+### Three instrument defects, caught before any of them could count as evidence
+
+**1. A class selector cannot tell two states apart that are identical by design.** `PL9b`'s first version matched `<g class="pm pm-unstated">`. **Both** unstated states wear that class — `p5` has no `listingType` at all (ABSENT), `p6` carries `'Wat'` (UNRECOGNISED) — because `CQ12` rules they are the same on the surface and distinct only in the data. `.exec()` returned the first in document order: the **$25** absent row, not the **$145** `'Wat'` one. **It failed honestly here; had `'Wat'` been the cheaper sale it would have PASSED while testing the wrong specimen.** Now addressed by `data-p`, which exists so that a gate can identify a mark.
+
+**2. `\x{201C}` cannot match three bytes.** Row 79's first pattern matched the label's curly quotes that way. `perl -0pi` without `-C` reads the file as **bytes**, where U+201C is `E2 80 9C`, so the pattern asked for one character and matched nothing. Confirmed by **dry-run against a scratch copy** rather than discovered by a rotted pass — the fatal `mutate()` would have aborted loudly, but the row would still have been dead.
+
+**3. A pattern that worked by accident of a comment's punctuation.** Its replacement matched `` ` not recognised` `` and applied to the label **only because** a comment forty lines above writes `as "not recognised"` with a quote before the word rather than a space. Reword that comment and the mutation retargets the **comment**, plants nothing meaningful, and **still applies** — so `mutate()`'s fatal check would not catch it. Anchored on `` `not recognised' };` `` instead. **Row 55's rot in a new costume:** matching something incidental rather than the thing meant.
+
+### Named and parked, measured but not fixed
+
+**1. `endedAt` is DATE-ONLY in reality, and three harness fixtures use timestamps.** Both real runs are bare dates — `"2026-09-09"`, `"2026-08-22"` — **100/100 and 3/3, zero timestamps**. `COMPROWS`, which this record describes as *"the contract as one real run returned it"*, writes `'2026-09-02T11:00:00Z'`; so do `AKROWS` and `PLROWS`. The original probe fixture was written with a time the provider has never once sent.
+
+**No live defect**, because `compsDate` matches on a `/^(\d{4})-(\d{2})-(\d{2})/` prefix and both shapes render identically. **But `AK4` breaks nearest-comp ties by RECENCY**, and its fixture supplies hour precision (`k4` Aug 9 → `k5` Aug 7 → `k6` Aug 5) where real data has **day** granularity. **Six real sales share $29.99.** Same-day ties therefore have no recency order at all and fall through to sort stability — a property no assertion states and no fixture can currently exhibit. Parked rather than folded in: it touches `AK4`'s ordering claim and deserves its own measurement, not a ride-along on a mapping commit. Same class as the `category` error, pointing the other way — **a fixture asserting a shape richer than the contract**.
+
+**2. D10's adversarial case is PLANTED, and unobserved in real data.** The raw book whose title says *"CGC READY"* — the case that justifies labelling a filter *"title mentions CGC"* rather than *"slabbed"* — is a **synthetic row**, which the harness itself describes as *"planted explicitly … which is how sellers actually write them"*. Searched across 100 real sales with a **controlled** pattern (it matches the planted row on both clauses, so it is capable of firing): **0 of 84**. All ten CGC-mentioning titles are genuine slab references (`CGC 4.5` … `CGC 9.8`, plus one `CGC 85` that is almost certainly a mistyped 8.5).
+
+**The ruling stands on its own merits** — the app reports a string match and cannot know what a title means, which is true whether or not a seller has yet written a misleading one. **What changes is the evidence:** it should read *plausible and unobserved* rather than imply it was measured. A planted fixture proving a gate can fire is not the same as data proving the case occurs, and this record had been letting one stand in for the other.
