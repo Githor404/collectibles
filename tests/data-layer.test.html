@@ -1779,8 +1779,10 @@ window.setLS({});
   res(CT.parseComps('not json').ok === false && CT.parseComps('{"a":1}').ok === false,
       'CQ5: malformed and non-list replies are refused, not coerced');
   res(CT.COMP_KEYS.indexOf('grade') < 0 && CT.COMP_KEYS.indexOf('certification') < 0 && CT.COMP_KEYS.indexOf('categoryId') < 0,
-      'CQ5 GATE (D3): the contract is what ARRIVED -- no grade, no certification, and no category either, ' +
-      'though the vendor\'s own schema documentation claims the output carries one');
+      'CQ5 GATE (D3): the contract is what ARRIVED -- no grade and no certification. CATEGORY IS CARRIED AND USELESS, ' +
+      'which is a different claim and took two real runs to state correctly: `category` is present and NULL on 100/100 ' +
+      'and 3/3, and `categoryId` is present, populated, and 259104 on every row -- our OWN request parameter echoed back, ' +
+      'so it is constant by construction and can never group anything. Declaring it would add a field that cannot discriminate');
 
   // ---- R5: the row contract is DERIVED, so it cannot drift ------------------
   // COMP_KEYS declared listingType and conditionId for the whole of R2b and R3

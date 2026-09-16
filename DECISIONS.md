@@ -273,6 +273,22 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 
 **What was removed, and what was not.** The prices Settings card is gone; the prices **role keeps every piece of its machinery**, which the gates still exercise — pacing at 1 call/s, redaction of an echoing provider, and the `auth: 'none'` proof that the metering server of D1 is a table edit. **The capability is intact; only the invitation is gone.**
 
+## D25 — A falsification carries more authority than the belief it replaced, and is checked less (governance, 2026-09-15)
+
+**Where it happened.** R2b's paid probe struck out a prior belief — *"condition arrives as a label plus a numeric code, and **category as a label plus ID**"* — and recorded it as **"FALSIFIED by the probe, and it is the finding that mattered most"**, concluding *"there is no category field on a result whatsoever"*. Every consumer downstream treated that as settled: `COMP_KEYS` omitted it, `CQ5` asserted the omission, and the assertion's own comment repeated the claim for four slices.
+
+**Two real runs, 100 rows and 3 rows, different books and different days: `category` and `categoryId` are present on every single record.** The probe's falsification was wrong on the letter.
+
+**But the prior belief was only half right too, and that is the interesting part.** Category arrives as an **ID and never a label**: `category` is present and **null** on 100/100 and 3/3, while `categoryId` is present and populated — with `259104` on every row, **identical to what `compsBody` sends**. It is our own request parameter echoed back. So the probe's *substance* was right — there is nothing to group on — and its *statement* was false, and the belief it replaced was false in the opposite direction.
+
+**The mechanism.** A falsification arrives dressed as evidence. *"Measured, and it is not there"* reads as stronger than the assumption it overturns, and it closes the question in a way an assumption never does — nobody re-checks a thing that has already been checked. So a wrong falsification is **more durable than a wrong assumption**, and it takes its error further: it licenses removals (a field dropped from a contract) that a mere belief would not have.
+
+**What made both errors possible was the same test.** Each was settled by **presence or absence**, never by **value**. A key list cannot tell *carried* from *carried empty*; a glance at a console view cannot tell *absent* from *present-and-null*. Both readings came from looking at the shape of a response rather than its contents — and the later error inherited the earlier one's method, which is why they agreed on nothing and were made the same way.
+
+**The rule.** A falsification is a claim like any other and gets the same scrutiny as the belief it replaces — **more**, in proportion to the authority it will carry. Specifically: where a field is reported **missing**, state whether it was *absent*, *present-and-empty*, or *present-and-constant*, because those three license different conclusions and only the first justifies dropping it. And a finding recorded as settled should name **what would falsify it in turn** — here, one full item from any later run.
+
+**Family: D19 and D23.** D19 says measure before you argue. D23 says make sure you measured the half the argument rests on. D25 says the same scrutiny applies to a measurement that **overturns** something — the moment it feels most like evidence is the moment it is least likely to be re-read.
+
 ## D24 — A selector that reaches an element's CONTENTS proves nothing about the element (governance, 2026-09-15)
 
 **Where it happened.** `.cmpdrop{display:block}` overrode the UA's `[hidden]{display:none}`, so the dropped-listings disclosure was open on the page from R2b until 2026-09-15 — **1332px, 69% of the comps surface** on the first real response, under a button that relabelled itself and moved nothing. The layout gate's type-floor selector is `#compsBox *`. **It reached inside those sixteen rows, measured their text, and passed them** — every one met the 12px floor. The gate inspected the defect's own contents and reported health.
@@ -536,7 +552,9 @@ Publisher is live and narrowing, so using it looks free. **It is not.** An eBay 
 
 **The probe measured what this entry argued.** Three books, all at condition **`Pre-Owned / 3000`**, sold for **$9, $29.99 and $89** — a **10× spread at an identical code**. D7 was reasoned from a vocabulary mismatch; it is now a measurement, and it lands harder than the argument did: the condition field does not merely *translate badly* into grade vocabulary, it **carries no grade information whatsoever**.
 
-**Corrected.** The first bullet said the condition label and code are used *"only to split raw from slabbed."* **They cannot do even that.** At the search tier every comic is `Pre-Owned`, slabbed or not, and a result carries **no Certification field and no Item Specifics at all**. The bullet described a capability the source does not have — it was written from the actor's *advertised* field list, before a real run.
+**Corrected.** The first bullet said the condition label and code are used *"only to split raw from slabbed."* **They cannot do even that.** A result carries **no Certification field and no Item Specifics at all** — measured on the probe and confirmed on two later runs.
+
+**REPOINTED 2026-09-15, and the conclusion is untouched.** This paragraph also said *"at the search tier every comic is `Pre-Owned`, slabbed or not"*. **That was an 8-row artifact.** Across 100 real sales: **62 `Pre-Owned`, 19 `New (Other)` (`conditionId` 1500), and 19 with no condition at all** — and the second run shows the same three states. So the field is not constant; it is *sparse and inconsistent*, which fails to split raw from slabbed for a **different reason** than the one recorded. The 10× spread at an identical `Pre-Owned / 3000` code still stands and still proves the entry's claim. **What changed is the stated evidence, not the ruling.** The bullet described a capability the source does not have — it was written from the actor's *advertised* field list, before a real run.
 
 **What this entry forbids stands unchanged. What it permitted was never available.** See **D10**.
 
