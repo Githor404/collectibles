@@ -2081,3 +2081,16 @@ A count of *handlers never driven through their element* is not the same as a co
 - **The memory tier is reached through the test seam** (`forceWriteFailure` plus a state save), not through a real quota failure on the origin shared with HealthTracker. The quota case was driven once, outside the gate, and was not silent.
 - **The stamp has one-second resolution.** Two taps inside the same second render identically. RS6 waits 1.1s before its second tap, and that wait is the limit, stated.
 - **Only the replay card is driven this way.** See the open question above.
+
+### Deployed and verified (`c1888f4`, v0.9.1)
+
+| file | before (v0.9.0) | after (v0.9.1) |
+|---|---|---|
+| `app.js` | `e024b3895176288c` | `4bd6b4bd412b206c` |
+| `index.html` | `5bf9cd72baaf969c` | `5bf9cd72baaf969c` (unchanged) |
+
+- **Before the push:** the live fingerprints were measured and matched v0.9.0's recorded pair.
+- **The push:** `origin/main` was compared with `HEAD` rather than trusting the push's exit code.
+- **The deploy:** `app.js` matched `HEAD` on the **second poll, 16s** after the push, and the served file reports `APP_VERSION = '0.9.1'`.
+
+**Both sides of each comparison were computed by one function** (`curl … | sha256sum` against `git show HEAD:… | sha256sum`), per the v0.9.0 deploy's corrected rule. `index.html` did not change this version, so it is the **free unchanged-file control** that v0.9.0 lacked: identical before and after, which shows the instrument reports "no change" when there is none.
