@@ -21,13 +21,16 @@ Every gate must print a `GATE: PASS` or `GATE: FAIL` line. One that prints neith
 
 ## The real numbers — measured, and why a wrong estimate was expensive
 
+Each figure is approximate and carries the size it was measured at. A figure without its size goes stale without anyone noticing.
+
 | operation | measured |
 |---|---|
-| one suite run (`run-data-layer.sh`) | **~12s** |
-| full 41-row defect pass | **~8.5 min** — ~35s fixed + **~12s per selected row** |
+| **the full suite (`run-all-gates.sh`)** | **~2m40s** at 506 assertions (2026-09-16): the two rows below, summed. Defect rows do not enter it |
+| one data-layer run (`run-data-layer.sh`) | **~15s** at 506 assertions (2026-09-16); **~12s** at 350 (2026-09-13) |
+| full defect pass | **~8.5 min at 41 rows** (2026-09-13): ~35s fixed + **~12s per selected row**. **Now 83 rows, 3 of them layout rows (below); not re-measured at that size** |
 | a two-row subset (`ROWS=31-32`) | **59s** |
 | `git commit` before a pass | **~10s** |
-| the layout gate (`layout-gate.ps1`) | **~140s** — real-time CDP, Chrome bring-up, four viewports |
+| the layout gate (`layout-gate.ps1`) | **~140s** — real-time CDP, Chrome bring-up, four viewports. 142s on 2026-09-16; it loads `index.html` and runs none of the data-layer assertions |
 | a defect row that runs the layout gate | **~145s** — worth about **twelve** ordinary rows |
 
 **These are measurements. Do not re-derive them by feel.** On 2026-09-13 the working figure was *"~250s per row"*, inferred from elapsed times that were in fact a **fixed** cost — `run_dl` was unguarded, so every invocation ran the full suite for all 40 rows whatever `ROWS=` said (see `../GATES.md`). The estimate was wrong by **20×**, and the error was not academic:
@@ -157,7 +160,7 @@ The cheap form for an ad-hoc search: **assert the haystack exists first** (`ls`,
 
 ### `ROWS=` must cover every way a row plants, not just `mutate()`
 
-`ROWS=31-40 bash tests/defect-pass.sh` runs a subset, which is how the pass fits on a machine where each row costs ~250s. The filter hooks `mutate()` and `report()` — and **two rows do not plant through `mutate()` at all**: one appends `function phoneHome(u) { return fetch(u); }` to `app.js` with `>>` (to fail the egress census), another `mv`s the gate script aside (to fail the census). Both bypassed the range check, so **every subset run executed them whatever the range**.
+`ROWS=31-40 bash tests/defect-pass.sh` runs a subset (~35s fixed + ~12s per row; see the table above — this sentence once said *"each row costs ~250s"*, the 20× error, and outlived its correction by three days). The filter hooks `mutate()` and `report()` — and **two rows do not plant through `mutate()` at all**: one appends `function phoneHome(u) { return fetch(u); }` to `app.js` with `>>` (to fail the egress census), another `mv`s the gate script aside (to fail the census). Both bypassed the range check, so **every subset run executed them whatever the range**.
 
 That is invisible while the restore works, and it is not academic. When a concurrent pass destroyed the backups, the appended `phoneHome` survived into the working tree. The suite then failed on the egress census, and because a **mutation-signature sweep only knows about `mutate()`-based defects**, the diagnosis had to start from "`app.js` is 44 bytes larger than it should be" and work backwards. Both plants now carry `row_wanted &&`.
 

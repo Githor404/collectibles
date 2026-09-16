@@ -200,7 +200,8 @@ reap() {
 # 494s, ROWS=40-41 took 541s. A constant elapsed time with NO relationship to the
 # number of rows selected is the signature of a fixed cost -- it was read as
 # "~250s per row" instead, and every batching and timeout decision was built on
-# that. One suite run is ~12s; a full 41-row pass is ~500s.
+# that. One data-layer run was ~12s; a full 41-row pass was ~500s (2026-09-13;
+# current figures, each with its size, are in tests/README.md).
 run_dl() {
   row_wanted || return 0
   # DEFECT_PASS carries THIS pass's PID, which is also what the lock holds. The
