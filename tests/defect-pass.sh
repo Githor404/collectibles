@@ -105,8 +105,49 @@ ROW_LO=${ROWS%-*}; ROW_HI=${ROWS#*-}
 ROW=0
 row_wanted() { local n=$((ROW + 1)); [ "$n" -ge "$ROW_LO" ] && [ "$n" -le "$ROW_HI" ]; }
 
-mutate() { # perl-expression, file
+mutate() { # perl-expression, file, [literal-target-for-the-occurrence-check]
   row_wanted || return 0
+  # OCCURRENCE CHECK (2026-09-15). A pattern whose target appears MORE THAN ONCE
+  # is fragile whatever it happens to hit today, because `perl -0pi` without /g
+  # takes the FIRST match -- and the first match is decided by file order, not by
+  # intent. Three rows failed this way in one session:
+  #   row 55  pinned '0.1.0' and this repo's own version bump silenced it
+  #   row 79  matched ` not recognised`, and applied to the LABEL only because a
+  #           comment forty lines up writes `as "not recognised"` with a quote
+  #           rather than a space before the word
+  #   row 82  matched `title mentions CGC`, which occurs THREE times -- the
+  #           module comment, the label, and the changelog note. It took the
+  #           comment, APPLIED, planted nothing, and the fatal check below stayed
+  #           silent because the file HAD changed. GATE: PASS, testing nothing.
+  #
+  # Row 82 is the one this exists for. The fatal check below catches a mutation
+  # that does not apply; it cannot catch one that applies to the WRONG TARGET,
+  # and that failure is silent where the other is loud.
+  #
+  # ROUTED THROUGH ROTTED, not a second failure path. That machinery already
+  # stops the pass, prints the loud block and exits 1; a parallel mechanism would
+  # be one more thing to keep in step, which is the drift this file keeps paying
+  # for.
+  #
+  # OPT-IN, AND THAT IS A REAL LIMITATION. The check needs the literal target,
+  # and recovering it from an arbitrary s/// expression means parsing escaped
+  # delimiters -- fragile in exactly the way this guard exists to prevent. So a
+  # row passes its target as a third argument, and a row that does not pass one
+  # is unprotected. It covers the population that actually fails: all three
+  # misfires above were in NEWLY WRITTEN rows, where the author is right there
+  # and can add it. A guard that protects only the rows that ask is weaker than
+  # one that protects all 83, and that is stated rather than glossed.
+  if [ -n "${3:-}" ]; then
+    local hits
+    hits=$(grep -cF -- "$3" "$2" 2>/dev/null || echo 0)
+    if [ "$hits" -ne 1 ]; then
+      ROTTED=$((ROTTED + 1))
+      ROTTED_LIST="$ROTTED_LIST
+    row $((ROW + 1)) ($2): target occurs $hits times, needs exactly 1 -- '$3'"
+      echo "!! AMBIGUOUS TARGET ($hits occurrences, need 1): $3"
+      return 0
+    fi
+  fi
   # The guard compares against the file's OWN backup, so it covers every file in
   # MUTATED. Keyed to two hardcoded hashes it silently skipped the rest, and a
   # mutation that failed to apply would have produced a row that proves nothing --
@@ -886,12 +927,12 @@ report "unrecognised type stops naming itself" "NAMES THE VALUE" "$(run_dl)"; re
 # true by construction -- the plot holds no selection state, because at 5.31px no
 # channel could carry one. Row 80 is the row that would catch someone restoring
 # the design the measurement refused.
-mutate 's/const mk = compsMarks\(rows, sc\);/const mk = compsMarks(compsSelected(rows), sc);/' app.js
+mutate 's/const mk = compsMarks\(rows, sc\);/const mk = compsMarks(compsSelected(rows), sc);/' app.js 'const mk = compsMarks(rows, sc);'
 report "a filter removes marks from the plot" "PLOT UNCHANGED" "$(run_dl)"; restore
 
 # D5's shape: a button that matches nothing is a control that has stopped
 # controlling, and it looks exactly like one that works.
-mutate 's/if \(n > 0\) out\.push/out.push/' app.js
+mutate 's/if \(n > 0\) out\.push/out.push/' app.js 'if (n > 0) out.push'
 report "empty categories render as buttons anyway" "EIGHT categories with no match" "$(run_dl)"; restore
 
 # D10: the label states what was MATCHED, never what it might imply.
@@ -908,12 +949,12 @@ report "empty categories render as buttons anyway" "EIGHT categories with no mat
 # BYTE-safety and this row was about label semantics. The transferable rule is
 # neither: A PATTERN WHOSE TARGET OCCURS MORE THAN ONCE IS FRAGILE WHATEVER IT
 # HAPPENS TO HIT TODAY. Count the occurrences before trusting the anchor.
-mutate "s/label: 'title mentions CGC',/label: 'slabbed',/" app.js
+mutate "s/label: 'title mentions CGC',/label: 'slabbed',/" app.js "label: 'title mentions CGC',"
 report "a label becomes a claim about the book" "title mentions X" "$(run_dl)"; restore
 
 # OR -> AND. The selection shrinks toward nothing, which is filtering by another
 # name -- and the row count is the only thing that would say so.
-mutate 's/return COMPS_FILTERS\.some\(/return COMPS_FILTERS.every(/' app.js
+mutate 's/return COMPS_FILTERS\.some\(/return COMPS_FILTERS.every(/' app.js 'return COMPS_FILTERS.some('
 report "filters combine with AND instead of OR" "combine with OR" "$(run_dl)"; restore
 
 echo "-------------------------------------------------------------------"

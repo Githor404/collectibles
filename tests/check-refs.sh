@@ -108,7 +108,25 @@ scan() {
 # vacuous, because the "planted" name was the string the control already emits.
 #
 # THE LIMIT THIS BUYS, stated so it is not assumed away: a gate filename written
-# into check-refs.sh's own prose is outside this census's reach. Nothing else is.
+# into check-refs.sh's own prose is outside this census's reach.
+#
+# AND A SECOND LIMIT, WHICH IS LARGER AND HAS NO OWNER. This census resolves
+# IDENTIFIERS -- Dnn, HT-Dnn, Rnn, rule numbers, gate filenames. It cannot check
+# a CLAIM ABOUT CODE. On 2026-09-15 GATES.md stated that six declared filter
+# categories matched nothing on the real fixture and listed them, and one of the
+# six -- `direct` -- has never existed in COMPS_CATS at all. Every identifier in
+# that paragraph resolved; the census passed; the sentence was false.
+#
+# What makes the class dangerous is the ratio. Seven of the eight cells in that
+# table were correct, so the paragraph read as verified, and the wrong cell named
+# a thing that could only be checked by reading the source it described. A claim
+# about code is only falsifiable against the code, and nothing here does that.
+#
+# NOT CLOSED, AND DELIBERATELY NOT HALF-CLOSED. A heuristic that grepped prose
+# for identifier-shaped words and looked them up in app.js would fire on every
+# quotation, every hypothetical and every retired name -- the citation-versus-
+# quotation limit this file already records, at a much worse false-positive rate.
+# The gap is stated so that a green `refs: OK` is not read as covering it.
 GATE_FILE_SCAN="$DOCS tests/README.md tests/run-all-gates.sh tests/run-data-layer.sh"
 GATE_FILE_SCAN="$GATE_FILE_SCAN tests/defect-pass.sh tests/check-egress.sh"
 GATE_FILE_SCAN="$GATE_FILE_SCAN tests/restore-backups.sh tests/data-layer.test.html"

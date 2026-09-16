@@ -273,6 +273,36 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 
 **What was removed, and what was not.** The prices Settings card is gone; the prices **role keeps every piece of its machinery**, which the gates still exercise — pacing at 1 call/s, redaction of an echoing provider, and the `auth: 'none'` proof that the metering server of D1 is a table edit. **The capability is intact; only the invitation is gone.**
 
+## D26 — A search scoped to the whole file cannot answer a question about one structure (governance, 2026-09-15)
+
+**Four instances in one session, which makes it a rule rather than an anecdote.**
+
+| the question | the search | the answer | the truth |
+|---|---|---|---|
+| how many categories does `COMPS_CATS` declare? | `grep -cE "^  \{ key: '" app.js` | **17** | **12** — it swept in `ID_FIELDS`'s `title`/`issue`/`publisher` |
+| how many assertions does the harness run? | `grep -c '  res(' …test.html` | **461** | **506** — it matched only two-space indentation, missing every `res()` inside a `step()` |
+| what JSON files are in the repo? | `find . -name '*.json'` | *(timed out, twice)* | it descended into `tests/.tmp/probe-profile`, a Chrome user-data directory |
+
+**The mechanism.** A search makes **two** claims, not one: the **pattern** says *what* to match, and the **scope** says *where the question lives*. Reviewing a search means reviewing the pattern, because that is the part that looks like the question. The scope is the part that is implicit, inherited from whatever path was typed first, and **never re-examined** — and it is where all four of these failed. In every case the pattern was exactly right.
+
+**What makes it dangerous is that the answer is plausible.** 17 is a reasonable number of categories. 461 is a reasonable number of assertions. Neither output announces that it answered a different question from the one asked; a wrong scope produces a **confident, well-formed number**, which is the hardest kind of wrong to doubt. Two of the four were caught only because the answer collided with a pinned value; the `17` was caught only because it contradicted a reading taken from the running code moments earlier.
+
+### The same fault in a comparison: two sides, two methods (2026-09-15)
+
+**A fifth instance, and it is the costliest of the five.** The v0.9.0 deploy poller compared a *served* fingerprint against an *intended* one and reported failure for thirty consecutive polls. The deploy had landed on the first. The poller captured the response into a shell variable and hashed `printf '%s' "$VAR"`; the verification path piped `curl` straight into `sha256sum`. **Command substitution strips trailing newlines**, so the two sides of one comparison were computed from different bytes — 171466 against 171465 — and the mismatch was constant, total, and entirely manufactured.
+
+**Same root as the scope error, one level up.** There the *pattern* was right and the *scope* was unexamined. Here each *method* is right and their *equivalence* is unexamined. In both cases the reviewed half is the half that looks like the question, and the unreviewed half decides the answer. The scope of a search and the method of a comparison are the same kind of implicit claim.
+
+**What makes a comparison worse than a count.** A wrong count is one wrong number. A wrong comparison produces a **verdict** — matched or not — and a verdict invites action: I was one step from investigating the Pages build, and I had already written a false causal account of a CDN cache to explain it. **A bad instrument does not merely mislead; it generates work, and the work looks justified.**
+
+**The rule.** Both sides of a comparison are computed **by the same code path**, not by two paths believed to agree. Where a checker and a poller ask the same question, the poller **calls the checker** rather than reimplementing it — a second implementation of one measurement is D3's divergence, and this repo has now paid for that three times in one session (the drop-reason breakdown, the `categoryId` verdict line, this). **And a disagreement that is total and unvarying is a signature of the instrument, not of the world**: real drift is partial or moves.
+
+**Distinct from D24, and the pair is worth holding together.** D24 is a selector reaching **THROUGH** its subject — asking about an element's contents while the defect sits in the container. D26 is a search reaching **BEYOND** its subject — asking about one structure while scanning everything around it. One looks too deep, the other too wide. Both return green, well-formed answers about something other than the question.
+
+**The rule.** When a search answers a question about a **specific structure**, scope it to that structure's own boundaries — `awk '/^const NAME = \[/,/^\];/'` rather than a file-wide `grep` — or take the reading from the **running code**, which cannot be scoped wrongly because it *is* the structure. And treat a count that disagrees with a pinned or known value as a signal about **the instrument** at least as often as about the code: three of these four disagreed with something known, and in all three the instrument was the thing that was wrong.
+
+**The cheap test:** *could this pattern match something outside the thing I am asking about?* If yes, the scope is part of the claim, and an unstated scope is an unmeasured quantifier — **D19**, pointed at a search instead of at a sentence.
+
 ## D25 — A falsification carries more authority than the belief it replaced, and is checked less (governance, 2026-09-15)
 
 **Where it happened.** R2b's paid probe struck out a prior belief — *"condition arrives as a label plus a numeric code, and **category as a label plus ID**"* — and recorded it as **"FALSIFIED by the probe, and it is the finding that mattered most"**, concluding *"there is no category field on a result whatsoever"*. Every consumer downstream treated that as settled: `COMP_KEYS` omitted it, `CQ5` asserted the omission, and the assertion's own comment repeated the claim for four slices.
