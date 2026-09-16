@@ -273,6 +273,20 @@ A vendor that silently ignores a documented parameter is exactly GCD's failure w
 
 **What was removed, and what was not.** The prices Settings card is gone; the prices **role keeps every piece of its machinery**, which the gates still exercise — pacing at 1 call/s, redaction of an echoing provider, and the `auth: 'none'` proof that the metering server of D1 is a table edit. **The capability is intact; only the invitation is gone.**
 
+## D27 — An error that names the wrong cause is worse than a generic one (governance, 2026-09-16)
+
+**Where it happened.** C1's save refused an incomplete paste with *"The provider sent something that is not JSON."* One parser serves the live lookup and the paste, and the sentence was written for the lookup. On a paste it blamed a party that had done nothing. It also pointed away from the one recovery that works, which is to copy the whole response again. The subscriber tapped Save, did not read the amber line as being about their paste, tapped again, got an identical card, and reported a dead control.
+
+**Why it is worse than a generic message.** *"Could not save"* leaves the reader to find the cause, and they will look in the right places. A message that names a cause is believed, so it sends the reader to fix something that is not broken, and the real cause goes unexamined for as long as the message is trusted. **A specific wrong answer does more damage than a vague right one.**
+
+**The family: HT-D63.** HealthTracker's toast said *"Select-all + copy the prompt"* while pointing at a box that was empty on every build. The stated recovery was impossible. Here the stated cause was wrong. Both shapes produce the same result: the app gives an instruction, the user follows it, and the instruction was false.
+
+**The rule.** An error names only a cause it can know. Where one message serves two paths, **the message takes its path as an input** rather than being written for whichever path came first. `parseComps(raw, source)` changes the words and nothing else, and the rows a string parses to are asserted identical either way. When the cause cannot be known, **say what happened and stop**. That is still better than a confident guess.
+
+**It applied inside the fix, too.** With the memory-tier refusal removed, the read-back still catches the failure and says *"Storage took the write but did not give it back"*. That sentence is true, but it names no cause, while the cause is knowable and has a badge on the screen. So the tier is refused **first**, by name, and the read-back stays as the general guard for causes that cannot be known. Defect row 97 removes the refusal and fails on exactly that claim.
+
+**The cheap test:** *if the user did exactly what this message implies, would it fix the problem?* If the answer is "only on the other path", the message is wrong on this one.
+
 ## D26 — A search scoped to the whole file cannot answer a question about one structure (governance, 2026-09-15)
 
 **Four instances in one session, which makes it a rule rather than an anecdote.**
