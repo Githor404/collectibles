@@ -1900,3 +1900,55 @@ The served `app.js` reports `APP_VERSION = '0.9.0'`. **Both files changed this v
 **The corrected rule, which supersedes the window-sizing one.** A longer poll would not have helped; the digest was constant and wrong from poll 1. **Both sides of a fingerprint comparison must be computed by the same method, and a poller must REUSE the verification path rather than reimplement it.** Where the two sides are computed separately, a mismatch is evidence about the *instrument* before it is evidence about the deploy — and a stable wrong reading that never varies across thirty polls is that signature exactly.
 
 **Fourth propagation claim in four deploys, and the third that was wrong.** v0.7.0's entry said a non-matching early check is a timing fact; v0.8.0's said an early *match* removes the chance to measure the before state; this one says a mismatch may be neither, and may be arithmetic. The pattern across all three is not about Pages at all — it is that **this record keeps theorising about the network from an instrument it has not validated**.
+
+## C2 — Close-out: what this is, what it refused to be, and what is parked (2026-09-15)
+
+**Status at close: v0.9.0, deployed and verified by byte fingerprint.** 506 assertions, 83 defect rows, 8 gate scripts, 26 ruled decisions, 9 dated releases.
+
+### What the tool IS
+
+**A photograph becomes an identity you confirm, and the identity becomes a scatter of real sold prices with your asking price placed among them.** That is the whole chain, and every step of it is refusable by the human:
+
+1. **Photo → a reading.** A vision model returns only what is *printed or visible* — title, issue, publisher, cover date, cover price, variant markers. Never a value, never a grade, never whether it is a "key issue" (D2). A value in a reply is **refused actively and said so**, not dropped quietly.
+2. **The reading → a confirmed identity.** You correct it; the app never assumes it. A confidently wrong identification attached to a confident price is *the* failure mode this is built against, and the evidence is in the record: a commercial photo appraiser returned the same wrong book for three different covers, with a value and no uncertainty shown.
+3. **The identity → a query you can see and edit** (D4). The reading and the query are two objects; editing the query changes **what is sent**, not just what is displayed.
+4. **The query → sold comps, drawn.** Real sales on a ratio scale, one mark per sale, shape for listing type and a ring for an accepted offer. No average, no midpoint, no estimated value, no fitted curve (D8).
+5. **Your ask → placed among them.** How many sold below, how many at, how many above, and the nearest comps with the seller's own words verbatim. **The reading is the product**; the comparison is the thing the app must not do for you.
+6. **Filters count and list.** "Title mentions CGC — 10." The plot never changes when you filter, because the interesting fact is where the expensive sales sit against the cheap ones, and that is only visible with all of them on screen.
+
+**And then nothing is kept.** No capture, no reading, no lookup result and no ask is written to storage or to the export — asserted, not intended (`ID9 GATE (D2 Fork F1)`). Four keys do persist, and naming them is the honest version of "nothing saved": the want list you typed, your API credentials, the running version, and a saved response used only as test machinery (C1/D21).
+
+### What it deliberately ISN'T — REFUSED, with the reason
+
+| refused | why, and where it is ruled |
+|---|---|
+| **A valuation** | A single number from a sparse scatter *reads* as a verdict. The arithmetic is easy and the sentence it produces is false: the data cannot support it, and a user at a table cannot see that from the number alone (**D8**). No range either, at any N, while the markets cannot be separated — a span whose ends come from two markets is not a claim, it just looks like one. |
+| **A grader** | A phone photo cannot establish grade, and a marketplace condition is not a comics grade. Measured, not argued: three books at an identical `Pre-Owned / 3000` sold for **$9, $29.99 and $89** (**D7**). The grade is yours to supply; it is recorded beside your ask as your attestation and indexes nothing. |
+| **A splitter of raw from slabbed** | A group exists only where a field exists that constitutes it, and the search tier has none (**D10**). Filtering on title text would select *wrongly in the direction sellers push it* — "CGC READY" sits on raw books. |
+| **A scorer** | Counts, never percentiles (**D13**). A ratio is a count dressed as a score, and it invites the one inference D8 refuses. |
+| **A divider of quotes** | "3 for $10" is not $3.33 a book. The app never divides a seller's quote (**D12**). |
+| **A service with a server** | Not cost, not effort: a proxy would be the **first infrastructure that must exist and stay up**, seeing every lookup against a no-telemetry promise (**D6**). |
+| **A service with accounts** | Follows from the above. Credentials are yours, in your browser, outside the state object, never exported, egress only on an action you take (**D1**). |
+| **A marketplace** | It was never that, and the bright line is written down: the first time this runs with the subscriber's token in a browser that is not theirs, a server must hold the token and meter the calls. Before that point — not after. |
+
+**Each of those is refused, not postponed.** Two things genuinely *are* deferred and belong in neither column: **PriceCharting** (a subscription for modelled guide values with no sold comps and no history — kept as a provider row behind the same seam) and **canonical identity via the GCD** (free and correct, blocked on the proxy D6 refuses to stand up yet).
+
+**And one thing was killed rather than parked, which a later reader would otherwise hunt for:** the **two-view plot**. It was ruled, pre-registered with forks and gate obligations, and then deleted by the first real fixture — both of its justifications measured false (nothing hidden at 84 marks; three tick labels, zero collisions). It is not coming back on the evidence that killed it.
+
+### Named and parked, with why
+
+| parked | why it is not now |
+|---|---|
+| **`endedAt` is date-only; three fixtures use timestamps** | No live defect — `compsDate` prefix-matches both. But `AK4` breaks nearest-comp ties by **recency**, and real granularity is a **day** while its fixture supplies hours. Six real sales share $29.99. Touches AK4's ordering claim and deserves its own measurement. |
+| **`iou_circle_rect = 0.875` at the shipped size** | Circle vs square is auction vs Buy It Now — **65 of 84** real marks — and already at the indistinguishability bar before anything is dimmed. IoU is a proxy and 0.85 was a chosen bar, so this is a flag for a human eye test, not a proof. |
+| **Schema v2** | Ruled to have its own slice with the **migration branch as its subject**. `boot()` has no downgrade branch, so today's absence is unreachable rather than broken. |
+| **Title extraction** | Its own slice, after R5, and never folded into one. |
+| **Looser wanting** | v1 matches exact issues only, and says so where a line will never match. Widening is a ruling, not a tweak. |
+| **The service worker** | Deliberately not ported (D1). Offline is not a promise this makes. |
+| **`report()`'s second strict arm and the `egress` continuation line** | Named at the 61-row pass and still accurate: the pattern sits on a continuation line beneath the failure header, so a line-based arm cannot reach it. Making the arm block-aware has its own over-matching risk. |
+| **`mutate()`'s remaining 76 rows** | The occurrence guard is opt-in and 4 of 80 rows are wired — the four newest, which is where all three misfires came from. Wiring the rest is a **quiet-moment pass, not a slice**, and not before this close-out. |
+| **`check-refs` cannot check a claim about code** | Stated as a second limit in the census itself so a green result is not read as covering it. Deliberately **not half-closed**: a heuristic grepping prose for identifier-shaped words would fire on every quotation and retired name. **It has no owner, and should not acquire one by implication.** |
+
+### The one sentence worth keeping
+
+**The slice that paid for itself was the one that bought the measurement, not the one that built the design.** C1 was justified as a way to avoid paying to re-check a layout. What it actually bought was a real fixture that deleted a ruled slice, exposed a defect that had been shipping for four versions behind a button that did nothing, and corrected a falsification the record had been treating as settled.
