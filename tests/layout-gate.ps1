@@ -33,6 +33,12 @@
 #   * FAILURE -- the stated message and both ways out are in view;
 #   * PENDING -- the counted spinner and the cancel, in view.
 #
+# C1's REPLAY SAVE (2026-09-16) is measured here too, and it is not a layout
+# claim: it is a SHIPPED-ELEMENT claim, which this is the only harness able to
+# make. Real touch events on the Settings card, a real paste, and the key read
+# straight out of localStorage. Every RP1 assertion called replaySave() by hand,
+# so a save that said nothing on the real surface passed all of them.
+#
 # Unlike the data-layer suite this runs in REAL time, so it exercises the
 # createImageBitmap decoder that never settles under --virtual-time-budget (HT-D47).
 #
@@ -432,6 +438,61 @@ function Measure-TypeFloor {
   return (Eval '(function(){ return JSON.stringify(__g.typefloor()); })()' | ConvertFrom-Json)
 }
 
+# ---- C1's SAVE, driven the way a thumb drives it (2026-09-16) ----------------
+# A snapshot of everything a person, or the arm, could learn after a tap: what
+# the card says, whether it is drawn, and what is ACTUALLY in the key -- read
+# from localStorage directly, never through the app's own Store, because the
+# app's read path is one of the things under test.
+$rsSnap = @'
+(function(){
+  var r = document.getElementById('replayReport'), a = document.getElementById('replayArm'), k = null, rec = null;
+  try { k = localStorage.getItem('collectibles-replay'); } catch (e) {}
+  try { rec = k ? JSON.parse(k) : null; } catch (e) {}
+  var b = r ? r.getBoundingClientRect() : null;
+  return JSON.stringify({
+    report: r ? r.textContent.replace(/\s+/g, ' ').trim() : '',
+    err: r ? Array.prototype.map.call(r.querySelectorAll('.idna'), function (x) { return x.textContent; }).join(' | ') : '',
+    drawn: !!b && b.width > 0 && b.height > 0,
+    inView: !!b && b.top >= 0 && b.bottom <= innerHeight,
+    armDisabled: a ? a.disabled : null,
+    keyLen: k ? k.length : 0,
+    keyIsGood: !!rec && typeof window.__rsGood === 'string' && rec.raw === window.__rsGood,
+    keyRows: rec ? rec.rows : null,
+    tier: CT.Store.tier
+  });
+})()
+'@
+function RS-Snap { return (Eval $rsSnap | ConvertFrom-Json) }
+# A REAL TOUCH at the element's centre -- after checking the point is ON the
+# element. A tap that lands on an overlay is its own silent failure, and a
+# gate that dispatched el.click() would walk straight past it.
+function RS-Tap([string]$sel) {
+  $q = ($sel | ConvertTo-Json)
+  $p = Eval ("(function(){ var el = document.querySelector($q); if (!el) return JSON.stringify({ found: false });" +
+             " el.scrollIntoView({ block: 'center' }); var b = el.getBoundingClientRect();" +
+             " var x = b.left + b.width / 2, y = b.top + b.height / 2, hit = document.elementFromPoint(x, y);" +
+             " return JSON.stringify({ found: true, x: x, y: y, text: (el.textContent || '').trim()," +
+             " onTarget: !!hit && (hit === el || el.contains(hit)) }); })()") | ConvertFrom-Json
+  if ($p.found) {
+    Invoke-CDP 'Input.dispatchTouchEvent' @{ type = 'touchStart'; touchPoints = @(@{ x = $p.x; y = $p.y }) } | Out-Null
+    Invoke-CDP 'Input.dispatchTouchEvent' @{ type = 'touchEnd'; touchPoints = @() } | Out-Null
+    Start-Sleep -Milliseconds 400
+  }
+  return $p
+}
+# A PASTE, as the browser receives one: focus, select what is there, insert.
+function RS-Paste([string]$text) {
+  Eval "(function(){ var b = document.getElementById('replayBox'); b.focus(); b.select(); return 1; })()" | Out-Null
+  Invoke-CDP 'Input.insertText' @{ text = $text } | Out-Null
+}
+$script:rsOk = $true
+# One line per claim. A failing line carries "FAIL:" so defect-pass.sh's strict
+# arm can name it -- the other layout cases print "-> False", which it cannot.
+function RS([bool]$ok, [string]$claim) {
+  if ($ok) { Write-Host "  replay save       ok  : $claim" }
+  else     { Write-Host "  replay save       FAIL: $claim"; $script:rsOk = $false }
+}
+
 $browser = Find-Browser
 if (-not $browser) { Write-Host "ERROR: no Chrome/Edge found"; exit 2 }
 
@@ -639,6 +700,136 @@ try {
   if (-not $clOk) { $allOk = $false }
 
   if (-not $lOk) { $allOk = $false }
+
+  # ---- C1's SAVE, on the SHIPPED element, with REAL taps (2026-09-16) --------
+  # Reported from use: a real Apify response pasted, Save tapped, and NOTHING --
+  # no confirmation, no error -- then arming failed. Every RP1 assertion drives
+  # CT.replaySave() directly, so nothing had ever pressed the button: D16's
+  # second sub-failure, the harness supplying the CALL.
+  #
+  # Measured before this was written, through the same taps: on a healthy tier
+  # the save WORKED on v0.9.0 -- the button is wired and takes the touch. The
+  # silence was the MEMORY tier. One failed state save demotes it for the
+  # session; readRaw then returns null for every key while writeRaw still
+  # writes; the save reported ok, and the card re-rendered "Nothing saved",
+  # byte-identical to the card before the tap. RS4 is that case, exactly.
+  #
+  # ONE REAL PASTE OF THE FULL RESPONSE, and why only one. Input.insertText
+  # takes ~15s for the 100KB response (measured 2026-09-16: 15480ms, 15172ms),
+  # and pasting it four times put ~60s on every run of this gate and on every
+  # defect row that runs it. The full response goes in once, for RS1 -- the
+  # reported case. RS3 reuses what is already in the box; the storage cases
+  # (RS5, RS4) paste the first three rows of the same response, because their
+  # claims are about the tier and the read-back, not about size.
+  $RS_FIXTURE = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'fixtures\comps-asm-151-2026-09-15.json'))
+  $RS_SMALL = ConvertTo-Json -InputObject @(($RS_FIXTURE | ConvertFrom-Json)[0..2]) -Depth 5 -Compress
+  $SAVE = '#replayBox + button'
+  Write-Host "layout: replay save (C1's Settings card, REAL touch on the shipped elements, phone 390x745):"
+  Go 390 745 $true
+  Eval "(function(){ try { localStorage.removeItem('collectibles-replay'); } catch (e) {} return 1; })()" | Out-Null
+  Go 390 745 $true
+  $s0 = RS-Snap
+  RS ($s0.keyLen -eq 0 -and $s0.report -like '*Nothing saved*' -and $s0.armDisabled -eq $true) `
+     "CONTROL: before any tap the key is absent, the card says nothing is saved, arming is disabled -- '$($s0.report)'"
+  $t = RS-Tap '#settingsBtn'
+  RS ($t.found -and $t.onTarget) 'SETUP: the Settings button takes the tap'
+  RS-Paste $RS_FIXTURE
+  Eval "(function(){ window.__rsGood = document.getElementById('replayBox').value.trim(); return 1; })()" | Out-Null
+  $n = [int](Eval "CT.parseComps(document.getElementById('replayBox').value).rows.length")
+  RS ($n -gt 0) "SETUP: the real Apify fixture parses to $n listings -- a success case over zero rows proves nothing"
+
+  # THE PLANTED CONTROL. If the paste alone, or any tap at all, wrote the key or
+  # changed the card, RS1 would pass without the button doing anything.
+  $t = RS-Tap '[data-setting="replay"] h2'
+  $sI = RS-Snap
+  RS ($t.found -and $sI.keyLen -eq 0 -and $sI.report -eq $s0.report) `
+     'CONTROL: a tap on the card heading, response pasted, saves nothing and changes nothing'
+
+  $t = RS-Tap $SAVE
+  $s1 = RS-Snap
+  RS ($t.found -and $t.onTarget -and $t.text -like 'Save*') `
+     "RS1 GATE: the tap lands ON the save button -- found=$($t.found) onTarget=$($t.onTarget) text='$($t.text)'"
+  RS ($s1.keyIsGood -and $s1.keyRows -eq $n) `
+     "RS1 GATE: the key holds the pasted response, parsed -- keyLen=$($s1.keyLen) rows=$($s1.keyRows)"
+  RS ($s1.report -ne $s0.report -and ([string]$s1.report).Contains("$n listings saved") -and $s1.drawn -and $s1.inView) `
+     "RS1 GATE: the card says it was saved, with the parsed count, drawn and in view -- '$($s1.report)'"
+  RS (([string]$s1.report).Contains('Saved and read back')) `
+     "RS1 GATE: the card acknowledges THIS tap, not only the standing summary a reload would also show -- '$($s1.report)'"
+  RS ($s1.armDisabled -eq $false) 'RS1 GATE: arming is enabled once something is saved'
+
+  # A THROW IS A RESULT TOO. A phone has no console, so an exception in an
+  # inline handler is visible nowhere unless the card shows it. Planted by
+  # swapping the global parseComps for one tap; the box still holds RS1's paste.
+  Eval "(function(){ window.__rsPC = parseComps; parseComps = function () { throw new Error('planted parser throw'); }; return 1; })()" | Out-Null
+  RS-Tap $SAVE | Out-Null
+  $s3 = RS-Snap
+  Eval "(function(){ parseComps = window.__rsPC; return 1; })()" | Out-Null
+  RS (([string]$s3.err).Contains('planted parser throw') -and $s3.keyIsGood) `
+     "RS3 GATE: a throw inside the save is reported on the card, and the saved response is untouched -- card '$($s3.err)'"
+
+  # THE PARSER'S OWN MESSAGE, across both refusals parseComps has (D3: the
+  # range, not one specimen). Read from the parser at run time, never pinned
+  # here -- a pinned literal is how row 55 died.
+  $msgs = @()
+  foreach ($g in @(@('not JSON', 'not a response'), @('JSON but not a list', '{"items":[]}'))) {
+    RS-Paste $g[1]
+    $m = [string](Eval ("CT.parseComps(" + ($g[1] | ConvertTo-Json) + ", 'paste').error"))
+    RS-Tap $SAVE | Out-Null
+    $s2 = RS-Snap
+    RS ($m -ne '' -and ([string]$s2.err).Contains($m)) `
+       "RS2 GATE: a paste that is $($g[0]) shows the parser's own message on the card -- expected '$m', card '$($s2.err)'"
+    # D27. The same parser answers the live lookup, where "the provider sent"
+    # is true. On a paste it blamed a party that did nothing, and pointed away
+    # from the recovery that works.
+    RS (([string]$s2.err) -ne '' -and -not ([string]$s2.err).ToLower().Contains('provider') -and ([string]$s2.err).ToLower().Contains('paste')) `
+       "RS2 GATE: a paste that is $($g[0]) is refused as the PASTE's fault, not the provider's -- card '$($s2.err)'"
+    RS ($s2.keyIsGood) "RS2 GATE: the saved response survives a paste that is $($g[0])"
+    $msgs += $m
+  }
+  RS ($msgs.Count -eq 2 -and $msgs[0] -ne $msgs[1]) `
+     'RS2 GATE: the two refusals carry DIFFERENT parser messages -- one message for both would mean one branch was never reached'
+
+  # THE REPEAT TAP -- what was actually hit. An amber line went unread, Save was
+  # tapped again, the same outcome rendered the same card, and an identical card
+  # read as a dead control. Same paste, same outcome, a second later: the card
+  # must still CHANGE, and the outcome must not (so the change is the answer,
+  # not a different result).
+  Start-Sleep -Milliseconds 1100
+  $r6a = RS-Snap
+  RS-Tap $SAVE | Out-Null
+  $r6b = RS-Snap
+  RS ($r6a.err -ne '' -and $r6b.err -eq $r6a.err -and $r6b.report -ne $r6a.report) `
+     "RS6 GATE: a second tap with the same paste CHANGES the card -- an identical card reads as a dead control -- before '$($r6a.report)' after '$($r6b.report)'"
+
+  # THE READ-BACK, on a HEALTHY tier. A write the arm cannot read is not a save,
+  # whatever the write returned. Planted by blinding readRaw to this key alone.
+  RS-Paste $RS_SMALL
+  $ns = [int](Eval "CT.parseComps(document.getElementById('replayBox').value).rows.length")
+  RS ($ns -gt 0) "SETUP: the three-row slice parses to $ns listings -- a refusal of an empty response would prove nothing about storage"
+  Eval ("(function(){ localStorage.removeItem('collectibles-replay'); window.__rsRR = CT.Store.readRaw;" +
+        " CT.Store.readRaw = function (k) { return k === 'collectibles-replay' ? null : window.__rsRR(k); }; return 1; })()") | Out-Null
+  RS-Tap $SAVE | Out-Null
+  $s5 = RS-Snap
+  Eval "(function(){ CT.Store.readRaw = window.__rsRR; return 1; })()" | Out-Null
+  RS ($s5.tier -eq 'local' -and ([string]$s5.err) -ne '' -and -not ([string]$s5.report).Contains('Saved and read back') -and $s5.armDisabled -eq $true) `
+     "RS5 GATE: a write that cannot be read back is reported as a failure, never as a save -- tier=$($s5.tier) card '$($s5.report)'"
+
+  # THE REPORTED DEFECT. The tier is demoted through the shipped Store's own
+  # test seam; the save is still a real tap on the real button.
+  Eval "(function(){ try { localStorage.removeItem('collectibles-replay'); } catch (e) {} return 1; })()" | Out-Null
+  Go 390 745 $true
+  $tier = Eval "(function(){ CT.Store.forceWriteFailure(true); CT.resave(); CT.Store.forceWriteFailure(false); return CT.Store.tier; })()"
+  RS ($tier -eq 'memory') "RS4 SETUP: one failed state save drops the tier to memory -- tier=$tier"
+  RS-Tap '#settingsBtn' | Out-Null
+  RS-Paste $RS_SMALL
+  $b4 = RS-Snap
+  $t = RS-Tap $SAVE
+  $s4 = RS-Snap
+  RS ($t.onTarget -and $s4.report -ne $b4.report -and ([string]$s4.err).ToLower().Contains('memory')) `
+     "RS4 GATE: on the memory tier the card CHANGES and names memory as the cause -- before '$($b4.report)' after '$($s4.report)'"
+  RS ($s4.keyLen -eq 0) "RS4 GATE: on the memory tier nothing is written, so 'not saved' is true -- keyLen=$($s4.keyLen)"
+  RS ($s4.armDisabled -eq $true) 'RS4 GATE: arming stays disabled on the memory tier'
+  if (-not $script:rsOk) { $allOk = $false }
 
   Write-Host ("  thresholds        : exactly one outcome state; the identity question and BOTH actions fully inside the viewport with the page unscrolled; actions >={0}px tall; footer fixed while the body scrolls; capture surface carries no outcome; and a comps row's price, date and title occupy DISJOINT rectangles with the title below both and no horizontal page overflow" -f $MIN_ACTION_H)
   Write-Host "-----------------------------------------"
