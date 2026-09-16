@@ -958,6 +958,90 @@ report "a label becomes a claim about the book" "title mentions X" "$(run_dl)"; 
 mutate 's/return COMPS_FILTERS\.some\(/return COMPS_FILTERS.every(/' app.js 'return COMPS_FILTERS.some('
 report "filters combine with AND instead of OR" "combine with OR" "$(run_dl)"; restore
 
+# ---- RS (v0.9.1): C1's save, on the SHIPPED element (84-99) -----------------
+# One row per claim the layout gate makes about the save. Every RP1 row above
+# runs the data-layer suite, which calls replaySave() by hand -- so none of them
+# could see a save that said nothing on the real card, which is what shipped.
+# These run the LAYOUT gate: real touch events, a real paste, the key read
+# straight out of localStorage. ~180s each.
+#
+# Every mutate() passes its literal target, so a target that stops being unique
+# aborts the pass instead of planting in the wrong place (row 82's lesson).
+# Patterns are the gate's own claim text, and the gate prints failures as
+# "FAIL: <claim>", which report()'s script arm reads.
+
+# The button, unwired. The element is still there; nothing listens to it.
+mutate 's/onclick="replaySaveFromBox\(\)"/onclick=""/' index.html 'onclick="replaySaveFromBox()"'
+report "save button wired to nothing" "the key holds the pasted response" "$(run_layout)"; restore
+
+# An overlay above the button. The scrim moves above the panel it belongs
+# under, so the tap lands on the scrim. A gate that dispatched el.click() would
+# still pass; this is why RS-Tap checks elementFromPoint first.
+mutate 's/background:rgba\(0,0,0,\.42\);z-index:17\}/background:rgba(0,0,0,.42);z-index:19}/' index.html 'background:rgba(0,0,0,.42);z-index:17}'
+report "the scrim covers the save button" "the tap lands ON the save button" "$(run_layout)"; restore
+
+# The save runs and the card is never repainted: key written, card unchanged.
+mutate 's/  renderReplayCard\(r\);\n  return r;/  return r;/' app.js 'renderReplayCard(r);'
+report "save stops repainting the card" "the card says it was saved" "$(run_layout)"; restore
+
+# The standing summary still renders; the answer to THIS tap does not.
+mutate 's/\? \x27<b>Saved and read back<\/b> at \x27 \+ esc\(clockTime\(\)\) \+ \x27\.\x27/? \x27\x27/' app.js "'<b>Saved and read back</b> at '"
+report "success line dropped" "acknowledges THIS tap" "$(run_layout)"; restore
+
+mutate 's/arm\.disabled = !saved;/arm.disabled = true;/' app.js 'arm.disabled = !saved;'
+report "arming never enables" "arming is enabled once" "$(run_layout)"; restore
+
+# The catch rethrows: an exception from an inline handler, on a phone, is
+# visible nowhere.
+mutate 's/catch \(e\) \{ r = \{ ok: false, error: \x27The save failed: \x27/catch (e) { throw e; r = { ok: false, error: \x27The save failed: \x27/' app.js "catch (e) { r = { ok: false, error: 'The save failed: '"
+report "a throw escapes the save" "a throw inside the save is reported" "$(run_layout)"; restore
+
+# RS2's two ways to lose the parser's message: the line is never pushed, or the
+# save substitutes words of its own. Same claim, two defects -- rows 71 and 73's
+# arrangement: each clause of the claim is load-bearing on its own.
+mutate 's/if \(last\) bits\.push\(last\.ok/if (last && last.ok) bits.push(last.ok/' app.js 'if (last) bits.push(last.ok'
+report "only successes reach the card" "parser's own message" "$(run_layout)"; restore
+
+mutate 's/parseComps\(body, \x27paste\x27\);\n  if \(!parsed\.ok\) return \{ ok: false, error: parsed\.error \};/parseComps(body, \x27paste\x27);\n  if (!parsed.ok) return { ok: false, error: \x27That is not a response.\x27 };/' app.js "parseComps(body, 'paste');"
+report "save replaces the parser's words" "parser's own message" "$(run_layout)"; restore
+
+# D27: the paste parsed as if the provider had sent it -- the wording as shipped
+# in v0.9.0, blaming a party that did nothing.
+mutate 's/parseComps\(body, \x27paste\x27\)/parseComps(body)/' app.js "parseComps(body, 'paste')"
+report "a bad paste blames the provider" "PASTE's fault, not the provider's" "$(run_layout)"; restore
+
+# "Clear the old one first": every save attempt, refused or not, destroys the
+# response that was already saved.
+mutate 's/(  const body = String\(text == null \? \x27\x27 : text\)\.trim\(\);)/  Store.writeAux(REPLAY_KEY, \x27\x27);\n$1/' app.js "const body = String(text == null ? '' : text).trim();"
+report "a refused paste destroys the saved one" "survives a paste" "$(run_layout)"; restore
+
+# One message for both refusals: RS2's control on the parser's own range (D3).
+mutate 's/error: msg\.notList/error: msg.notJson/' app.js 'error: msg.notList'
+report "both refusals say the same thing" "DIFFERENT parser messages" "$(run_layout)"; restore
+
+# What was actually hit: the stamp goes, and a repeat tap renders an identical
+# card.
+mutate 's/\x27<\/span> \(\x27 \+ esc\(clockTime\(\)\) \+ \x27\)\x27/\x27<\/span>\x27/' app.js "'</span> (' + esc(clockTime()) + ')'"
+report "result line loses its time" "second tap with the same paste" "$(run_layout)"; restore
+
+# "The write returned true" trusted again, on a healthy tier.
+mutate 's/const back = replayRead\(\);/const back = { raw: body, rows: parsed.rows.length, at: rec.at };/' app.js 'const back = replayRead();'
+report "save trusts the write, no read-back" "cannot be read back" "$(run_layout)"; restore
+
+# The memory-tier refusal removed. The read-back still catches it, so the card
+# is not silent -- but it names the wrong cause, which is D27's failure.
+mutate 's/  if \(Store\.tier !== \x27local\x27\) return \{ ok: false, error: REPLAY_MEMORY_MSG \};\n//' app.js "if (Store.tier !== 'local') return { ok: false, error: REPLAY_MEMORY_MSG };"
+report "memory tier not refused up front" "names memory as the cause" "$(run_layout)"; restore
+
+# THE DEFECT AS SHIPPED IN v0.9.0: no refusal and no read-back. Written on the
+# memory tier, reported ok, card unchanged.
+mutate 's/const back = replayRead\(\);/const back = { raw: body, rows: parsed.rows.length, at: rec.at };/' app.js 'const back = replayRead();'
+mutate 's/  if \(Store\.tier !== \x27local\x27\) return \{ ok: false, error: REPLAY_MEMORY_MSG \};\n//' app.js "if (Store.tier !== 'local') return { ok: false, error: REPLAY_MEMORY_MSG };"
+report "memory-tier save as shipped (v0.9.0)" "nothing is written" "$(run_layout)"; restore
+
+mutate 's/arm\.disabled = !saved;/arm.disabled = false;/' app.js 'arm.disabled = !saved;'
+report "arming offered with nothing saved" "arming stays disabled" "$(run_layout)"; restore
+
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
   printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"
