@@ -58,6 +58,13 @@ function localDate(d) {
     String(d.getDate()).padStart(2, '0');
 }
 function todayKey() { return localDate(nowDate()); }
+// HH:MM:SS, local. What a result line is stamped with, so that two taps with
+// the same outcome still read as two answers (C1's save, 2026-09-16).
+function clockTime(d) {
+  d = d || nowDate();
+  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(function (n) { return String(n).padStart(2, '0'); }).join(':');
+}
 
 // ---- storage adapter: localStorage -> memory (HT-D1, HT-D3) ---------------
 const Store = (() => {
@@ -96,10 +103,15 @@ const Store = (() => {
     },
     peekBackup() { return readRaw(PRERESTORE_KEY); },
     // Auxiliary keys OUTSIDE the state object -- the running version, and whatever
-    // later needs to outlive a restore without entering the export. Mirrors
-    // readRaw's asymmetry deliberately: on the memory tier readRaw returns null and
-    // this is a no-op, so a feature built on it degrades to "never fires" rather
-    // than "fires on every load", which is the safe direction for a notice.
+    // later needs to outlive a restore without entering the export.
+    //
+    // IT WRITES WHATEVER THE TIER. Until 2026-09-16 this comment said that on the
+    // memory tier it "is a no-op", mirroring readRaw. The code never did that:
+    // writeRaw does not look at the tier. So on the memory tier a write can
+    // SUCCEED while readRaw returns null for the same key, and `true` here means
+    // "storage took it", never "this session can read it back". C1's save trusted
+    // the sentence, reported ok, and the card said nothing. A caller that needs
+    // the value later must read it back through the path its consumer uses.
     writeAux(key, value) { return writeRaw(key, value); },
     revertBackup(snapshot) {
       if (tier !== 'local') return;
@@ -1512,9 +1524,15 @@ function renderWantFlag() {
   if (el) el.innerHTML = wantFlagHTML(identityValue());
 }
 // C1's surface. Test machinery, and the card says so where someone would look.
+//
+// A THROW IS A RESULT TOO (2026-09-16). This runs from an inline onclick, and a
+// phone has no console: an exception here is visible nowhere unless the card
+// shows it.
 function replaySaveFromBox() {
   const box = document.getElementById('replayBox');
-  const r = replaySave(box ? box.value : '', compsQuery());
+  let r;
+  try { r = replaySave(box ? box.value : '', compsQuery()); }
+  catch (e) { r = { ok: false, error: 'The save failed: ' + String((e && e.message) || e) }; }
   renderReplayCard(r);
   return r;
 }
@@ -1527,7 +1545,13 @@ function renderReplayCard(last) {
   if (arm) { arm.checked = replayArmed(); arm.disabled = !saved; }
   if (!rep) return;
   const bits = [];
-  if (last && last.error) bits.push('<span class="idna">' + esc(last.error) + '</span>');
+  // THE RESULT OF THIS TAP, stamped with its time (2026-09-16). Reported from
+  // use: an amber line went unread, Save was tapped again, the same outcome
+  // rendered the same card, and an identical card reads as a control that is
+  // dead. The stamp makes a second answer look like one.
+  if (last) bits.push(last.ok
+    ? '<b>Saved and read back</b> at ' + esc(clockTime()) + '.'
+    : '<span class="idna">' + esc(last.error) + '</span> (' + esc(clockTime()) + ')');
   if (saved) {
     bits.push(esc(saved.rows + ' listing' + (saved.rows === 1 ? '' : 's') +
       ' saved ' + String(saved.at).slice(0, 10) +
@@ -1834,11 +1858,24 @@ function compTypeOf(r) {
            statesOffer: !!hit.statesOffer };
 }
 
-function parseComps(raw) {
+// THE REFUSAL NAMES WHERE THE TEXT CAME FROM (D27). One parser serves the live
+// lookup and C1's paste, and until 2026-09-16 both were told "The provider sent
+// something that is not JSON" -- which, for a paste cut short, blamed a party
+// that had done nothing wrong and pointed away from the one recovery that works:
+// copy the whole response again. `source` changes the WORDS and nothing else;
+// the rows a given string parses to are identical either way.
+const COMPS_PARSE_MSG = {
+  provider: { notJson: 'The provider sent something that is not JSON.',
+              notList: 'The provider did not send a list of listings.' },
+  paste:    { notJson: 'The pasted text is not JSON. A response cut short looks exactly like this — copy the whole dataset and paste it again.',
+              notList: 'The pasted text is JSON, but not a list of listings. Paste the dataset itself: the array of sold listings, starting with [.' },
+};
+function parseComps(raw, source) {
+  const msg = COMPS_PARSE_MSG[source] || COMPS_PARSE_MSG.provider;
   let arr;
   try { arr = JSON.parse(String(raw == null ? '' : raw)); }
-  catch (e) { return { ok: false, error: 'The provider sent something that is not JSON.' }; }
-  if (!Array.isArray(arr)) return { ok: false, error: 'The provider did not send a list of listings.' };
+  catch (e) { return { ok: false, error: msg.notJson }; }
+  if (!Array.isArray(arr)) return { ok: false, error: msg.notList };
   const rows = [];
   for (let i = 0; i < arr.length; i++) {
     const o = arr[i];
@@ -1944,16 +1981,32 @@ function replayRead() {
 // PARSED BEFORE IT IS STORED, so a paste that is not a comps response is refused
 // with the PARSER'S OWN message rather than accepted and discovered later. What
 // is in the key is therefore always something parseComps has already accepted.
+// Parsed AS A PASTE, so the refusal names the paste rather than the provider.
+//
+// AND READ BACK BEFORE IT IS CALLED A SAVE (2026-09-16). "The write returned
+// true" was never "the arm can read it". One failed state save puts a session on
+// the memory tier, where writeAux still writes and readRaw returns null -- so
+// this reported ok, the card re-rendered "Nothing saved" identical to the card
+// before the tap, and the arm could never engage. The memory tier is now refused
+// BEFORE writing, which keeps "not saved" true; any other write is read back
+// through replayRead, the arm's own path, and a record it cannot read is not kept.
+const REPLAY_MEMORY_MSG = 'Not saved. Storage is running in memory only this session — the badge at the top says why — so a saved response could not be read back to replay. Reload the page; if the badge then says saved, paste it again.';
 function replaySave(text, query) {
   const body = String(text == null ? '' : text).trim();
   if (!body) return { ok: false, error: 'Nothing to save.' };
-  const parsed = parseComps(body);
+  const parsed = parseComps(body, 'paste');
   if (!parsed.ok) return { ok: false, error: parsed.error };
+  if (Store.tier !== 'local') return { ok: false, error: REPLAY_MEMORY_MSG };
   const rec = { at: new Date(nowMs()).toISOString(), query: String(query || ''),
                 raw: body, rows: parsed.rows.length };
-  const wrote = Store.writeAux(REPLAY_KEY, JSON.stringify(rec));
-  return { ok: !!wrote, rows: parsed.rows.length, at: rec.at,
-           error: wrote ? '' : 'Storage refused the write — nothing was saved.' };
+  if (!Store.writeAux(REPLAY_KEY, JSON.stringify(rec)))
+    return { ok: false, error: 'Storage refused the write — nothing was saved.' };
+  const back = replayRead();
+  if (!back || back.raw !== body) {
+    Store.writeAux(REPLAY_KEY, '');
+    return { ok: false, error: 'Storage took the write but did not give it back, so it was discarded — nothing is saved.' };
+  }
+  return { ok: true, rows: back.rows, at: back.at, error: '' };
 }
 function replayClear() { Store.writeAux(REPLAY_KEY, ''); REPLAY_ARMED = false; return { ok: true }; }
 // Armed AND present. A saved response on its own is never a reason to replay.
@@ -2707,7 +2760,7 @@ function renderAskLive() {
 // WHY A NOTICE WORKS WITH NO WORKER: there is no app-controlled cache, so a load
 // fetches current bytes and the notice fires on it. The worker is what would
 // CREATE the stale-shell problem it then solves.
-const APP_VERSION = '0.9.0';
+const APP_VERSION = '0.9.1';
 const VERSION_KEY = 'collectibles-version';   // PFX1: every storage key is prefixed
 
 // One line per release, newest LAST. The newest entry's `v` must equal
@@ -2731,6 +2784,7 @@ const VERSION_LOG = [
   { v: '0.7.0', d: '2026-09-15', note: 'The sales the app filtered out were never actually hidden. One line of styling overrode the mark that closes them, so every excluded listing — lots, reprints, collections — sat open on the page beneath a button offering to show them, and tapping that button changed nothing but its own label. On a real lookup that was 1332 pixels of it: more than two thirds of the whole sold-comps panel, with the chart squeezed into a seventh of the space. It is closed now until you ask for it, the button does what it says in both directions, and the repair is written so that anything else in this app marked hidden stays hidden. Found by loading a real 100-sale response for the first time; on the small test data it was a strip too short to notice.' },
   { v: '0.8.0', d: '2026-09-15', note: 'Sales that ended in an accepted offer are drawn correctly. eBay reports those as their own listing type, which this app had never seen before and so drew as “type not recognised” — a fifth of the sales on a real lookup, marked as an unknown when the app could in fact tell exactly what they were: a Buy It Now whose price was negotiated. They now draw as Buy It Now with the ring that has always meant an accepted offer, so the shape says how it sold and the ring says how the price was reached, without saying it twice. The listing types the app does not recognise still name themselves on the surface rather than being quietly folded into a default — that is the point of showing them at all, and it is now checked on the drawn mark rather than only in the data underneath.' },
   { v: '0.9.0', d: '2026-09-15', note: 'Filters, for narrowing the list to the sales you care about. Buttons appear for what the sellers actually wrote — “title mentions CGC”, “title mentions a letter grade”, and so on — and a button only appears if some sale matches it, with the count beside it. Tap more than one and you get all of them, not the overlap. The labels say what was MATCHED rather than what it might mean: a title saying “CGC READY” is usually a raw book hoping to be graded, so the app tells you the words are there and leaves the reading to you. The chart itself never changes. Filtering the list does not remove a single mark from it, because the interesting thing about these sales is where the expensive ones sit against the cheap ones, and that is only visible with all of them on screen at once.' },
+  { v: '0.9.1', d: '2026-09-16', note: 'Saving a response for replay now always answers. Each tap on Save gets its own line on the card, stamped with the time, so a second tap that ends the same way no longer looks like a button that does nothing. A paste that was cut short now says so, instead of blaming the provider for text you pasted. And if storage is running in memory only this session (the badge at the top says so), the save refuses and tells you why, instead of appearing to do nothing.' },
 ];
 
 // Numeric per segment, so 0.2.0 < 0.10.0 -- a string compare gets that backwards

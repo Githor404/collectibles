@@ -1438,7 +1438,10 @@ window.setLS({});
           'RP1: a response saves, and reports the row count the PARSER found -- eight parsed, before the client-side filter takes two',
           'ok=' + sv.ok + ' rows=' + sv.rows);
       var bad = CT.replaySave('not a response', 'q');
-      res(bad.ok === false && bad.error === CT.parseComps('not a response').error &&
+      // REPOINTED 2026-09-16 (HT-D60 Clause 3): the save parses AS A PASTE, so
+      // the parser's own message is the PASTE message (D27). Compared against the
+      // provider wording, this would fail on a correct save.
+      res(bad.ok === false && bad.error === CT.parseComps('not a response', 'paste').error &&
           String(__ls._get(CT.REPLAY_KEY) || '').indexOf(C1_CANARY) >= 0,
           'RP1 GATE: a paste that is not a comps response is refused with THE PARSER\'S OWN message, and the good response already saved SURVIVES the refusal -- parsed before stored, so what is in the key is always something parseComps accepted',
           bad.error);
@@ -1778,6 +1781,17 @@ window.setLS({});
       'CQ5 GATE: a listing with no price is NOT a comp -- it is dropped rather than rendered as $0');
   res(CT.parseComps('not json').ok === false && CT.parseComps('{"a":1}').ok === false,
       'CQ5: malformed and non-list replies are refused, not coerced');
+  // D27: the refusal names where the text came from, and NOTHING ELSE moves.
+  // Both directions (D3): the live path still names the provider, the paste
+  // never does -- and one string parses to identical rows down either path.
+  var pvJ = CT.parseComps('not json').error, psJ = CT.parseComps('not json', 'paste').error,
+      pvL = CT.parseComps('{"a":1}').error,  psL = CT.parseComps('{"a":1}', 'paste').error;
+  res(/provider/i.test(pvJ) && /provider/i.test(pvL) && !/provider/i.test(psJ) && !/provider/i.test(psL) &&
+      /pasted/i.test(psJ) && /pasted/i.test(psL) && psJ !== psL,
+      'CQ5 GATE (D27): a LIVE refusal names the provider and a PASTED one names the paste, for both refusals -- an error that names the wrong cause sends the reader to fix something that is not broken',
+      [pvJ, psJ, pvL, psL].join(' | '));
+  res(JSON.stringify(CT.parseComps(COMPROWS, 'paste')) === JSON.stringify(p5),
+      'CQ5 GATE (D27): the source changes the WORDS only -- the same string parses to identical rows as a paste and as a reply');
   res(CT.COMP_KEYS.indexOf('grade') < 0 && CT.COMP_KEYS.indexOf('certification') < 0 && CT.COMP_KEYS.indexOf('categoryId') < 0,
       'CQ5 GATE (D3): the contract is what ARRIVED -- no grade and no certification. CATEGORY IS CARRIED AND USELESS, ' +
       'which is a different claim and took two real runs to state correctly: `category` is present and NULL on 100/100 ' +
