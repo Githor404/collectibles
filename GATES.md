@@ -1821,3 +1821,59 @@ The served `app.js` reports `APP_VERSION = '0.8.0'`.
 **`index.html` is the control, and it is what makes the rest trustworthy.** It did not change in this version, and it matches `HEAD` at exactly the fingerprint recorded for v0.7.0 — so the instrument is reading the live site correctly, and `app.js` moving is a real change rather than an artefact of a broken check. An unchanged file is a free control on every deploy that touches only one of the two, and this record had not been using it.
 
 **Third distinct propagation outcome in four deploys, and the one my own rule did not anticipate.** v0.2.0 matched on the first poll, v0.6.0 on the second, v0.7.0 on neither manual poll and then on a background waiter's first. The rule written after v0.7.0 says *a non-matching early check is a timing fact, not a failure* — correct, and silent about the opposite case. Here the early check **matched**, which is equally a timing fact and has its own hazard: it removes the chance to measure the before state. **So the pairing is: capture the before fingerprints BEFORE pushing, not before verifying.** I captured them before pushing for v0.7.0 and got it right by habit; here I deferred and lost the measurement.
+
+## R6b, part two — the filters COUNT AND LIST, because no channel carries a selection at 5.31px — **BUILT AND GATED**, v0.9.0 (2026-09-15)
+
+Assertions **496 → 506**, re-pinned in the same commit. **Ruled as highlight-and-dim; built as count-and-list, because the measurement refused the design three times over.**
+
+### The three refusals, measured before a line of filter code was written
+
+Marks render at **5.31 × 5.31px**. The bar is **3:1**, WCAG 1.4.11's floor for a graphical object.
+
+| channel | result | verdict |
+|---|---|---|
+| **opacity** | dim-vs-backdrop peaks at **2.45:1** dark / **2.28:1** light. Where dim-vs-*normal* finally clears 3:1, dim-vs-backdrop has fallen to **2.08:1** | the two requirements **cross at ~2.7:1** and neither is met |
+| **colour** | `--accent` sits **2.10:1** dark / **1.74:1** light from a normal mark; at full alpha **1.14:1** / **1.01:1** — luminance-identical | hue alone fails WCAG 1.4.1 and vanishes in greyscale |
+| **brighter** | `.pm:hover`/`.pm:focus` already own `opacity:1`; `full_vs_normal` is **2.13:1** dark / **2.85:1** light | a highlight would render identically to the mark under the user's finger, **and still miss the bar** |
+| **size** | first shrink meeting a 1.4 ratio gives IoU **0.888** circle/rect, **0.878** circle/diamond, **0.849** rect/diamond | destroys the **listing-type** channel to add a selection one, and halves the tap target of the sales *not* selected |
+
+**Light is strictly worse than dark throughout**, because a normal mark starts at 4.58:1 there rather than 7.12:1 — the mirror case, and it was predicted before it was measured.
+
+### What shipped instead, and why it is not a retreat
+
+The plot keeps **every sale, unchanged**; the selection drives the **list**. R6's own legibility-half fork had already ruled this summon path: *"an action that lists the CURRENT SELECTION — 'list these N sales' — never the whole set by default. Once filters exist that becomes 'title mentions CGC → list these'."* **The measurement pushed the build onto the path the record had already chosen.**
+
+**`HIGHLIGHT NEVER FILTERS OUT` now holds BY CONSTRUCTION.** The plot carries no selection state at all, so nothing exists that could remove a mark. `FLT4` asserts the `data-p` multiset is byte-identical before and after a filter; **row 80 restores the refused design and must fail.**
+
+**Colour *does* carry the button on-state**, and that is sound for precisely the reason it was refused on the marks: a **14px filled control** is not a **5.31px glyph**. The same channel at two sizes is two different propositions, and the record should not read as if the refusal were about colour as such.
+
+### The vocabulary is derived, and the absentees are the control
+
+Twelve categories declared. On the **real 84**: seven render — CGC 10, letter grade 27, number grade 23, variant 3, key 3, signed 2, damage 2 — and **six do not**: CBCS, PGX, graded/slabbed, newsstand, direct, pence, all **zero**. On `COMPROWS`: four render, **eight** do not.
+
+**The absentees are what make *"buttons derive from the response"* a test rather than a rule** (D5): a button that matches nothing is a control that has stopped controlling, and it looks exactly like one that works.
+
+### The overlap — dim-never-remove, proven against real data rather than argued
+
+**CGC floor $74.99; non-CGC ceiling $260.** Five non-CGC sales sit **at or above** the CGC floor, and **seven of the ten** CGC sales sit **at or below** the non-CGC ceiling. The bands **interpenetrate**. R6 predicted *"slabbed above $200, raw mass at $20–60"*; the real distribution is messier, and filtering either side out would have shown a clean separation **that is not there**.
+
+### DEMONSTRATED — rows 80–83, each seen to fail (HT-D60 Clause 1)
+
+Run on a tree committed first at `29b12ce`. Zero rotted mutations; all four mutated files restored identical.
+
+| row | planted defect | verdict | first named failure |
+|---|---|---|---|
+| 80 | a filter removes marks from the plot | `GATE: FAIL` | `FLT4 GATE: a filter leaves the PLOT UNCHANGED …` |
+| 81 | empty categories render as buttons anyway | `GATE: FAIL` | `FLT1 GATE (D5): the EIGHT categories with no match render NOWHERE …` |
+| 82 | a label becomes a claim about the book | `GATE: FAIL` | `FLT3 GATE (D10): every label reads "title mentions X" …` |
+| 83 | filters combine with AND instead of OR | `GATE: FAIL` | `FLT6 GATE: multiple filters combine with OR …` |
+
+**Row 82 was SILENTLY DEAD on its first form, and that is the entry worth keeping.** `"title mentions CGC"` occurs **three times** in `app.js` — the module's own comment, the `COMPS_CATS` label, and the v0.9.0 changelog note — and `perl -0pi` without `/g` took the **first**, the comment. It **applied**, so `mutate()`'s fatal check stayed quiet; the suite ran clean and the row would have reported `GATE: PASS` while testing nothing.
+
+**Third occurrence of that class in this file** — row 55's pinned literal, row 79's comment-punctuation near-miss, now row 82 — and this one was written **directly beneath the comment warning about it**, because that warning was about *byte-safety* and this row was about *label semantics*. The transferable rule is neither: **a pattern whose target occurs more than once is fragile whatever it happens to hit today.** All four rows' targets now occur exactly once, verified by count.
+
+### Named and parked
+
+**1. The shape channel is already at the threshold, before anything was dimmed.** `iou_circle_rect` at the **shipped** size is **0.875** — above the 0.85 bar this slice set for indistinguishability. Circle vs square is auction vs Buy It Now, between them **65 of the 84** real marks. Diamond still separates cleanly (0.771 / 0.721). IoU is a proxy and 0.85 was a chosen bar, so this is **a flag for a human eye test, not a proof** — but it sits directly against R5's shape-and-ring ruling and should not wait to be rediscovered.
+
+**2. `mutate()` should count its matches and abort on more than one.** Three misfires of one class say the discipline does not transfer by comment. The mechanism is cheap — count occurrences, refuse on `> 1` — and it converts a **silent** misfire into a loud abort, which is the difference between row 82 today and row 55's year. **Not built here:** it is shared machinery under all 83 rows and does not belong inside a filters commit.
