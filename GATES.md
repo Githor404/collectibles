@@ -1806,3 +1806,18 @@ Run on a tree committed first at `aa05bff`. Zero rotted mutations; all four muta
 **2. D10's adversarial case is PLANTED, and unobserved in real data.** The raw book whose title says *"CGC READY"* — the case that justifies labelling a filter *"title mentions CGC"* rather than *"slabbed"* — is a **synthetic row**, which the harness itself describes as *"planted explicitly … which is how sellers actually write them"*. Searched across 100 real sales with a **controlled** pattern (it matches the planted row on both clauses, so it is capable of firing): **0 of 84**. All ten CGC-mentioning titles are genuine slab references (`CGC 4.5` … `CGC 9.8`, plus one `CGC 85` that is almost certainly a mistyped 8.5).
 
 **The ruling stands on its own merits** — the app reports a string match and cannot know what a title means, which is true whether or not a seller has yet written a misleading one. **What changes is the evidence:** it should read *plausible and unobserved* rather than imply it was measured. A planted fixture proving a gate can fire is not the same as data proving the case occurs, and this record had been letting one stand in for the other.
+
+### Deployed and verified (`aa05bff`, v0.8.0)
+
+| file | before (v0.7.0) | after (v0.8.0) |
+|---|---|---|
+| `index.html` | `1c7d9e18860063af` | `1c7d9e18860063af` *(unchanged — v0.8.0 touched only `app.js`)* |
+| `app.js` | `a19ce13df5969ffc` | `4b43430ec34058a5` |
+
+The served `app.js` reports `APP_VERSION = '0.8.0'`.
+
+**The before column for `app.js` is CITED FROM THE v0.7.0 ENTRY, not measured.** It is the one number here I did not take myself: propagation had already completed by the time I went to capture it, so the live site was serving the new build on the first check. Recording where a value came from matters more than the value — **D25 is two commits old and its whole subject is a claim that reads as a measurement**.
+
+**`index.html` is the control, and it is what makes the rest trustworthy.** It did not change in this version, and it matches `HEAD` at exactly the fingerprint recorded for v0.7.0 — so the instrument is reading the live site correctly, and `app.js` moving is a real change rather than an artefact of a broken check. An unchanged file is a free control on every deploy that touches only one of the two, and this record had not been using it.
+
+**Third distinct propagation outcome in four deploys, and the one my own rule did not anticipate.** v0.2.0 matched on the first poll, v0.6.0 on the second, v0.7.0 on neither manual poll and then on a background waiter's first. The rule written after v0.7.0 says *a non-matching early check is a timing fact, not a failure* — correct, and silent about the opposite case. Here the early check **matched**, which is equally a timing fact and has its own hazard: it removes the chance to measure the before state. **So the pairing is: capture the before fingerprints BEFORE pushing, not before verifying.** I captured them before pushing for v0.7.0 and got it right by habit; here I deferred and lost the measurement.
