@@ -2162,14 +2162,117 @@ function compsListHTML(sorted) {
 // from COMPS.rows, so a stale `true` shows THIS book's sales, never the previous
 // one's -- there is no wrong-data risk to guard. Resetting it would mean the
 // four-call-site bookkeeping that compsPick avoided by keying on object identity.
+// ---- R6b: THE FILTERS. They COUNT AND LIST; the plot is untouched ----------
+// RULED AS HIGHLIGHT-AND-DIM, BUILT AS COUNT-AND-LIST, because the measurement
+// refused the design. Marks render at 5.31 x 5.31px, and at that size no channel
+// can carry a second state:
+//
+//   opacity  dim vs backdrop peaks at 2.45:1 (dark) / 2.28:1 (light) -- below the
+//            3:1 bar for a graphical object. Where dim-vs-NORMAL finally clears
+//            3:1, dim-vs-backdrop has fallen to 2.08:1: the two requirements
+//            cross at ~2.7:1 and neither is met. Light is strictly worse, because
+//            a normal mark starts at 4.58:1 there rather than 7.12:1.
+//   colour   --accent sits 2.10:1 (dark) / 1.74:1 (light) from a normal mark, and
+//            1.14:1 / 1.01:1 at full alpha -- luminance-identical. Hue alone would
+//            fail WCAG 1.4.1 and vanish in greyscale.
+//   alpha up .pm:hover/:focus ALREADY own opacity 1, so a brighter highlight would
+//            render identically to the mark under the user's finger.
+//   size     the first shrink meeting a 1.4 ratio collapses shape discrimination:
+//            circle/rect IoU 0.888, circle/diamond 0.878, rect/diamond 0.849. It
+//            destroys the listing-type channel to add a selection one, and halves
+//            the tap target of exactly the sales the user did NOT select.
+//
+// So the plot keeps every sale, unchanged, and the SELECTION drives the LIST.
+// This is not a retreat: R6's own legibility-half fork already ruled the summon
+// path as "an action that lists the CURRENT SELECTION -- 'list these N sales' --
+// never the whole set by default. Once filters exist that becomes 'title mentions
+// CGC -> list these'." The measurement pushed the build onto the path the record
+// had already chosen.
+//
+// D10 GOVERNS THE LABELS. The app reports a STRING MATCH and cannot know what a
+// title means: "CGC READY" sits on raw books. So every label says what was
+// matched -- "title mentions CGC" -- never what it might imply ("slabbed").
+const COMPS_CATS = [
+  { key: 'cgc',       label: 'title mentions CGC',                      re: /\bCGC\b/i },
+  { key: 'cbcs',      label: 'title mentions CBCS',                     re: /\bCBCS\b/i },
+  { key: 'pgx',       label: 'title mentions PGX',                      re: /\bPGX\b/i },
+  { key: 'graded',    label: 'title mentions graded or slabbed',        re: /\bgraded\b|\bslabbed\b|\bslab\b/i },
+  { key: 'numgrade',  label: 'title mentions a number grade (9.8)',     re: /\b(?:10|[1-9])\.\d\b/ },
+  { key: 'ltrgrade',  label: 'title mentions a letter grade (VF, NM)',  re: /\b(?:VF|NM|FN|VG|GD|FA|PR)\b/i },
+  { key: 'signed',    label: 'title mentions signed',                   re: /\bsigned\b|\bsignature\b|\bautograph/i },
+  { key: 'variant',   label: 'title mentions variant',                  re: /\bvariant\b/i },
+  { key: 'key',       label: 'title mentions key',                      re: /\bkey\b/i },
+  { key: 'damage',    label: 'title mentions damage (tape, tear)',      re: /\bdetached\b|\btapes?d?\b|\bwater\b|\bcoverless\b|\bmissing\b|\btears?\b/i },
+  { key: 'newsstand', label: 'title mentions newsstand',                re: /\bnewsstand\b/i },
+  { key: 'pence',     label: 'title mentions pence or UK',              re: /\bpence\b|\bUK\b/ },
+];
+let COMPS_FILTERS = [];
+// DERIVED FROM THE RESPONSE, never declared. Twelve categories exist; only those
+// the seller titles actually support render. An empty filter cannot narrow, and a
+// button that matches nothing is a control that has stopped controlling (D5).
+// Measured on the real 84: seven render, six do not -- and the six are the control
+// that makes "derives from the response" a test rather than a claim.
+function compsFilterCats() {
+  const rows = (COMPS && COMPS.phase === 'done') ? COMPS.rows : [];
+  const out = [];
+  COMPS_CATS.forEach(function (c) {
+    let n = 0;
+    rows.forEach(function (r) { if (c.re.test(String((r && r.title) || ''))) n++; });
+    if (n > 0) out.push({ key: c.key, label: c.label, n: n });
+  });
+  return out;
+}
+function compsFiltersActive() { return COMPS_FILTERS.slice(); }
+function compsFilterClear() { COMPS_FILTERS = []; renderComps(); return { ok: true }; }
+function compsFilterToggle(key) {
+  const i = COMPS_FILTERS.indexOf(key);
+  if (i >= 0) COMPS_FILTERS.splice(i, 1); else COMPS_FILTERS.push(key);
+  renderComps();
+  return { ok: true, active: COMPS_FILTERS.slice() };
+}
+// OR, not AND (ruled). AND shrinks the selection toward nothing, which is
+// filtering by another name and contradicts the ruling this slice is built on.
+function compsFilterMatch(r) {
+  if (!COMPS_FILTERS.length) return true;
+  const t = String((r && r.title) || '');
+  return COMPS_FILTERS.some(function (k) {
+    for (let i = 0; i < COMPS_CATS.length; i++)
+      if (COMPS_CATS[i].key === k) return COMPS_CATS[i].re.test(t);
+    return false;
+  });
+}
+function compsSelected(sorted) { return (sorted || []).filter(compsFilterMatch); }
+function compsFilterHTML() {
+  const cats = compsFilterCats();
+  if (!cats.length) return '';
+  return `<div class="cmpfilters">` +
+    `<div class="fine">Narrow the list by what the seller wrote. ` +
+    `The plot never changes — every sale stays on it.</div>` +
+    cats.map(function (c) {
+      const on = COMPS_FILTERS.indexOf(c.key) >= 0;
+      return `<button type="button" class="fbtn${on ? ' on' : ''}" aria-pressed="${on ? 'true' : 'false'}" ` +
+        `onclick="compsFilterToggle('${esc(c.key)}')">${esc(c.label)} — ${esc(String(c.n))}</button>`;
+    }).join('') +
+    `</div>`;
+}
+
+// R5's four-call-site bookkeeping that compsPick avoided by keying on object identity.
 let LIST_SHOWN = false;
 function compsListShown() { return LIST_SHOWN; }
 function compsListToggle() { LIST_SHOWN = !LIST_SHOWN; renderComps(); return { ok: true, shown: LIST_SHOWN }; }
 function compsListBlockHTML(sorted, n) {
+  // THE CONTROL NAMES ITS SCOPE, and the scope is now the selection. R6 ruled
+  // the summon must say how much it is about to show; with filters active that
+  // is "these N", not "all N" -- a button that reports the wrong number is the
+  // thing R6 removed, wearing a filter.
+  const sel = compsSelected(sorted);
+  const narrowed = COMPS_FILTERS.length > 0;
+  const label = LIST_SHOWN ? 'Hide the list'
+    : (narrowed ? 'List these ' + sel.length + ' sales' : 'List all ' + n + ' sales');
   return `<div class="cmpsummon">` +
-    `<button type="button" class="btn" onclick="compsListToggle()">` +
-    esc(LIST_SHOWN ? 'Hide the list' : 'List all ' + n + ' sales') + `</button>` +
-    (LIST_SHOWN ? `<div class="cmplist">${compsListHTML(sorted)}</div>` : '') +
+    compsFilterHTML() +
+    `<button type="button" class="btn" onclick="compsListToggle()">` + esc(label) + `</button>` +
+    (LIST_SHOWN ? `<div class="cmplist">${compsListHTML(sel)}</div>` : '') +
     `</div>`;
 }
 // THREE FIELDS, THREE ELEMENTS, and the source order matches the visual order:
@@ -2604,7 +2707,7 @@ function renderAskLive() {
 // WHY A NOTICE WORKS WITH NO WORKER: there is no app-controlled cache, so a load
 // fetches current bytes and the notice fires on it. The worker is what would
 // CREATE the stale-shell problem it then solves.
-const APP_VERSION = '0.8.0';
+const APP_VERSION = '0.9.0';
 const VERSION_KEY = 'collectibles-version';   // PFX1: every storage key is prefixed
 
 // One line per release, newest LAST. The newest entry's `v` must equal
@@ -2627,6 +2730,7 @@ const VERSION_LOG = [
   { v: '0.6.0', d: '2026-09-15', note: 'A way to save one sold-comps response and replay it instead of calling the provider. This is TEST MACHINERY rather than an offline mode, and it is built to stay that way: a lookup costs about $0.40 and returns the same sales every time, so checking a layout change should not cost money. It replays ONLY when you arm it, and arming lasts one session — a saved response sitting in Settings is never on its own a reason to skip a call, because a testing aid that fires without being asked would make every measurement taken afterwards untrustworthy while nothing looked wrong. A replayed result SAYS SO where the numbers are, with the date it was captured, because those sales were a 90-day window on that date and the window has moved since. The cost line reads “no charge” rather than billing you for a call that never happened, and the saved response is kept outside your data, so an export cannot carry it.' },
   { v: '0.7.0', d: '2026-09-15', note: 'The sales the app filtered out were never actually hidden. One line of styling overrode the mark that closes them, so every excluded listing — lots, reprints, collections — sat open on the page beneath a button offering to show them, and tapping that button changed nothing but its own label. On a real lookup that was 1332 pixels of it: more than two thirds of the whole sold-comps panel, with the chart squeezed into a seventh of the space. It is closed now until you ask for it, the button does what it says in both directions, and the repair is written so that anything else in this app marked hidden stays hidden. Found by loading a real 100-sale response for the first time; on the small test data it was a strip too short to notice.' },
   { v: '0.8.0', d: '2026-09-15', note: 'Sales that ended in an accepted offer are drawn correctly. eBay reports those as their own listing type, which this app had never seen before and so drew as “type not recognised” — a fifth of the sales on a real lookup, marked as an unknown when the app could in fact tell exactly what they were: a Buy It Now whose price was negotiated. They now draw as Buy It Now with the ring that has always meant an accepted offer, so the shape says how it sold and the ring says how the price was reached, without saying it twice. The listing types the app does not recognise still name themselves on the surface rather than being quietly folded into a default — that is the point of showing them at all, and it is now checked on the drawn mark rather than only in the data underneath.' },
+  { v: '0.9.0', d: '2026-09-15', note: 'Filters, for narrowing the list to the sales you care about. Buttons appear for what the sellers actually wrote — “title mentions CGC”, “title mentions a letter grade”, and so on — and a button only appears if some sale matches it, with the count beside it. Tap more than one and you get all of them, not the overlap. The labels say what was MATCHED rather than what it might mean: a title saying “CGC READY” is usually a raw book hoping to be graded, so the app tells you the words are there and leaves the reading to you. The chart itself never changes. Filtering the list does not remove a single mark from it, because the interesting thing about these sales is where the expensive ones sit against the cheap ones, and that is only visible with all of them on screen at once.' },
 ];
 
 // Numeric per segment, so 0.2.0 < 0.10.0 -- a string compare gets that backwards
@@ -2887,6 +2991,10 @@ window.CT = {
   compsRowHTML, compsShowDropped, compsMoney, compsDate, compsListHTML, __setComps,
   // R6 -- the list is summoned, never permanent
   compsListShown, compsListToggle, compsListBlockHTML,
+  // R6b -- the filters COUNT AND LIST; the plot carries no selection state,
+  // because at 5.31px no channel could carry one (see COMPS_CATS' comment).
+  COMPS_CATS, compsFilterCats, compsFiltersActive, compsFilterToggle,
+  compsFilterClear, compsFilterMatch, compsSelected, compsFilterHTML,
   // C1 -- response replay, TEST MACHINERY. Held outside the state object so an
   // export cannot carry it, and armed in memory so it cannot outlive a reload.
   REPLAY_KEY, replayRead, replaySave, replayClear, replayArmed, replaySetArmed,

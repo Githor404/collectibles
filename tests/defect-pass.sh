@@ -881,6 +881,41 @@ report "hidden stops hiding (the shipped defect)" "ZERO RENDERED HEIGHT" "$(run_
 mutate 's/not recognised\x27 \};/not stated\x27 };/' app.js
 report "unrecognised type stops naming itself" "NAMES THE VALUE" "$(run_dl)"; restore
 
+# ---- FLT (R6b): the filters count and list, and the plot must not move -------
+# The ruling these rows enforce is HIGHLIGHT NEVER FILTERS OUT. It is currently
+# true by construction -- the plot holds no selection state, because at 5.31px no
+# channel could carry one. Row 80 is the row that would catch someone restoring
+# the design the measurement refused.
+mutate 's/const mk = compsMarks\(rows, sc\);/const mk = compsMarks(compsSelected(rows), sc);/' app.js
+report "a filter removes marks from the plot" "PLOT UNCHANGED" "$(run_dl)"; restore
+
+# D5's shape: a button that matches nothing is a control that has stopped
+# controlling, and it looks exactly like one that works.
+mutate 's/if \(n > 0\) out\.push/out.push/' app.js
+report "empty categories render as buttons anyway" "EIGHT categories with no match" "$(run_dl)"; restore
+
+# D10: the label states what was MATCHED, never what it might imply.
+#
+# ANCHORED ON `label: '...',` BECAUSE THE LOOSE FORM WAS SILENTLY DEAD. The
+# string "title mentions CGC" occurs THREE times in app.js -- in the module's own
+# comment (line ~2194), in the COMPS_CATS label, and in the v0.9.0 changelog
+# note. perl -0pi without /g takes the FIRST, which is the comment: the mutation
+# APPLIES, so mutate()'s fatal check stays silent, the suite runs clean, and the
+# row reports GATE: PASS while testing nothing at all.
+#
+# That is row 55's rot for the third time in this file -- and it was written
+# directly beneath the comment warning about it, because that warning was about
+# BYTE-safety and this row was about label semantics. The transferable rule is
+# neither: A PATTERN WHOSE TARGET OCCURS MORE THAN ONCE IS FRAGILE WHATEVER IT
+# HAPPENS TO HIT TODAY. Count the occurrences before trusting the anchor.
+mutate "s/label: 'title mentions CGC',/label: 'slabbed',/" app.js
+report "a label becomes a claim about the book" "title mentions X" "$(run_dl)"; restore
+
+# OR -> AND. The selection shrinks toward nothing, which is filtering by another
+# name -- and the row count is the only thing that would say so.
+mutate 's/return COMPS_FILTERS\.some\(/return COMPS_FILTERS.every(/' app.js
+report "filters combine with AND instead of OR" "combine with OR" "$(run_dl)"; restore
+
 echo "-------------------------------------------------------------------"
 for f in $MUTATED; do
   printf 'restored: %-11s %s\n' "$f" "$(cmp -s "$TMP/$(basename "$f").orig" "$f" && echo 'identical to its pre-run copy' || echo 'DIFFERS -- INVESTIGATE')"

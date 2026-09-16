@@ -174,6 +174,17 @@
      reason the raw-vs-slab statement and the window sit where the numbers are,
      not in a footnote. */
   .replaynote{font-weight:700;letter-spacing:.01em}
+  /* R6b: the filter controls. COLOUR CARRIES THE ON-STATE HERE, and that is
+     sound for exactly the reason it was refused on the marks: this is a 14px
+     filled control, not a 5.31px glyph. A filled accent background against
+     white text clears the contrast bar comfortably, where an accent FILL on a
+     5px mark measured 2.10:1 from a normal mark in dark and 1.01:1 in light.
+     The same channel, at two sizes, is two different propositions. */
+  .cmpfilters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .cmpfilters .fine{flex:1 0 100%;margin:0 0 2px}
+  .fbtn{width:auto;font-size:14px;font-weight:700;padding:7px 11px;border:1px solid var(--line);
+    border-radius:999px;background:var(--bg);color:var(--txt);cursor:pointer}
+  .fbtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
   .cmpsummon{margin-top:14px}
   .cmpsummon .cmplist{margin-top:10px}
   .cmpprice{font-weight:800;font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap}

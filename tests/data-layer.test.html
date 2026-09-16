@@ -2640,6 +2640,72 @@ window.setLS({});
     });
   });
 
+  // ---- FLT (R6b): the filters COUNT AND LIST; the plot is untouched ---------
+  // Ruled as highlight-and-dim, built as count-and-list, because at 5.31px no
+  // channel carries a second state: opacity peaks at 2.45:1 against the backdrop
+  // (2.28:1 light), accent sits 2.10:1 / 1.01:1 from a normal mark, .pm:hover
+  // already owns opacity 1, and the first size shrink meeting a 1.4 ratio
+  // collapses circle/rect IoU to 0.888. All three measured, all three refused.
+  //
+  // So the ruling that survives is the one that mattered -- HIGHLIGHT NEVER
+  // FILTERS OUT -- and here it holds BY CONSTRUCTION: the plot carries no
+  // selection state at all, so nothing exists that could remove a mark.
+  //
+  // PLACED AT THE END OF THE SYNCHRONOUS SECTION DELIBERATELY (D22). This block
+  // re-seeds COMPS, and the R6 block sits INSIDE the AK section -- putting these
+  // assertions there would pull the substrate out from under AK6, AK7 and AK8,
+  // which is the precise failure D22 records.
+  CT.compsFilterClear();
+  if (CT.compsListShown()) CT.compsListToggle();
+  var fltP = CT.parseComps(COMPROWS);
+  var fltF = CT.compsFilter(fltP.rows);
+  CT.__setComps(fltF.kept, fltF.dropped, 'amazing spider-man 151');
+  var fltBox = function () { return document.getElementById('compsBox').innerHTML; };
+  var fltRows = function () { return document.querySelectorAll('#compsBox .cmplist .cmprow').length; };
+  var fltDefault = fltBox();
+  var fltCats = CT.compsFilterCats();
+  var fltKeyArr = fltCats.map(function (c) { return c.key; });
+  var fltN = {}; fltCats.forEach(function (c) { fltN[c.key] = c.n; });
+
+  res(fltKeyArr.slice().sort().join(',') === 'cgc,damage,ltrgrade,numgrade',
+      'FLT1 GATE (ruled): the buttons DERIVE FROM THE RESPONSE -- four of twelve declared categories match these six kept titles, and only those four render',
+      fltCats.map(function (c) { return c.key + ':' + c.n; }).join(' '));
+  var fltGone = CT.COMPS_CATS.filter(function (c) { return fltKeyArr.indexOf(c.key) < 0; });
+  res(CT.COMPS_CATS.length === 12 && fltGone.length === 8 &&
+      fltGone.every(function (c) { return fltDefault.indexOf(c.label) < 0; }),
+      'FLT1 GATE (D5): and the EIGHT categories with no match render NOWHERE on the surface -- an empty filter cannot narrow, and a button that matches nothing is a control that has stopped controlling. The eight absentees are what make "derives from the response" a test rather than a claim',
+      'declared=' + CT.COMPS_CATS.length + ' rendered=' + fltCats.length + ' absent=' + fltGone.length);
+  res(fltN.cgc === 2 && fltN.numgrade === 3 && fltN.ltrgrade === 5 && fltN.damage === 1,
+      'FLT2 GATE: every button carries ITS OWN count from the kept rows -- the count IS what this feature reports, since the measurement refused any selection state on the plot',
+      JSON.stringify(fltN));
+  res(fltCats.every(function (c) { return c.label.indexOf('title mentions ') === 0; }),
+      'FLT3 GATE (D10): every label reads "title mentions X" -- the app reports a STRING MATCH and cannot know what a title means. "slabbed" would be a claim about the book, and CGC READY sits on raw copies',
+      fltCats.map(function (c) { return c.label; }).join(' | '));
+
+  var fltPlotA = (fltBox().match(/data-p="[0-9.]+"/g) || []).sort().join(',');
+  CT.compsFilterToggle('cgc');
+  var fltPlotB = (fltBox().match(/data-p="[0-9.]+"/g) || []).sort().join(',');
+  res(fltPlotA.length > 0 && fltPlotA === fltPlotB,
+      'FLT4 GATE (the ruling, and the whole point): a filter leaves the PLOT UNCHANGED -- every mark present before a filter is present after it. Because no channel could carry a selection at 5.31px, the plot holds no selection state, so this is true by construction rather than by a dim floor that had to be chosen',
+      'before=' + fltPlotA + ' after=' + fltPlotB);
+  res(fltBox().indexOf('List these 2 sales') >= 0 && fltBox().indexOf('List all') < 0,
+      'FLT5 GATE (R6): the summon control NAMES ITS SCOPE -- "List these 2 sales" with a filter active, never a bare "show" and never the wrong number');
+  CT.compsListToggle();
+  res(fltRows() === 2,
+      'FLT5 GATE: and the list shows EXACTLY the selection -- counted inside .cmplist, because the dropped-listings disclosure also emits .cmprow and a box-wide count would silently include it',
+      String(fltRows()));
+  CT.compsFilterToggle('damage');
+  res(fltRows() === 3 && CT.compsFiltersActive().length === 2,
+      'FLT6 GATE (ruled): multiple filters combine with OR -- cgc 2 or damage 1 gives 3. AND would shrink the selection toward nothing, which is filtering by another name and contradicts the ruling this slice rests on',
+      'rows=' + fltRows() + ' active=' + CT.compsFiltersActive().join(','));
+  CT.compsFilterToggle('cgc'); CT.compsFilterToggle('damage');
+  res(CT.compsFiltersActive().length === 0 && fltRows() === 6,
+      'FLT7: tapping an active button turns it off, and with none active the list is the whole kept set again',
+      'active=' + CT.compsFiltersActive().length + ' rows=' + fltRows());
+  CT.compsListToggle();
+  res(fltBox() === fltDefault,
+      'FLT8 GATE: with every filter off and the list hidden the surface is BYTE-IDENTICAL to before any filter was touched -- AK5 and CQ7 read .cmpprice out of this surface, and a residue would move their substrate without moving their verdict');
+
   // ---- DROP1: "hidden" must ACTUALLY HIDE (found by the first real fixture) --
   // `.cmpdrop{display:block}` beat the UA's [hidden]{display:none}, so the
   // dropped-listings disclosure was open from R2b until 2026-09-15 -- 1332px on
