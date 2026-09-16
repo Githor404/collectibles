@@ -25,13 +25,14 @@ Each figure is approximate and carries the size it was measured at. A figure wit
 
 | operation | measured |
 |---|---|
-| **the full suite (`run-all-gates.sh`)** | **~2m40s** at 506 assertions (2026-09-16): the two rows below, summed. Defect rows do not enter it |
-| one data-layer run (`run-data-layer.sh`) | **~15s** at 506 assertions (2026-09-16); **~12s** at 350 (2026-09-13) |
-| full defect pass | **~8.5 min at 41 rows** (2026-09-13): ~35s fixed + **~12s per selected row**. **Now 83 rows, 3 of them layout rows (below); not re-measured at that size** |
+| **the full suite (`run-all-gates.sh`)** | **~3m05s**: 185s at 508 assertions, v0.9.1. It was ~2m40s at 506 before the layout gate drove C1's save. It is the data-layer and layout-gate rows below, summed; defect rows do not enter it |
+| one data-layer run (`run-data-layer.sh`) | **~15s** at 506–508 assertions (2026-09-16); **~12s** at 350 (2026-09-13) |
+| full defect pass | **~8.5 min at 41 rows** (2026-09-13): ~35s fixed + **~12s per ordinary row**. **Now 99 rows, 19 of them layout rows (below). Not measured at that size**; the layout rows alone come to ~55 min |
 | a two-row subset (`ROWS=31-32`) | **59s** |
 | `git commit` before a pass | **~10s** |
-| the layout gate (`layout-gate.ps1`) | **~140s** — real-time CDP, Chrome bring-up, four viewports. 142s on 2026-09-16; it loads `index.html` and runs none of the data-layer assertions |
-| a defect row that runs the layout gate | **~145s** — worth about **twelve** ordinary rows |
+| the layout gate (`layout-gate.ps1`) | **~170–185s** with C1's save case (180s and 183s, v0.9.1), which includes one ~15s paste of the 100KB response. It was **~140s** before that case (142s, 2026-09-16). It loads `index.html` and runs none of the data-layer assertions, so what moves it is what the gate drives |
+| a defect row that runs the layout gate | **~175s** (rows 84–99: 52m08s of wall time, minus 5m47s of Modern Standby). That is worth about **fourteen** ordinary rows |
+| **a timer the machine slept under** | **not a measurement.** One suite re-time read 8300s, with Modern Standby inside it. Check the Kernel-Power 506/507 events before recording any figure that disagrees with the rest |
 
 **These are measurements. Do not re-derive them by feel.** On 2026-09-13 the working figure was *"~250s per row"*, inferred from elapsed times that were in fact a **fixed** cost — `run_dl` was unguarded, so every invocation ran the full suite for all 40 rows whatever `ROWS=` said (see `../GATES.md`). The estimate was wrong by **20×**, and the error was not academic:
 
@@ -74,6 +75,30 @@ In order, each failing the whole gate:
 - **failure**: the stated message plus *Try again* and *Paste the reply by hand*, in view;
 - **pending**: the counted spinner and the cancel, in view;
 - and in every state the capture surface carries none of it.
+
+### C1's save, on the shipped element (RS1–RS6, 2026-09-16)
+
+**Not a layout claim, and it lives here anyway.** This is the only harness running on the shipped page, and the claim is about the shipped page. Every RP1 assertion in the data-layer suite calls `CT.replaySave()` by hand, so a save that said nothing on the real card passed all of them. That is D16's second sub-failure: the harness supplied the **call**.
+
+**How it drives the page.** Everything happens at 390×745 with touch on:
+
+- **Paste:** `Input.insertText` into `#replayBox`, which is what a browser receives from a paste.
+- **Tap:** `Input.dispatchTouchEvent` at the element's centre, but only after `elementFromPoint` confirms the point is on that element. A tap that lands on an overlay is its own silent failure, and `el.click()` would miss it (row 85 plants exactly that).
+- **Read:** the key comes straight out of `localStorage`, not through the app's `Store`, because the app's read path is under test.
+
+| claim | what it catches |
+|---|---|
+| **controls** | before any tap: key absent, card says nothing is saved, arming disabled. A tap on the card heading with a response pasted changes nothing. |
+| **RS1** | the tap lands on Save; the key holds the pasted 100-row response; the card says so, drawn and in view; it acknowledges **this** tap; arming enables |
+| **RS3** | a throw inside the save reaches the card — a phone has no console |
+| **RS2** | both parser refusals, in the parser's own words, naming **the paste** rather than the provider (D27); the saved response survives both; the two messages differ |
+| **RS6** | a repeat tap with the same outcome still **changes** the card. This is what was actually hit: an identical card reads as a dead control. |
+| **RS5** | on a healthy tier, a write that cannot be read back is a failure, not a save |
+| **RS4** | on the memory tier: the card changes and names the cause, nothing is written, and arming stays off |
+
+**Proven against v0.9.0 first**, in a worktree at the gate's own commit. The two cases the report asked for (a good paste and a bad one) passed there, because the button was wired and the save worked on a healthy tier. All eight new claims failed. In RS4 the cards before and after the tap were byte-identical, and the key was written anyway.
+
+**Only one full paste.** `Input.insertText` takes **~15s** for the 100KB response (measured at 15480ms and 15172ms). RS1 pastes it once. RS3 reuses what is already in the box. The storage cases paste the first three rows of the same response, because their claims are about the tier and the read-back, not about size.
 
 ## `defect-pass.sh` — the gates, run against the defects they close (HT-D60)
 

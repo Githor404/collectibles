@@ -1960,3 +1960,124 @@ The served `app.js` reports `APP_VERSION = '0.9.0'`. **Both files changed this v
 ### The one sentence worth keeping
 
 **The slice that paid for itself was the one that bought the measurement, not the one that built the design.** C1 was justified as a way to avoid paying to re-check a layout. What it actually bought was a real fixture that deleted a ruled slice, exposed a defect that had been shipping for four versions behind a button that did nothing, and corrected a falsification the record had been treating as settled.
+
+## v0.9.1 — C1's save said nothing: found in use, fixed, and gated on the shipped page (2026-09-16)
+
+**Reported:** a real Apify response pasted into the replay card, Save tapped, *"no response at all — no confirmation, no error"*, then arming impossible. The report's hypothesis: **the handler is not wired to the shipped element**, because every RP1 assertion drives `CT.replaySave()` directly (D16's second sub-failure — askBox's shape).
+
+### The hypothesis, measured — and falsified on this engine
+
+Driven through the shipped page with **real touch events** in headless Chrome, 390×745, and the real 100-row response: the tap lands **on** the button (`elementFromPoint`), the click reaches it, the key holds 113,026 characters, the card reads *"100 listings saved"*, arming enables. **The button was wired, and the save worked on a healthy tier.** Mouse at 1200×900: the same.
+
+Three more conditions were then driven through the same taps, looking for the one that produces *exactly* the report:
+
+| condition | card after the tap | key | silent? |
+|---|---|---|---|
+| origin quota nearly full | *"Storage refused the write — nothing was saved."* in amber | absent | no |
+| **tier demoted to memory** (one failed state save) | *"Nothing saved. Paste a response above."* — **byte-identical to before the tap** | **written, 113,026 chars** | **yes** |
+| the real response cut to 30,000 chars | *"The provider sent something that is not JSON."* in amber, 62px below the button | absent | no — **until the second tap**, which renders the identical card |
+
+### What was actually hit
+
+The subscriber's account, after the measurements: **the paste was incomplete.** An amber line appeared and went unread, Save was tapped again, the same outcome rendered the same card, and **an identical card read as a dead control.** The line also blamed **the provider** for text the subscriber had pasted — pointing at the wrong party and away from the one recovery that works. That is **D27**, ruled from this, in HT-D63's family.
+
+**So the fix covers four failures, only two of which were the report:** the repeat tap (hit), the wrong-cause message (hit), the memory-tier silence (found, reproduced, independent of the paste), and a throw inside the handler (a phone has no console; nothing caught it).
+
+### The fix (`da3f46b`)
+
+- **The result line is stamped** with the tap's time: a repeat tap with the same outcome still visibly answers.
+- **`parseComps(raw, source)`**: a paste is refused as the paste's fault — *"A response cut short looks exactly like this — copy the whole dataset and paste it again."* The live lookup still names the provider. **The words change and nothing else**; identical rows either way, asserted.
+- **The memory tier is refused before writing**, by name. Refusing *first* keeps "not saved" true.
+- **Every other write is read back through `replayRead`**, the arm's own path. A record it cannot read is discarded, never called a save. (The poller rule from the v0.9.0 deploy, applied to storage: verify through the path the consumer uses.)
+- **A throw is rendered on the card.**
+
+**And a comment was false about the code.** `Store.writeAux` said that on the memory tier it *"is a no-op"*. `writeRaw` never looks at the tier. C1's save checked `writeAux`'s return, trusted the sentence, and reported ok on a write the session could not read. **This is C2's parked limit — `check-refs` cannot check a claim about code — with a shipped defect attached.** Corrected to what the code does. The limit itself stays parked and unowned.
+
+### The gate (`93bd3fd`), committed before the fix and proven against v0.9.0
+
+In `layout-gate.ps1`, because it is the only harness on the shipped page. Run in a worktree at the gate's own commit — the gate as committed, the app as v0.9.0:
+
+| claim | v0.9.0 | v0.9.1 |
+|---|---|---|
+| controls: nothing saved before a tap; an inert tap changes nothing | ok | ok |
+| RS1: the tap lands on Save · the key holds the response · the card says so, in view · arming enables | ok | ok |
+| RS1: the card acknowledges **this** tap | **FAIL** | ok |
+| RS3: a throw reaches the card | **FAIL** | ok |
+| RS2: the parser's own message, both refusals · the saved response survives · the messages differ | ok | ok |
+| RS2: the refusal names the **paste**, not the provider (×2) | **FAIL** | ok |
+| RS6: a repeat tap changes the card | **FAIL** | ok |
+| RS5: a write that cannot be read back is a failure | **FAIL** | ok |
+| RS4: the card changes and names memory · nothing is written | **FAIL** | ok |
+| RS4: arming stays off | ok | ok |
+
+**The two cases the report asked for passed on v0.9.0.** Recorded because a gate that passes on the code it was written against looks like a gate that does not work — here it is the evidence that the button was never the defect.
+
+### DEMONSTRATED — rows 84–99, one per claim (HT-D60 Clause 1)
+
+Run as `ROWS=84-99` on a tree committed first at `b0ee8fb`. **Every row failed, and each failure named its own claim.** Zero mutations failed to plant, and all four mutated files were restored identical.
+
+Two checks came before the commit:
+
+- All 17 substitutions were dry-run on copies, and each was seen to change its file.
+- Every mutated `app.js` (row 98's pair applied together) was loaded in headless Chrome and still defined `CT`. This matters because a row that broke parsing would fail every claim and "catch" its defect for the wrong reason. The check itself was first seen to fail on a planted syntax error.
+
+| row | planted defect | verdict | first named failure |
+|---|---|---|---|
+| 84 | save button wired to nothing | `GATE: FAIL` | `RS1 GATE: the key holds the pasted response` |
+| 85 | the scrim covers the save button | `GATE: FAIL` | `RS1 GATE: the tap lands ON the save button` |
+| 86 | save stops repainting the card | `GATE: FAIL` | `RS1 GATE: the card says it was saved …` |
+| 87 | success line dropped | `GATE: FAIL` | `RS1 GATE: the card acknowledges THIS tap …` |
+| 88 | arming never enables | `GATE: FAIL` | `RS1 GATE: arming is enabled once something is saved` |
+| 89 | a throw escapes the save | `GATE: FAIL` | `RS3 GATE: a throw inside the save is reported on the card …` |
+| 90 | only successes reach the card | `GATE: FAIL` | `RS2 GATE: a paste that is not JSON shows the parser's own message …` |
+| 91 | save replaces the parser's words | `GATE: FAIL` | `RS2 GATE: a paste that is not JSON shows the parser's own message …` |
+| 92 | a bad paste blames the provider | `GATE: FAIL` | `RS2 GATE: a paste that is not JSON is refused as the PASTE's fault …` |
+| 93 | a refused paste destroys the saved one | `GATE: FAIL` | `RS2 GATE: the saved response survives a paste …` |
+| 94 | both refusals say the same thing | `GATE: FAIL` | `RS2 GATE: the two refusals carry DIFFERENT parser messages` |
+| 95 | result line loses its time | `GATE: FAIL` | `RS6 GATE: a second tap with the same paste CHANGES the card …` |
+| 96 | save trusts the write, no read-back | `GATE: FAIL` | `RS5 GATE: a write that cannot be read back is reported as a failure …` |
+| 97 | memory tier not refused up front | `GATE: FAIL` | `RS4 GATE: on the memory tier the card CHANGES and names memory …` |
+| 98 | memory-tier save as shipped (v0.9.0) | `GATE: FAIL` | `RS4 GATE: on the memory tier nothing is written …` |
+| 99 | arming offered with nothing saved | `GATE: FAIL` | `RS4 GATE: arming stays disabled on the memory tier` |
+
+Three rows need a note:
+
+- **Rows 90 and 91 name the same claim on purpose**, the arrangement rows 71 and 73 used. In 90 the result line is never pushed; in 91 it is pushed with the save's own words instead of the parser's. Each half of the claim catches a different defect.
+- **Row 97 is D27 inside the fix.** With the up-front refusal removed, the read-back still catches the write and the card is not silent. But the card then names no cause, and the gate fails on exactly that.
+- **Row 98 is v0.9.0's memory-tier path**, with both guards removed.
+
+
+### Measured costs, each with its size
+
+| operation | measured |
+|---|---|
+| `Input.insertText`, the 100KB response | **15480ms, 15172ms** |
+| the layout gate, before the replay case | **142s** |
+| the layout gate, with it | **163s** (before RS2's wording claim and RS6 existed), then **180s** and **183s** complete |
+| the full suite | **185s** at 508 assertions (14:56:52 → 14:59:57; the wall clock was checked against the timer) |
+| rows 84–99 | **52m08s** of wall time, of which **5m47s was Modern Standby** (Kernel-Power 506 → 507, 12:08:09 → 12:13:56). That leaves **~46m awake, ~174s per layout row**. |
+| a full pass at 99 rows | **not measured.** 19 rows now run the layout gate, and at ~175s those alone come to ~55 min. |
+
+**A timer is not a measurement when the machine sleeps under it.** The first attempt to re-time the suite read **8300s**, with Modern Standby from 12:38:29 to 14:54:10 sitting inside it. It was caught because 8300s contradicted every other reading, and the standby was confirmed from the event log rather than assumed. That check is what separates "the suite got slower" from "the clock kept running", and without it the number would have gone into `CLAUDE.md` as a cost.
+
+
+### Which other blocks share the exposure? — OPEN
+
+**This is the third feature whose assertions all ran against harness-built calls rather than the shipped control:** askBox (D16, R3), HealthTracker's dead prompt path (HT-D63), and this. The question is recorded as a question; answering it is not a slice until it is ruled one.
+
+A starting inventory, with its method: `grep -oE 'on(click|change|input|keydown|submit)="…'` over the shell and the rendered markup.
+
+- **The shipped shell (`index.html`)** carries **16** inline handler attributes naming **12** distinct handlers.
+- **Markup rendered by `app.js`** names **23** more handler strings. One of those is an inline `document.getElementById(…).click()`, not a named handler.
+- **Driven by a real input event in any gate: 2.** Both are today's: `openSettings` and `replaySaveFromBox`.
+- **Driven by a synthetic `.click()` on the shipped element: 1**, `compsShowDropped` (DROP1). That exercises the attribute but skips hit-testing.
+- **Every other handler is reached, if at all, by calling it by name through `CT`.** That proves the function, never the control, which is D16 again.
+
+A count of *handlers never driven through their element* is not the same as a count of *defects*. Most of these are probably fine. The inventory says where a dead control could hide in green, not where one is.
+
+### What this does not cover (Clause 2)
+
+- **No real device.** The taps are CDP touch events in headless Chrome, and the paste is `Input.insertText`. An iOS clipboard that truncates a 100KB paste, a soft keyboard hiding the card, and Safari's handling of a large textarea are all unmeasured.
+- **The memory tier is reached through the test seam** (`forceWriteFailure` plus a state save), not through a real quota failure on the origin shared with HealthTracker. The quota case was driven once, outside the gate, and was not silent.
+- **The stamp has one-second resolution.** Two taps inside the same second render identically. RS6 waits 1.1s before its second tap, and that wait is the limit, stated.
+- **Only the replay card is driven this way.** See the open question above.
