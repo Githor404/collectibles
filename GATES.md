@@ -1903,7 +1903,15 @@ The served `app.js` reports `APP_VERSION = '0.9.0'`. **Both files changed this v
 
 ## C2 — Close-out: what this is, what it refused to be, and what is parked (2026-09-15)
 
-**Status at close: v0.9.0, deployed and verified by byte fingerprint.** 506 assertions, 83 defect rows, 8 gate scripts, 26 ruled decisions, 9 dated releases.
+**Status at close: v0.9.0, deployed and verified by byte fingerprint.** Each count beside the method that took it (re-taken 2026-09-16):
+
+- **506 assertions** — executed, and equal to the pin (`run-data-layer.sh`'s `SUMMARY` line).
+- **83 defect rows** — `report` calls in `defect-pass.sh`, which numbers rows by `report`, not by `mutate`. 80 rows plant through exactly one `mutate()`; 3 plant without one.
+- **26 ruled decisions** — `## Dnn` headings in `DECISIONS.md`: D1–D26, none missing.
+- **9 dated releases** — entries in `VERSION_LOG`: 0.1.0–0.9.0.
+- **Gates, named rather than counted** — the suite runs two stages: `run-data-layer.sh` (the gate-script census, the residue check, `check-egress.sh`, `check-refs.sh`, `check-version.sh`, `data-layer.test.html`) and one browser gate, `layout-gate.ps1`. `defect-pass.sh` runs outside the suite.
+
+**Corrected 2026-09-16.** This line first read *"8 gate scripts"*, with no counting method, beside a suite whose own census prints **"1 of 1"** because it counts browser gates (`*-gate.ps1`) only. The only method found that yields 8 — every file in `tests/` except `README.md`, `fixtures/` and `restore-backups.sh` — was reverse-engineered from the number, which makes it an argument, not a description (D19). The number is replaced by the list, following the census's own rule (HT-D53: a manifest, not a count — naming the file ends the hunt). The message of commit `da991ea` still says 8; that commit is pushed and its message stands.
 
 ### What the tool IS
 
