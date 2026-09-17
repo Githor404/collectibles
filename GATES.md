@@ -2111,3 +2111,11 @@ A count of *handlers never driven through their element* is not the same as a co
 - **Not a gate, and it does not relieve one.** It is an observation that the fixtures were not lying, which is worth more than it sounds and less than a measurement.
 
 **Open, and asked of the subscriber:** which line matched and in what form; whether anything on the surface correctly failed to fire; and which build was running.
+
+**CONFIRMED ON THE DEVICE, 2026-09-17 — the two failures that were actually hit.** Reported from the phone: tapping Save twice **updated the time** and showed **"The pasted text is not JSON…"**.
+
+- **The build question above is answered.** That wording exists only in v0.9.1; v0.9.0 said *"The provider sent something that is not JSON."*
+- **RS6 holds on a real device.** The second tap changed the card. The identical-card reading that made this look like a dead control is gone, on the surface where it happened rather than in a gate.
+- **D27 holds on a real device.** The refusal names the paste and points at the recovery that works.
+
+**Still open, and it decides whether there is a second defect:** whether that paste was **complete**. If it was cut short, the message is correct and the fix is doing its job. **If it was complete, a valid 100KB response is being refused on the phone**, and the likeliest cause is the one Clause 2 already names as unmeasured — a mobile clipboard or textarea truncating a 100KB paste, which the app would see as exactly this. That would be a device-tier defect in C1's usability, not in the parser.
