@@ -2094,3 +2094,20 @@ A count of *handlers never driven through their element* is not the same as a co
 - **The deploy:** `app.js` matched `HEAD` on the **second poll, 16s** after the push, and the served file reports `APP_VERSION = '0.9.1'`.
 
 **Both sides of each comparison were computed by one function** (`curl … | sha256sum` against `git show HEAD:… | sha256sum`), per the v0.9.0 deploy's corrected rule. `index.html` did not change this version, so it is the **free unchanged-file control** that v0.9.0 lacked: identical before and after, which shows the instrument reports "no change" when there is none.
+
+### DEVICE OBSERVATION — the want list fired on real input, 2026-09-17
+
+**Reported from the device, not measured here.** Replay armed with the Apify **151** response, and the want-list flag fired correctly against the subscriber's own watch list. Recorded in the device-pass family: it needed a real phone, a real watch list and a real response, so **no automated gate can hold it** and it cannot become re-runnable.
+
+**What it establishes.**
+
+- **D15's generous match works on real input.** Every want-list assertion until now ran against fixtures written by the same hand that wrote the matcher — the shape D3 exists to distrust. A line the subscriber typed for their own hunting, against a title read off a real cover, is the first input neither side of that pair chose.
+- **The paste → save → arm path runs on a device.** C1's card was only ever driven by CDP touch events in headless Chrome; the v0.9.1 entry lists "no real device" as its first Clause 2 limit. A response saved and armed on a phone exercises that path for real. **Which build was running was not stated in the report**, and it matters: on a healthy tier this path also worked on v0.9.0, so this is evidence about the path, not yet about v0.9.1's fix.
+
+**What it does not establish, stated because one firing is not a rule.**
+
+- **No negative control was observed.** D15 errs toward firing *on purpose*, and its amendment bounds that generosity. A flag that fires on a book that IS on the list says nothing about a book that is not. The asymmetry stays fixture-only until something correctly does **not** fire on a device.
+- **Which clause of the generosity did the work is unknown.** Dropped article, `#` present or absent, case, spacing — the report names none of them, so the form the title took is unrecorded. One specimen, and D3's rule applies: a contract is gated across the range it permits, not on the one input that happened to arrive.
+- **Not a gate, and it does not relieve one.** It is an observation that the fixtures were not lying, which is worth more than it sounds and less than a measurement.
+
+**Open, and asked of the subscriber:** which line matched and in what form; whether anything on the surface correctly failed to fire; and which build was running.
