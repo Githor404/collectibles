@@ -2119,3 +2119,9 @@ A count of *handlers never driven through their element* is not the same as a co
 - **D27 holds on a real device.** The refusal names the paste and points at the recovery that works.
 
 **Still open, and it decides whether there is a second defect:** whether that paste was **complete**. If it was cut short, the message is correct and the fix is doing its job. **If it was complete, a valid 100KB response is being refused on the phone**, and the likeliest cause is the one Clause 2 already names as unmeasured — a mobile clipboard or textarea truncating a 100KB paste, which the app would see as exactly this. That would be a device-tier defect in C1's usability, not in the parser.
+
+**CLOSED, 2026-09-17.** The paste was cut short deliberately — about ten results copied out of a hundred. So the refusal was **correct**, the wording sent the subscriber to the right recovery, and **there is no second defect**: the reported failure is fixed end to end on the device, on the exact surface where it was hit.
+
+**What this does NOT close:** whether a phone can carry a **complete** 100KB response through its clipboard into the box. A deliberate ten-result copy is evidence about the parser, not about the clipboard, and Clause 2's device limit stands untouched. **The two look identical to the app** — a truncated clipboard and a short copy both arrive as JSON that stops mid-object — which is why the message names the paste and states the recovery rather than guessing which happened.
+
+A **small** response is not itself refused: `parseComps` accepts any valid array, so ten listings save fine if the copied text ends with `]`. What is refused is text that stops mid-structure, whatever cut it.
