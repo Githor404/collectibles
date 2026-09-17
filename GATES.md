@@ -2077,7 +2077,7 @@ A count of *handlers never driven through their element* is not the same as a co
 
 ### What this does not cover (Clause 2)
 
-- **No real device.** The taps are CDP touch events in headless Chrome, and the paste is `Input.insertText`. An iOS clipboard that truncates a 100KB paste, a soft keyboard hiding the card, and Safari's handling of a large textarea are all unmeasured.
+- **No real device.** The taps are CDP touch events in headless Chrome, and the paste is `Input.insertText`. An iOS clipboard that truncates a 100KB paste, a soft keyboard hiding the card, and Safari's handling of a large textarea are all unmeasured. — **MOSTLY CLOSED 2026-09-17 by the device observations at the end of this file**: real taps, a real clipboard carrying the full 100KB response, and a large textarea holding it, all on a phone. **The soft keyboard is the one part still unmeasured**, and the phone's OS and browser were not recorded.
 - **The memory tier is reached through the test seam** (`forceWriteFailure` plus a state save), not through a real quota failure on the origin shared with HealthTracker. The quota case was driven once, outside the gate, and was not silent.
 - **The stamp has one-second resolution.** Two taps inside the same second render identically. RS6 waits 1.1s before its second tap, and that wait is the limit, stated.
 - **Only the replay card is driven this way.** See the open question above.
@@ -2131,3 +2131,7 @@ A **small** response is not itself refused: `parseComps` accepts any valid array
 This is **RS1's success path confirmed where it matters.** RS1 drives a 100KB paste through `Input.insertText` in headless Chrome; the subscriber drove the same response through a real clipboard and a real control, and got the same outcome.
 
 **One detail is unstated and decides one open question:** whether that full paste was made **on the phone** or in a desktop browser. On the phone, Clause 2's clipboard limit is **closed** — a mobile clipboard carries 100KB into the box intact. On a desktop, it is not, and it stays open. Everything else above holds either way.
+
+**ON THE PHONE — the clipboard question is closed, 2026-09-17.** The full response was pasted **on the phone**. So a mobile clipboard carries the whole ~100KB dataset into the box intact, the textarea holds it, and the save parses and stores it. Clause 2's clipboard limit is closed, and with it the largest doubt about whether C1 is usable where it is meant to be used — at a table, on a phone.
+
+**What is left of that bullet:** the **soft keyboard** — whether it covers the card's result line at the moment of the tap — which none of these reports touch. And the phone's **OS and browser were not recorded**, so nothing here should be read as a claim about iOS or Safari specifically; it is a claim about the subscriber's phone.
