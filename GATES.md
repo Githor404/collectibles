@@ -2125,3 +2125,9 @@ A count of *handlers never driven through their element* is not the same as a co
 **What this does NOT close:** whether a phone can carry a **complete** 100KB response through its clipboard into the box. A deliberate ten-result copy is evidence about the parser, not about the clipboard, and Clause 2's device limit stands untouched. **The two look identical to the app** — a truncated clipboard and a short copy both arrive as JSON that stops mid-object — which is why the message names the paste and states the recovery rather than guessing which happened.
 
 A **small** response is not itself refused: `parseComps` accepts any valid array, so ten listings save fine if the copied text ends with `]`. What is refused is text that stops mid-structure, whatever cut it.
+
+**THE FULL RESPONSE SAVES AND REPLAYS, 2026-09-17.** Reported: the complete JSON saved, and a replayed lookup on **ASM 151** works. With the want-list firing already reported against the same armed response, **the whole chain has now run outside the harness** — paste, save, arm, replay, identity, want flag — on the real surface, on v0.9.1.
+
+This is **RS1's success path confirmed where it matters.** RS1 drives a 100KB paste through `Input.insertText` in headless Chrome; the subscriber drove the same response through a real clipboard and a real control, and got the same outcome.
+
+**One detail is unstated and decides one open question:** whether that full paste was made **on the phone** or in a desktop browser. On the phone, Clause 2's clipboard limit is **closed** — a mobile clipboard carries 100KB into the box intact. On a desktop, it is not, and it stays open. Everything else above holds either way.
